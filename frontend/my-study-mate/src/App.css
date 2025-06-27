@@ -1,0 +1,293 @@
+:root {
+  --gradient-speed: 15s;
+  --gradient-colors: linear-gradient(
+    -45deg,
+    #14001c,
+    #001233,
+    #05001d,
+    #001040
+  );
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Space Grotesk", sans-serif;
+  background: var(--gradient-colors);
+  background-size: 400% 400%;
+  animation: gradient var(--gradient-speed) ease infinite;
+  overflow-y: auto;
+  overflow-x: hidden; /* prevents horizontal overflow */
+  position: relative;
+}
+
+#root {
+  position: relative;
+  z-index: 2; /* Ensures UI stays above canvas */
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* Canvas should sit underneath everything */
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none; /* Allows clicks to pass through */
+  opacity: 1;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Optional: aura/overlay effects */
+.aura {
+  position: absolute;
+  width: 60vmin;
+  height: 60vmin;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at center,
+    rgba(63, 94, 251, 0.2) 0%,
+    rgba(70, 135, 252, 0.1) 30%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  animation: pulse 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/**
+ * Glow text adapted from "Apple MacBook Pro Page Header Text" by Mark Learst
+ * Source: https://codepen.io/marklearst/pen/JooEKYB
+ * Licensed under the MIT License.
+ */
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin-top: 3rem;
+}
+
+.label {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  opacity: 1;
+  margin-bottom: 1rem;
+  font-family: "Outfit", sans-serif;
+  position: relative;
+  z-index: 1;
+  transform: translateZ(10px);
+}
+
+.glow-text {
+  position: relative;
+  font-size: 3.5rem;
+  font-weight: 300;
+  letter-spacing: -0.015em;
+  color: #ffffff;
+  font-family: "Outfit", sans-serif;
+  filter: brightness(1.1);
+  z-index: 2;
+  line-height: 1.1;
+  transform: translateZ(30px);
+}
+
+.glow-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    hsl(185, 100%, 50%),
+    hsl(315, 100%, 50%),
+    hsl(35, 100%, 60%)
+  );
+  filter: blur(20px) brightness(0.8);
+  opacity: 0.7;
+  border-radius: 100px;
+  z-index: -1;
+  pointer-events: none;
+  background-size: 200% 200%;
+  animation: gradientShift 12s ease-in-out infinite;
+}
+
+.glow-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  font-family: inherit;
+  letter-spacing: inherit;
+  background: linear-gradient(
+    90deg,
+    hsl(185, 100%, 50%),
+    hsl(315, 100%, 50%),
+    hsl(35, 100%, 60%)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  mix-blend-mode: color-burn;
+  filter: blur(3px) brightness(1.3);
+  z-index: 0;
+  pointer-events: none;
+  background-size: 200% 200%;
+  animation: gradientShift 12s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.tilt-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-style: preserve-3d;
+}
+
+.drop-zone {
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 3rem;
+  text-align: center;
+  color: white;
+  transition: transform 0.3s ease;
+}
+.drop-zone:hover {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
+  animation: pulseDrop 2s ease-in-out infinite;
+}
+
+@keyframes pulseDrop {
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.12);
+  }
+}
+
+@keyframes glowDrop {
+  0%,
+  100% {
+    box-shadow: 0 0 15px hsla(var(--accent-hue, 35), 100%, 50%, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px hsla(var(--accent-hue, 35), 100%, 50%, 0.4);
+  }
+}
+
+.drop-zone.drag-over {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: hsl(
+    var(--accent-hue, 35),
+    100%,
+    60%
+  ); /* or one of your accent hues */
+  box-shadow: 0 0 30px hsla(var(--accent-hue, 35), 100%, 50%, 0.3);
+  backdrop-filter: blur(2px);
+  animation: glowDrop 2s ease-in-out infinite;
+}
+
+.fade-in {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeInUp 1.2s ease forwards;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.neon-progress-wrapper {
+  position: relative;
+  width: 100%;
+  height: 15px;
+  background: transparent;
+  overflow: visible;
+  border-radius: 999px;
+}
+
+.neon-progress-glow {
+  position: absolute;
+  height: 100%;
+  border-radius: 999px;
+  z-index: 1;
+  transition: width 0.4s ease;
+  background: linear-gradient(
+    90deg,
+    hsl(185, 100%, 50%),
+    hsl(315, 100%, 50%),
+    hsl(35, 100%, 50%)
+  );
+  animation: pulseLoadingBar 2.5s infinite ease-in-out;
+}
+
+.neon-progress-core {
+  position: absolute;
+  height: 100%;
+  background: white;
+  border-radius: 999px;
+  z-index: 2;
+  opacity: 1;
+  transition: width 0.4s ease;
+}
+
+@keyframes pulseLoadingBar {
+  0%,
+  100% {
+    filter: blur(6px) opacity(1);
+  }
+  50% {
+    filter: blur(10px);
+  }
+}
