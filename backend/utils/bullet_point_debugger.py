@@ -77,20 +77,38 @@ def compare_chunk_to_topics(
     Returns:
     Dict[str, float]: A dictionary of topic names and their similarity scores to the chunk.
     """
-    model = get_model()
+    # Early return for empty input
+    if not chunk or not chunk.strip():
+        return {}
 
-    # Encode the chunk and all topic chunks
-    chunk_embedding = model.encode([chunk])
-    topic_similarities = {}
+    # Early return for no topics
+    if not topics:
+        return {}
 
-    for topic_name, topic_chunks in topics.items():
-        topic_embeddings = model.encode(topic_chunks)
-        similarities = cosine_similarity(chunk_embedding, topic_embeddings)[0]
-        topic_similarities[topic_name] = np.mean(
-            similarities
-        )  # Average similarity to the topic
+    try:
+        model = get_model()
 
-    return topic_similarities
+        # Encode the chunk and all topic chunks
+        chunk_embedding = model.encode([chunk])
+        topic_similarities = {}
+
+        for topic_name, topic_chunks in topics.items():
+            # Skip empty topic lists
+            if not topic_chunks:
+                topic_similarities[topic_name] = 0.0
+                continue
+
+            topic_embeddings = model.encode(topic_chunks)
+            similarities = cosine_similarity(chunk_embedding, topic_embeddings)[0]
+            topic_similarities[topic_name] = np.mean(
+                similarities
+            )  # Average similarity to the topic
+
+        return topic_similarities
+
+    except Exception as e:
+        print(f"Error in compare_chunk_to_topics: {e}")
+        return {}
 
 
 def debug_bullet_point(
