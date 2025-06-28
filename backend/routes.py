@@ -6,6 +6,7 @@ import json
 from uuid import uuid4
 from fastapi import BackgroundTasks
 import asyncio
+from utils.bullet_point_debugger import debug_bullet_point
 
 router = APIRouter()
 
@@ -469,3 +470,51 @@ def expand_cluster(data: dict):
     # Pass only the filename (not the full path) to expand_cluster
     result = expand_cluster_util(processed_filename, cluster_id)
     return result
+
+
+@router.post("/debug-bullet-point")
+def debug_bullet_point_endpoint(data: dict):
+    """
+    Debug a bullet point by finding its most similar chunk and comparing it to other topics.
+
+    Args:
+        data (dict): A dictionary containing 'bullet_point' (str), 'chunks' (list of str), and 'topics' (dict).
+
+    Returns:
+        dict: Debugging result including the most similar chunk, similarity to the current topic, and topic similarities.
+    """
+    bullet_point = data.get("bullet_point")
+    chunks = data.get("chunks", [])
+    topics = data.get("topics", {})
+
+    if not bullet_point or not chunks or not topics:
+        return {
+            "error": "Missing required fields: 'bullet_point', 'chunks', or 'topics'."
+        }
+
+    try:
+        result = debug_bullet_point(bullet_point, chunks, topics)
+
+        # Convert numpy types to native Python types
+        result["similarity_to_current_topic"] = float(
+            result["similarity_to_current_topic"]
+        )
+
+        # Convert top_similar_chunks similarities to float
+        if "top_similar_chunks" in result:
+            result["top_similar_chunks"] = [
+                {"chunk": chunk["chunk"], "similarity": float(chunk["similarity"])}
+                for chunk in result["top_similar_chunks"]
+            ]
+
+        topic_similarities = result.get("topic_similarities")
+        if isinstance(topic_similarities, dict):
+            result["topic_similarities"] = {
+                key: float(value) for key, value in topic_similarities.items()
+            }
+        else:
+            result["topic_similarities"] = {}
+
+        return result
+    except Exception as e:
+        return {"error": f"Failed to debug bullet point: {str(e)}"}

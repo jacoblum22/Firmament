@@ -14,6 +14,14 @@ type UploadResponse = {
   transcription_file?: string;
 };
 
+type DebugResult = {
+  bullet_point: string;
+  top_similar_chunks: { chunk: string; similarity: number }[];
+  most_similar_chunk: string;
+  similarity_to_current_topic: number;
+  topic_similarities: { [key: string]: number };
+};
+
 type TopicResponse = {
   num_chunks: number;
   num_topics: number;
@@ -32,6 +40,7 @@ type TopicResponse = {
         max_size: number;
       };
       bullet_points?: string[]; // Added bullet_points property
+      debugResult?: DebugResult; // Added debugResult property
     };
   };
 };
@@ -379,6 +388,159 @@ function App() {
     } catch {
       setError("Failed to expand cluster.");
     }
+  };
+
+  const handleDebugBulletPoint = async (bulletPoint: string, topicId: string) => {
+    console.log("🔍 Debug bullet point clicked:", { bulletPoint, topicId });
+    
+    if (!topics || !topics.topics[topicId]) {
+      console.error("❌ No topics or topic not found:", { topics: !!topics, topicExists: !!topics?.topics[topicId] });
+      return;
+    }
+
+    const topicChunks = topics.topics[topicId].examples; // Assuming 'examples' are the chunks
+    // Convert topics to the structure expected by the backend
+    const allTopics = Object.keys(topics.topics).reduce((acc, id) => {
+      acc[id] = {
+        examples: topics.topics[id].examples,
+        heading: topics.topics[id].heading
+      };
+      return acc;
+    }, {} as { [key: string]: { examples: string[], heading: string } });
+
+    console.log("📊 Request data:", { 
+      bullet_point: bulletPoint,
+      chunks_count: topicChunks?.length || 0,
+      topics_count: Object.keys(allTopics).length 
+    });
+
+    try {
+      const res = await fetch("http://localhost:8000/debug-bullet-point", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bullet_point: bulletPoint,
+          chunks: topicChunks,
+          topics: allTopics,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("❌ HTTP error:", res.status, res.statusText);
+        const errorText = await res.text();
+        console.error("Error response:", errorText);
+        return;
+      }
+
+      const data = await res.json();
+      console.log("📥 Backend response:", data);
+
+      if (data.error) {
+        console.error("Error debugging bullet point:", data.error);
+      } else {
+        console.log("✅ Debugging result received:", data);
+        // Display the result below the bullet point
+        setTopics((prevTopics) => {
+          if (!prevTopics) {
+            console.error("❌ No prevTopics in setState");
+            return prevTopics;
+          }
+
+          const updatedTopics = { ...prevTopics.topics };
+          updatedTopics[topicId] = {
+            ...updatedTopics[topicId],
+            debugResult: data, // Add debug result to the topic
+          };
+
+          console.log("🔄 Updated topic with debug result:", updatedTopics[topicId]);
+          return { ...prevTopics, topics: updatedTopics };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to debug bullet point:", error);
+    }
+  };
+
+  const renderDebugResult = (topicId: string) => {
+    const debugResult = topics?.topics[topicId]?.debugResult;
+    console.log("🎨 Rendering debug result for topic:", topicId, debugResult);
+    
+    if (!debugResult) {
+      console.log("❌ No debug result to render for topic:", topicId);
+      return null;
+    }
+
+    console.log("✅ Rendering debug result:", debugResult);
+    return (
+      <div style={{ 
+        marginTop: "1rem", 
+        padding: "1rem", 
+        border: "1px solid #ccc",
+        borderRadius: "8px",
+        background: "rgba(255, 255, 255, 0.02)"
+      }}>
+        <h4 style={{ margin: "0 0 1rem 0", color: "#fff" }}>Debugging Result:</h4>
+        <p><strong>Bullet Point:</strong> {debugResult.bullet_point}</p>
+        
+        <div style={{ marginBottom: "1rem" }}>
+          <strong>Top 5 Most Similar Chunks:</strong>
+          <div style={{ marginTop: "0.5rem" }}>
+            {debugResult.top_similar_chunks && debugResult.top_similar_chunks.map((item, idx) => (
+              <div key={idx} style={{ 
+                marginBottom: "0.8rem", 
+                padding: "0.8rem", 
+                background: idx === 0 ? "rgba(185, 255, 128, 0.1)" : "rgba(255, 255, 255, 0.05)",
+                borderRadius: "6px",
+                border: idx === 0 ? "1px solid rgba(185, 255, 128, 0.3)" : "1px solid rgba(255, 255, 255, 0.1)"
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center",
+                  marginBottom: "0.5rem"
+                }}>
+                  <strong style={{ color: idx === 0 ? "hsl(185, 100%, 70%)" : "#ccc" }}>
+                    #{idx + 1} {idx === 0 ? "(Most Similar)" : ""}
+                  </strong>
+                  <span style={{ 
+                    color: idx === 0 ? "hsl(185, 100%, 70%)" : "#999",
+                    fontWeight: "bold"
+                  }}>
+                    {item.similarity.toFixed(3)}
+                  </span>
+                </div>
+                <p style={{ 
+                  margin: 0, 
+                  color: "#ddd", 
+                  fontSize: "0.9rem",
+                  lineHeight: "1.4"
+                }}>
+                  {item.chunk}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p><strong>Similarity to Current Topic:</strong> {debugResult.similarity_to_current_topic.toFixed(3)}</p>
+        
+        <div>
+          <h5 style={{ margin: "1rem 0 0.5rem 0" }}>Topic Similarities:</h5>
+          <ul style={{ margin: 0, paddingLeft: "1.5rem" }}>
+            {debugResult.topic_similarities &&
+              Object.entries(debugResult.topic_similarities)
+                .sort(([,a], [,b]) => b - a) // Sort by similarity descending
+                .map(([title, similarity]) => (
+                  <li key={title} style={{ marginBottom: "0.3rem" }}>
+                    {title}: <strong>{similarity.toFixed(3)}</strong>
+                  </li>
+                ))}
+          </ul>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -733,13 +895,20 @@ function App() {
                         listStyleType: "disc"
                       }}>
                         {topic.bullet_points.map((point, idx) => (
-                          <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                          <li 
+                            key={idx} 
+                            style={{ marginBottom: "0.5rem", cursor: "pointer" }}
+                            onClick={() => handleDebugBulletPoint(point, topicId)}
+                          >
                             {point.replace(/^\s*-\s*/, '')}
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
+
+                  {/* Debugging result section */}
+                  {renderDebugResult(topicId)}
                 </div>
               ))}
             </div>
