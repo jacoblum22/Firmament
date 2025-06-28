@@ -491,9 +491,9 @@ function App() {
               <div key={idx} style={{ 
                 marginBottom: "0.8rem", 
                 padding: "0.8rem", 
-                background: idx === 0 ? "rgba(185, 100%, 50%, 0.1)" : "rgba(255, 255, 255, 0.05)",
+                background: idx === 0 ? "rgba(185, 255, 128, 0.1)" : "rgba(255, 255, 255, 0.05)",
                 borderRadius: "6px",
-                border: idx === 0 ? "1px solid rgba(185, 100%, 50%, 0.3)" : "1px solid rgba(255, 255, 255, 0.1)"
+                border: idx === 0 ? "1px solid rgba(185, 255, 128, 0.3)" : "1px solid rgba(255, 255, 255, 0.1)"
               }}>
                 <div style={{ 
                   display: "flex", 
