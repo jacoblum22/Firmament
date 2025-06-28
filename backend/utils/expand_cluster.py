@@ -78,13 +78,16 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
     # Extract the text of the segments at the specified positions
     chunks = []
     for pos in segment_positions:
-        if pos.isdigit() and int(pos) < len(segments):
-            chunks.append(segments[int(pos)]["text"])
+        matching_segment = next(
+            (segment for segment in segments if segment.get("position") == pos), None
+        )
+        if matching_segment:
+            chunks.append(matching_segment["text"])
             print(
-                f"Successfully retrieved segment at position {pos}: {segments[int(pos)]['text']}"
+                f"Successfully retrieved segment at position {pos}: {matching_segment['text']}"
             )
         else:
-            print(f"Invalid or out-of-range position: {pos}")
+            print(f"No matching segment found for position: {pos}")
 
     if not chunks:
         print(f"Error: No valid segments found for Cluster ID {cluster_id}.")
