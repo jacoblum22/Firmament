@@ -31,6 +31,7 @@ type TopicResponse = {
         mean_size: number;
         max_size: number;
       };
+      bullet_points?: string[]; // Added bullet_points property
     };
   };
 };
@@ -44,18 +45,18 @@ const buttonStyle: React.CSSProperties = {
 };
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
+  const [, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<UploadResponse | null>(null);
   const [topics, setTopics] = useState<TopicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [, setJobId] = useState<string | null>(null);
   type JobStatus =
     | { stage: "uploading" | "preprocessing" | "saving_output" }
     | { stage: "transcribing"; current: number; total: number }
     | { stage: "done"; result: UploadResponse }
     | { stage: "error"; error: string };
   const [status, setStatus] = useState<JobStatus | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [generatingHeadings, setGeneratingHeadings] = useState(false);
   const [activeHue, setActiveHue] = useState<number | null>(null);
@@ -339,6 +340,46 @@ function App() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []); // ✅ empty deps: attach once, don't re-run
+
+  const handleExpandCluster = async (clusterId: string) => {
+    if (!response?.filename) return;
+
+    setError(null);
+    try {
+      const res = await fetch("http://localhost:8000/expand-cluster", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filename: response.filename,
+          cluster_id: clusterId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        setError(data.error);
+      } else {
+        console.log("Received bullet points:", data.cluster.bullet_points);
+        // Update the specific topic with the expanded cluster data
+        setTopics((prevTopics) => {
+          if (!prevTopics) return prevTopics;
+
+          const updatedTopics = { ...prevTopics.topics };
+          updatedTopics[clusterId] = {
+            ...updatedTopics[clusterId],
+            bullet_points: data.cluster.bullet_points,
+          };
+
+          return { ...prevTopics, topics: updatedTopics };
+        });
+      }
+    } catch {
+      setError("Failed to expand cluster.");
+    }
+  };
 
   return (
     <>
@@ -652,6 +693,53 @@ function App() {
                     <span>{topic.stats.num_chunks} chunks</span>
                     <span>Avg: {Math.round(topic.stats.mean_size)} words</span>
                   </div>
+
+                  {/* Expand/Collapse buttons */}
+                  <div style={{ 
+                    marginTop: "1rem", 
+                    display: "flex", 
+                    flexDirection: "column", 
+                    gap: "0.5rem" 
+                  }}>
+                    <button
+                      onClick={() => handleExpandCluster(topicId)}
+                      style={{
+                        ...buttonStyle,
+                        background: "hsl(185, 100%, 50%)",
+                      }}
+                    >
+                      {topic.bullet_points
+                        ? "Regenerate Insights"
+                        : "Expand Cluster for More Insights"}
+                    </button>
+                  </div>
+
+                  {/* Bullet points section */}
+                  {topic.bullet_points && topic.bullet_points.length > 0 && (
+                    <div style={{ 
+                      marginTop: "1rem", 
+                      padding: "1rem", 
+                      background: "rgba(255, 255, 255, 0.04)", 
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255, 255, 255, 0.1)"
+                    }}>
+                      <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
+                        Key Bullet Points:
+                      </strong>
+                      <ul style={{ 
+                        margin: "0.5rem 0 0 0", 
+                        paddingLeft: "1.5rem",
+                        color: "#ddd",
+                        listStyleType: "disc"
+                      }}>
+                        {topic.bullet_points.map((point, idx) => (
+                          <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                            {point.replace(/^\s*-\s*/, '')}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

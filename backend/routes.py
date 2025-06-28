@@ -144,6 +144,9 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                         "keywords": cluster.get("keywords", []),
                         "examples": cluster.get("examples", []),
                         "stats": cluster.get("stats", {}),
+                        "bullet_points": cluster.get(
+                            "bullet_points", None
+                        ),  # Include bullet_points if they exist
                     }
                     for cluster in clusters
                 }
@@ -416,3 +419,53 @@ def generate_headings(data: dict):
         "num_topics": result["num_topics"],
         "topics": result["topics"],
     }
+
+
+@router.post("/expand-cluster")
+def expand_cluster(data: dict):
+    """
+    Expand a specific cluster in the processed file for the given filename and cluster ID.
+
+    Args:
+        data (dict): A dictionary containing 'filename' (str) and 'cluster_id' (str or int).
+
+    Returns:
+        dict:
+            On success, returns a dictionary with expanded cluster information, e.g.:
+    full_filename = data.get("filename")
+    cluster_id = data.get("cluster_id")
+
+    if full_filename is None or cluster_id is None:
+        return {"error": "Filename and cluster ID are required."}
+
+    # Validate and convert cluster_id to int if possible
+    try:
+        cluster_id = int(cluster_id)
+    except (ValueError, TypeError):
+        return {"error": "cluster_id must be an integer."}
+
+    # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
+    processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
+
+    from utils.expand_cluster import expand_cluster as expand_cluster_util
+
+    # Pass only the filename (not the full path) to expand_cluster
+    result = expand_cluster_util(processed_filename, cluster_id)
+    return result
+        - Processed file not found or invalid.
+        - Cluster ID not found in the processed data.
+    """
+    full_filename = data.get("filename")
+    cluster_id = data.get("cluster_id")
+
+    if full_filename is None or cluster_id is None:
+        return {"error": "Filename and cluster ID are required."}
+
+    # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
+    processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
+
+    from utils.expand_cluster import expand_cluster as expand_cluster_util
+
+    # Pass only the filename (not the full path) to expand_cluster
+    result = expand_cluster_util(processed_filename, cluster_id)
+    return result
