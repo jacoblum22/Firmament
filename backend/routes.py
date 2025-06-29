@@ -518,3 +518,30 @@ def debug_bullet_point_endpoint(data: dict):
         return result
     except Exception as e:
         return {"error": f"Failed to debug bullet point: {str(e)}"}
+
+
+@router.post("/expand-bullet-point")
+def expand_bullet_point_endpoint(data: dict):
+    """
+    Expand a bullet point with additional detail and context.
+
+    Args:
+        data (dict): A dictionary containing 'bullet_point' (str), 'chunks' (list of str), and 'topic_heading' (str).
+
+    Returns:
+        dict: Expansion result including the original bullet point and expanded content.
+    """
+    bullet_point = data.get("bullet_point")
+    chunks = data.get("chunks", [])
+    topic_heading = data.get("topic_heading", "Unknown Topic")
+
+    if not bullet_point or not chunks:
+        return {"error": "Missing required fields: 'bullet_point' or 'chunks'."}
+
+    try:
+        from utils.expand_bullet_point import expand_bullet_point
+
+        result = expand_bullet_point(bullet_point, chunks, topic_heading)
+        return result
+    except Exception as e:
+        return {"error": f"Failed to expand bullet point: {str(e)}"}
