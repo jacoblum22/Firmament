@@ -37,10 +37,16 @@ type NestedExpansions = {
   };
 };
 
+type BulletExpansion = {
+  expansion: ExpandedBulletResult;
+  subExpansions?: NestedExpansions;
+};
+
 type TopicResponse = {
   num_chunks: number;
   num_topics: number;
   total_tokens_used: number;
+  segments?: Array<{ position: string; text: string }>; // Added segments
   topics: {
     [key: string]: {
       concepts: string[];
@@ -48,14 +54,35 @@ type TopicResponse = {
       summary: string;
       keywords: string[];
       examples: string[];
+      segment_positions?: string[]; // Added segment_positions
       stats: {
         num_chunks: number;
         min_size: number;
         mean_size: number;
         max_size: number;
       };
-      bullet_points?: string[]; // Added bullet_points property
-      debugResult?: DebugResult; // Added debugResult property
+      bullet_points?: string[];
+      bullet_expansions?: {
+        [bulletKey: string]: {
+          layer_1?: {
+            original_bullet?: string;
+            expanded_bullets: string[];
+            layer: number;
+            topic_heading: string;
+            chunks_used: number;
+            timestamp: string;
+          };
+          layer_2?: {
+            original_bullet?: string;
+            expanded_bullets: string[];
+            layer: number;
+            topic_heading: string;
+            chunks_used: number;
+            timestamp: string;
+          };
+        };
+      };
+      debugResult?: DebugResult;
     };
   };
 };
@@ -156,6 +183,8 @@ function App() {
         setError(data.error);
       } else {
         setTopics(data);
+        // Load saved expansions when topics are loaded
+        loadSavedExpansions(data);
       }
     } catch {
       setError("Failed to generate headings.");
@@ -211,7 +240,10 @@ function App() {
               if (parsed.stage === "done" && parsed.result) {
                 setResponse(parsed.result);
                 if (parsed.result.topics) {
-                  setTopics({ ...parsed.result, topics: parsed.result.topics });
+                  const topicsData = { ...parsed.result, topics: parsed.result.topics };
+                  setTopics(topicsData);
+                  // Load saved expansions when topics are loaded from upload
+                  loadSavedExpansions(topicsData);
                 }
               }
 
@@ -416,12 +448,57 @@ function App() {
       return;
     }
 
-    const topicChunks = topics.topics[topicId].examples; // Assuming 'examples' are the chunks
+    const topic = topics.topics[topicId];
+    
+    // Get all chunks for this topic by cross-referencing segment_positions with segments
+    const getAllTopicChunks = (
+      topicData: TopicResponse['topics'][string], 
+      allSegments?: Array<{ position: string; text: string }>
+    ): string[] => {
+      console.log(`🔍 Debug getAllTopicChunks called for topic ${topicId}`);
+      console.log(`📊 Debug topic data available:`, {
+        hasSegmentPositions: !!topicData.segment_positions,
+        segmentPositionsCount: topicData.segment_positions?.length || 0,
+        examplesCount: topicData.examples?.length || 0,
+        hasAllSegments: !!allSegments,
+        allSegmentsCount: allSegments?.length || 0
+      });
+
+      if (!topicData.segment_positions || !allSegments) {
+        console.warn("⚠️ Debug: Missing segment_positions or segments data, falling back to examples");
+        console.log(`📝 Debug fallback: Using ${topicData.examples?.length || 0} examples instead`);
+        return topicData.examples || [];
+      }
+      
+      // Create a lookup map for faster access
+      const segmentMap = new Map<string, string>();
+      allSegments.forEach(segment => {
+        segmentMap.set(segment.position, segment.text);
+      });
+      console.log(`🗂️ Debug: Created segment lookup map with ${segmentMap.size} positions`);
+      
+      // Extract all chunks for this topic
+      const topicChunks = topicData.segment_positions
+        .map((position: string) => segmentMap.get(position))
+        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
+      
+      const improvement = topicChunks.length - (topicData.examples?.length || 0);
+      console.log(`🎯 Debug: Successfully extracted ${topicChunks.length} chunks for topic ${topicId}`);
+      console.log(`📈 Debug improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
+      
+      return topicChunks;
+    };
+    
+    // Try to get all chunks, fallback to examples if not available
+    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
+    
     // Convert topics to the structure expected by the backend
     const allTopics = Object.keys(topics.topics).reduce((acc, id) => {
+      const topicData = topics.topics[id];
+      const chunks = getAllTopicChunks(topicData, topics?.segments) || topicData.examples || [];
       acc[id] = {
-        examples: topics.topics[id].examples,
-        heading: topics.topics[id].heading
+        examples: chunks, // Use all chunks, not just examples
+        heading: topicData.heading
       };
       return acc;
     }, {} as { [key: string]: { examples: string[], heading: string } });
@@ -490,7 +567,56 @@ function App() {
     }
 
     const topic = topics.topics[topicId];
-    const topicChunks = topic.examples; // Using 'examples' as the chunks
+    
+    // Get all chunks for this topic by cross-referencing segment_positions with segments
+    const getAllTopicChunks = (
+      topicData: TopicResponse['topics'][string], 
+      allSegments?: Array<{ position: string; text: string }>
+    ): string[] => {
+      console.log(`🔍 getAllTopicChunks called for topic ${topicId}`);
+      console.log(`📊 Topic data available:`, {
+        hasSegmentPositions: !!topicData.segment_positions,
+        segmentPositionsCount: topicData.segment_positions?.length || 0,
+        examplesCount: topicData.examples?.length || 0,
+        hasAllSegments: !!allSegments,
+        allSegmentsCount: allSegments?.length || 0
+      });
+
+      if (!topicData.segment_positions || !allSegments) {
+        console.warn("⚠️ Missing segment_positions or segments data, falling back to examples");
+        console.log(`📝 Fallback: Using ${topicData.examples?.length || 0} examples instead`);
+        return topicData.examples || [];
+      }
+      
+      // Create a lookup map for faster access
+      const segmentMap = new Map<string, string>();
+      allSegments.forEach(segment => {
+        segmentMap.set(segment.position, segment.text);
+      });
+      console.log(`🗂️ Created segment lookup map with ${segmentMap.size} positions`);
+      
+      // Extract all chunks for this topic
+      const topicChunks = topicData.segment_positions
+        .map((position: string) => segmentMap.get(position))
+        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
+      
+      const improvement = topicChunks.length - (topicData.examples?.length || 0);
+      console.log(`🎯 Successfully extracted ${topicChunks.length} chunks for topic ${topicId}`);
+      console.log(`📈 Improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
+      
+      // Log first few chunks for verification
+      if (topicChunks.length > 0) {
+        console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
+        if (topicChunks.length > 1) {
+          console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
+        }
+      }
+      
+      return topicChunks;
+    };
+    
+    // Try to get all chunks, fallback to examples if not available
+    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
     const topicHeading = topic.heading;
 
     console.log("📊 Expansion request data:", { 
@@ -509,6 +635,9 @@ function App() {
           bullet_point: bulletPoint,
           chunks: topicChunks,
           topic_heading: topicHeading,
+          filename: response?.filename, // Add filename for saving
+          topic_id: topicId, // Add topic_id for saving
+          layer: 1, // First expansion layer
         }),
       });
 
@@ -526,8 +655,10 @@ function App() {
         console.error("Error expanding bullet point:", data.error);
       } else {
         console.log("✅ Expansion result received:", data);
-        // Store the expansion result using a unique key
-        const bulletKey = `${topicId}_${bulletPoint.slice(0, 50)}`;
+        // Store the expansion result using a consistent key generation
+        const bulletKey = `${topicId}_${generateBulletKey(bulletPoint)}`;
+        console.log(`🔑 Generated frontend expansion key: '${bulletKey}'`);
+        
         setExpandedBullets(prev => ({
           ...prev,
           [bulletKey]: {
@@ -547,9 +678,9 @@ function App() {
     parentBulletKey: string,
     depth: number = 1
   ) => {
-    // Prevent infinite recursion by limiting depth
-    if (depth >= 3) {
-      console.log("Maximum expansion depth reached");
+    // Prevent infinite recursion by limiting depth to maximum 2 layers
+    if (depth >= 2) {
+      console.log("Maximum expansion depth of 2 layers reached");
       return;
     }
 
@@ -563,7 +694,44 @@ function App() {
       return;
     }
 
-    const topicChunks = topic.concepts || [];
+    // Get all chunks for this topic by cross-referencing segment_positions with segments
+    const getAllTopicChunks = (
+      topicData: TopicResponse['topics'][string], 
+      allSegments?: Array<{ position: string; text: string }>
+    ): string[] => {
+      console.log(`🔍 Sub-bullet getAllTopicChunks called for topic ${topicId} at depth ${depth}`);
+      console.log(`📊 Sub-bullet topic data:`, {
+        hasSegmentPositions: !!topicData.segment_positions,
+        segmentPositionsCount: topicData.segment_positions?.length || 0,
+        examplesCount: topicData.examples?.length || 0,
+        hasAllSegments: !!allSegments,
+        allSegmentsCount: allSegments?.length || 0
+      });
+
+      if (!topicData.segment_positions || !allSegments) {
+        console.warn("⚠️ Sub-bullet: Missing segment_positions or segments data, falling back to examples");
+        return topicData.examples || [];
+      }
+      
+      // Create a lookup map for faster access
+      const segmentMap = new Map<string, string>();
+      allSegments.forEach(segment => {
+        segmentMap.set(segment.position, segment.text);
+      });
+      
+      // Extract all chunks for this topic
+      const topicChunks = topicData.segment_positions
+        .map((position: string) => segmentMap.get(position))
+        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
+      
+      const improvement = topicChunks.length - (topicData.examples?.length || 0);
+      console.log(`🎯 Sub-bullet expansion: Extracted ${topicChunks.length} chunks for topic ${topicId}`);
+      console.log(`📈 Sub-bullet improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
+      
+      return topicChunks;
+    };
+
+    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
     const topicHeading = topic.heading || `Topic ${topicId}`;
 
     try {
@@ -576,6 +744,10 @@ function App() {
           bullet_point: subBullet,
           chunks: topicChunks,
           topic_heading: topicHeading,
+          filename: response?.filename, // Add filename for saving
+          topic_id: topicId, // Add topic_id for saving
+          parent_bullet: parentBulletKey, // Add parent bullet for layer 2 tracking
+          layer: depth + 1, // Pass the layer based on expansion depth
         }),
       });
 
@@ -613,6 +785,84 @@ function App() {
     } catch (error) {
       console.error("Failed to expand sub-bullet:", error);
     }
+  };
+
+  // Function to generate a consistent bullet key (must match backend logic)
+  const generateBulletKey = (bulletPoint: string): string => {
+    // Remove markdown formatting and limit length (match backend logic)
+    const cleanBullet = bulletPoint.replace(/^[-*+]\s*/, '').trim();
+    return cleanBullet.slice(0, 80); // Use first 80 chars as key
+  };
+  
+  // Function to load saved bullet point expansions
+  const loadSavedExpansions = (topicsData: TopicResponse) => {
+    console.log("🔄 Loading saved expansions from topics data");
+    const newExpandedBullets: Record<string, BulletExpansion> = {};
+    
+    Object.entries(topicsData.topics).forEach(([topicId, topic]) => {
+      const bulletExpansions = topic.bullet_expansions;
+      if (bulletExpansions) {
+        console.log(`📂 Found saved expansions for topic ${topicId}:`, bulletExpansions);
+        
+        Object.entries(bulletExpansions).forEach(([bulletKey, expansionData]) => {
+          // Handle layer 1 expansions
+          if (expansionData.layer_1) {
+            const originalBullet = expansionData.layer_1.original_bullet || bulletKey;
+            const frontendKey = `${topicId}_${generateBulletKey(originalBullet)}`;
+            
+            console.log(`🔑 Loading layer 1: backend key '${bulletKey}' -> frontend key '${frontendKey}'`);
+            
+            newExpandedBullets[frontendKey] = {
+              expansion: {
+                original_bullet: originalBullet,
+                expanded_bullets: expansionData.layer_1.expanded_bullets,
+                topic_heading: expansionData.layer_1.topic_heading,
+                chunks_used: expansionData.layer_1.chunks_used
+              },
+              subExpansions: {}
+            };
+          }
+          
+          // Handle layer 2 expansions (now stored separately)
+          if (expansionData.layer_2) {
+            const layer2Data = expansionData.layer_2;
+            const originalSubBullet = layer2Data.original_bullet || bulletKey;
+            
+            // Find the parent expansion this belongs to by looking for a layer 1 expansion
+            // that contains this sub-bullet in its expanded_bullets
+            let parentFound = false;
+            Object.entries(newExpandedBullets).forEach(([parentKey, parentExpansion]) => {
+              if (parentKey.startsWith(topicId) && 
+                  parentExpansion.expansion.expanded_bullets.some(bullet => 
+                    generateBulletKey(bullet) === generateBulletKey(originalSubBullet)
+                  )) {
+                
+                const subKey = `${parentKey}_sub_${originalSubBullet.slice(0, 30)}`;
+                console.log(`🔑 Loading layer 2: '${bulletKey}' -> '${subKey}' under parent '${parentKey}'`);
+                
+                parentExpansion.subExpansions![subKey] = {
+                  expansion: {
+                    original_bullet: originalSubBullet,
+                    expanded_bullets: layer2Data.expanded_bullets,
+                    topic_heading: layer2Data.topic_heading,
+                    chunks_used: layer2Data.chunks_used
+                  },
+                  subExpansions: {}
+                };
+                parentFound = true;
+              }
+            });
+            
+            if (!parentFound) {
+              console.warn(`⚠️ Could not find parent for layer 2 expansion: ${bulletKey}`);
+            }
+          }
+        });
+      }
+    });
+    
+    console.log("✅ Loaded saved expansions:", newExpandedBullets);
+    setExpandedBullets(newExpandedBullets);
   };
 
   const renderDebugResult = (topicId: string) => {
@@ -721,11 +971,12 @@ function App() {
                 marginBottom: "0.5rem",
                 fontSize: "inherit",
                 lineHeight: "inherit",
-                cursor: depth < 3 ? "pointer" : "default" // Only clickable if under depth limit
+                cursor: depth < 2 ? "pointer" : "default", // Only clickable if under depth limit
+                opacity: depth < 2 ? 1 : 0.8 // Slightly fade out non-clickable items
               }}
               onClick={(e) => {
                 e.stopPropagation(); // Prevent parent click
-                if (depth < 3) {
+                if (depth < 2) {
                   if (isDeveloperMode) {
                     handleDebugBulletPoint(subBullet, topicId);
                   } else {
@@ -765,8 +1016,10 @@ function App() {
           // Remove markdown list formatting (-, *, +) from the beginning of bullet points
           // since we're using HTML list styling
           const cleanedPoint = point.replace(/^[-*+]\s*/, '').trim();
-          const bulletKey = `${topicId}_${point.slice(0, 50)}`;
+          const bulletKey = `${topicId}_${generateBulletKey(point)}`;
           const isExpanded = expandedBullets[bulletKey];
+          
+          console.log(`🔍 Rendering bullet ${idx}: key='${bulletKey}', expanded=${!!isExpanded}`);
           
           return (
             <li 
