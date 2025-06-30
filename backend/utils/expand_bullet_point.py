@@ -1,9 +1,13 @@
+import json
+import os
+import tiktoken
 from dotenv import load_dotenv
 from .openai_client import get_openai_client
 
 load_dotenv()
 
 client = get_openai_client()
+encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 
 
 def expand_bullet_point(
@@ -73,8 +77,8 @@ def expand_bullet_point(
         MAX_PROMPT_TOKENS = 120000  # Conservative limit
 
         def estimate_tokens(text: str) -> int:
-            """Rough estimation: ~4 characters per token for English text"""
-            return len(text) // 4
+            """Precise token counting using tiktoken encoding for gpt-4o-mini"""
+            return len(encoding.encode(text))
 
         # Calculate base prompt tokens
         base_prompt_tokens = estimate_tokens(prompt)
