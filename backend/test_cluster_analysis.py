@@ -1,9 +1,23 @@
 import json
 
-# Load the processed data
-with open("processed/COGS 200 L1_processed.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+import sys
+import json
 
+# Load the processed data
+try:
+    with open("processed/COGS 200 L1_processed.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+except FileNotFoundError:
+    print("Error: The file 'processed/COGS 200 L1_processed.json' was not found.")
+    print("Please ensure the file exists and try again.")
+    sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"Error: Invalid JSON in 'processed/COGS 200 L1_processed.json': {e}")
+    print("Please check the file format and try again.")
+    sys.exit(1)
+except Exception as e:
+    print(f"Unexpected error loading the file: {e}")
+    sys.exit(1)
 print("Looking for segment_positions in clusters:")
 if "clusters" in data:
     for cluster in data["clusters"]:
