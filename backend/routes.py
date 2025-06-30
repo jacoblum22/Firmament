@@ -639,7 +639,7 @@ def expand_bullet_point_endpoint(data: dict):
                                         # Save the layer 2 expansion under the parent
                                         existing_data["sub_expansions"][bullet_key] = expansion_data
                                         parent_found = True
-                                        print(f"� Saved layer 2 expansion '{bullet_key}' under parent '{existing_key}'")
+                                        print(f"✔️ Saved layer 2 expansion '{bullet_key}' under parent '{existing_key}'")
                                         break
                                 
                                 if not parent_found:
