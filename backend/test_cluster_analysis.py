@@ -1,7 +1,5 @@
 import json
-
 import sys
-import json
 
 # Load the processed data
 try:
