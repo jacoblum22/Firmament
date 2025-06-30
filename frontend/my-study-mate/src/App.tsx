@@ -7,6 +7,56 @@ import ReactMarkdown from 'react-markdown';
 
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
 
+// Shared function to get all topic chunks by cross-referencing segment_positions with segments
+const getAllTopicChunks = (
+  topicData: TopicResponse['topics'][string], 
+  allSegments?: Array<{ position: string; text: string }>,
+  topicId?: string,
+  context?: string
+): string[] => {
+  const contextLabel = context || "getAllTopicChunks";
+  console.log(`🔍 ${contextLabel} called for topic ${topicId || 'unknown'}`);
+  console.log(`📊 ${contextLabel} topic data available:`, {
+    hasSegmentPositions: !!topicData.segment_positions,
+    segmentPositionsCount: topicData.segment_positions?.length || 0,
+    examplesCount: topicData.examples?.length || 0,
+    hasAllSegments: !!allSegments,
+    allSegmentsCount: allSegments?.length || 0
+  });
+
+  if (!topicData.segment_positions || !allSegments) {
+    console.warn(`⚠️ ${contextLabel}: Missing segment_positions or segments data, falling back to examples`);
+    console.log(`📝 ${contextLabel} fallback: Using ${topicData.examples?.length || 0} examples instead`);
+    return topicData.examples || [];
+  }
+  
+  // Create a lookup map for faster access
+  const segmentMap = new Map<string, string>();
+  allSegments.forEach(segment => {
+    segmentMap.set(segment.position, segment.text);
+  });
+  console.log(`🗂️ ${contextLabel}: Created segment lookup map with ${segmentMap.size} positions`);
+  
+  // Extract all chunks for this topic
+  const topicChunks = topicData.segment_positions
+    .map((position: string) => segmentMap.get(position))
+    .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
+  
+  const improvement = topicChunks.length - (topicData.examples?.length || 0);
+  console.log(`🎯 ${contextLabel}: Successfully extracted ${topicChunks.length} chunks for topic ${topicId || 'unknown'}`);
+  console.log(`📈 ${contextLabel} improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
+  
+  // Log first few chunks for verification (only for main expansion, not debug)
+  if (context === "Expansion" && topicChunks.length > 0) {
+    console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
+    if (topicChunks.length > 1) {
+      console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
+    }
+  }
+  
+  return topicChunks;
+};
+
 type UploadResponse = {
   filename: string;
   filetype: string;
@@ -64,21 +114,21 @@ type TopicResponse = {
       bullet_points?: string[];
       bullet_expansions?: {
         [bulletKey: string]: {
-          layer_1?: {
-            original_bullet?: string;
-            expanded_bullets: string[];
-            layer: number;
-            topic_heading: string;
-            chunks_used: number;
-            timestamp: string;
-          };
-          layer_2?: {
-            original_bullet?: string;
-            expanded_bullets: string[];
-            layer: number;
-            topic_heading: string;
-            chunks_used: number;
-            timestamp: string;
+          original_bullet?: string;
+          expanded_bullets: string[];
+          layer: number;
+          topic_heading: string;
+          chunks_used: number;
+          timestamp: string;
+          sub_expansions?: {
+            [subBulletKey: string]: {
+              original_bullet?: string;
+              expanded_bullets: string[];
+              layer: number;
+              topic_heading: string;
+              chunks_used: number;
+              timestamp: string;
+            };
           };
         };
       };
@@ -450,52 +500,13 @@ function App() {
 
     const topic = topics.topics[topicId];
     
-    // Get all chunks for this topic by cross-referencing segment_positions with segments
-    const getAllTopicChunks = (
-      topicData: TopicResponse['topics'][string], 
-      allSegments?: Array<{ position: string; text: string }>
-    ): string[] => {
-      console.log(`🔍 Debug getAllTopicChunks called for topic ${topicId}`);
-      console.log(`📊 Debug topic data available:`, {
-        hasSegmentPositions: !!topicData.segment_positions,
-        segmentPositionsCount: topicData.segment_positions?.length || 0,
-        examplesCount: topicData.examples?.length || 0,
-        hasAllSegments: !!allSegments,
-        allSegmentsCount: allSegments?.length || 0
-      });
-
-      if (!topicData.segment_positions || !allSegments) {
-        console.warn("⚠️ Debug: Missing segment_positions or segments data, falling back to examples");
-        console.log(`📝 Debug fallback: Using ${topicData.examples?.length || 0} examples instead`);
-        return topicData.examples || [];
-      }
-      
-      // Create a lookup map for faster access
-      const segmentMap = new Map<string, string>();
-      allSegments.forEach(segment => {
-        segmentMap.set(segment.position, segment.text);
-      });
-      console.log(`🗂️ Debug: Created segment lookup map with ${segmentMap.size} positions`);
-      
-      // Extract all chunks for this topic
-      const topicChunks = topicData.segment_positions
-        .map((position: string) => segmentMap.get(position))
-        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-      
-      const improvement = topicChunks.length - (topicData.examples?.length || 0);
-      console.log(`🎯 Debug: Successfully extracted ${topicChunks.length} chunks for topic ${topicId}`);
-      console.log(`📈 Debug improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
-      
-      return topicChunks;
-    };
-    
     // Try to get all chunks, fallback to examples if not available
-    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
+    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Debug") || topic.examples || [];
     
     // Convert topics to the structure expected by the backend
     const allTopics = Object.keys(topics.topics).reduce((acc, id) => {
       const topicData = topics.topics[id];
-      const chunks = getAllTopicChunks(topicData, topics?.segments) || topicData.examples || [];
+      const chunks = getAllTopicChunks(topicData, topics?.segments, id, "Debug-All") || topicData.examples || [];
       acc[id] = {
         examples: chunks, // Use all chunks, not just examples
         heading: topicData.heading
@@ -568,55 +579,8 @@ function App() {
 
     const topic = topics.topics[topicId];
     
-    // Get all chunks for this topic by cross-referencing segment_positions with segments
-    const getAllTopicChunks = (
-      topicData: TopicResponse['topics'][string], 
-      allSegments?: Array<{ position: string; text: string }>
-    ): string[] => {
-      console.log(`🔍 getAllTopicChunks called for topic ${topicId}`);
-      console.log(`📊 Topic data available:`, {
-        hasSegmentPositions: !!topicData.segment_positions,
-        segmentPositionsCount: topicData.segment_positions?.length || 0,
-        examplesCount: topicData.examples?.length || 0,
-        hasAllSegments: !!allSegments,
-        allSegmentsCount: allSegments?.length || 0
-      });
-
-      if (!topicData.segment_positions || !allSegments) {
-        console.warn("⚠️ Missing segment_positions or segments data, falling back to examples");
-        console.log(`📝 Fallback: Using ${topicData.examples?.length || 0} examples instead`);
-        return topicData.examples || [];
-      }
-      
-      // Create a lookup map for faster access
-      const segmentMap = new Map<string, string>();
-      allSegments.forEach(segment => {
-        segmentMap.set(segment.position, segment.text);
-      });
-      console.log(`🗂️ Created segment lookup map with ${segmentMap.size} positions`);
-      
-      // Extract all chunks for this topic
-      const topicChunks = topicData.segment_positions
-        .map((position: string) => segmentMap.get(position))
-        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-      
-      const improvement = topicChunks.length - (topicData.examples?.length || 0);
-      console.log(`🎯 Successfully extracted ${topicChunks.length} chunks for topic ${topicId}`);
-      console.log(`📈 Improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
-      
-      // Log first few chunks for verification
-      if (topicChunks.length > 0) {
-        console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
-        if (topicChunks.length > 1) {
-          console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
-        }
-      }
-      
-      return topicChunks;
-    };
-    
     // Try to get all chunks, fallback to examples if not available
-    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
+    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Expansion") || topic.examples || [];
     const topicHeading = topic.heading;
 
     console.log("📊 Expansion request data:", { 
@@ -694,44 +658,8 @@ function App() {
       return;
     }
 
-    // Get all chunks for this topic by cross-referencing segment_positions with segments
-    const getAllTopicChunks = (
-      topicData: TopicResponse['topics'][string], 
-      allSegments?: Array<{ position: string; text: string }>
-    ): string[] => {
-      console.log(`🔍 Sub-bullet getAllTopicChunks called for topic ${topicId} at depth ${depth}`);
-      console.log(`📊 Sub-bullet topic data:`, {
-        hasSegmentPositions: !!topicData.segment_positions,
-        segmentPositionsCount: topicData.segment_positions?.length || 0,
-        examplesCount: topicData.examples?.length || 0,
-        hasAllSegments: !!allSegments,
-        allSegmentsCount: allSegments?.length || 0
-      });
-
-      if (!topicData.segment_positions || !allSegments) {
-        console.warn("⚠️ Sub-bullet: Missing segment_positions or segments data, falling back to examples");
-        return topicData.examples || [];
-      }
-      
-      // Create a lookup map for faster access
-      const segmentMap = new Map<string, string>();
-      allSegments.forEach(segment => {
-        segmentMap.set(segment.position, segment.text);
-      });
-      
-      // Extract all chunks for this topic
-      const topicChunks = topicData.segment_positions
-        .map((position: string) => segmentMap.get(position))
-        .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-      
-      const improvement = topicChunks.length - (topicData.examples?.length || 0);
-      console.log(`🎯 Sub-bullet expansion: Extracted ${topicChunks.length} chunks for topic ${topicId}`);
-      console.log(`📈 Sub-bullet improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
-      
-      return topicChunks;
-    };
-
-    const topicChunks = getAllTopicChunks(topic, topics?.segments) || topic.examples || [];
+    // Try to get all chunks, fallback to examples if not available
+    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Sub-bullet Expansion") || topic.examples || [];
     const topicHeading = topic.heading || `Topic ${topicId}`;
 
     try {
@@ -805,57 +733,46 @@ function App() {
         console.log(`📂 Found saved expansions for topic ${topicId}:`, bulletExpansions);
         
         Object.entries(bulletExpansions).forEach(([bulletKey, expansionData]) => {
-          // Handle layer 1 expansions
-          if (expansionData.layer_1) {
-            const originalBullet = expansionData.layer_1.original_bullet || bulletKey;
-            const frontendKey = `${topicId}_${generateBulletKey(originalBullet)}`;
-            
-            console.log(`🔑 Loading layer 1: backend key '${bulletKey}' -> frontend key '${frontendKey}'`);
-            
-            newExpandedBullets[frontendKey] = {
-              expansion: {
-                original_bullet: originalBullet,
-                expanded_bullets: expansionData.layer_1.expanded_bullets,
-                topic_heading: expansionData.layer_1.topic_heading,
-                chunks_used: expansionData.layer_1.chunks_used
-              },
-              subExpansions: {}
-            };
-          }
+          const originalBullet = expansionData.original_bullet || bulletKey;
+          const frontendKey = `${topicId}_${generateBulletKey(originalBullet)}`;
           
-          // Handle layer 2 expansions (now stored separately)
-          if (expansionData.layer_2) {
-            const layer2Data = expansionData.layer_2;
-            const originalSubBullet = layer2Data.original_bullet || bulletKey;
+          console.log(`🔑 Loading layer 1 expansion: backend key '${bulletKey}' -> frontend key '${frontendKey}'`);
+          
+          // Load the main expansion
+          newExpandedBullets[frontendKey] = {
+            expansion: {
+              original_bullet: originalBullet,
+              expanded_bullets: expansionData.expanded_bullets,
+              topic_heading: expansionData.topic_heading,
+              chunks_used: expansionData.chunks_used
+            },
+            subExpansions: {}
+          };
+          
+          // Load layer 2 sub-expansions if they exist
+          if (expansionData.sub_expansions) {
+            console.log(`🔗 Loading layer 2 sub-expansions for '${frontendKey}':`, expansionData.sub_expansions);
             
-            // Find the parent expansion this belongs to by looking for a layer 1 expansion
-            // that contains this sub-bullet in its expanded_bullets
-            let parentFound = false;
-            Object.entries(newExpandedBullets).forEach(([parentKey, parentExpansion]) => {
-              if (parentKey.startsWith(topicId) && 
-                  parentExpansion.expansion.expanded_bullets.some(bullet => 
-                    generateBulletKey(bullet) === generateBulletKey(originalSubBullet)
-                  )) {
-                
-                const subKey = `${parentKey}_sub_${originalSubBullet.slice(0, 30)}`;
-                console.log(`🔑 Loading layer 2: '${bulletKey}' -> '${subKey}' under parent '${parentKey}'`);
-                
-                parentExpansion.subExpansions![subKey] = {
-                  expansion: {
-                    original_bullet: originalSubBullet,
-                    expanded_bullets: layer2Data.expanded_bullets,
-                    topic_heading: layer2Data.topic_heading,
-                    chunks_used: layer2Data.chunks_used
-                  },
-                  subExpansions: {}
-                };
-                parentFound = true;
+            Object.entries(expansionData.sub_expansions).forEach(([subKey, subExpansionData]) => {
+              const originalSubBullet = subExpansionData.original_bullet || subKey;
+              const subFrontendKey = `${frontendKey}_sub_${originalSubBullet.slice(0, 30)}`;
+              
+              console.log(`🔑 Loading layer 2 expansion: backend key '${subKey}' -> frontend key '${subFrontendKey}'`);
+              
+              if (!newExpandedBullets[frontendKey].subExpansions) {
+                newExpandedBullets[frontendKey].subExpansions = {};
               }
+              
+              newExpandedBullets[frontendKey].subExpansions![subFrontendKey] = {
+                expansion: {
+                  original_bullet: originalSubBullet,
+                  expanded_bullets: subExpansionData.expanded_bullets,
+                  topic_heading: subExpansionData.topic_heading,
+                  chunks_used: subExpansionData.chunks_used
+                },
+                subExpansions: {}
+              };
             });
-            
-            if (!parentFound) {
-              console.warn(`⚠️ Could not find parent for layer 2 expansion: ${bulletKey}`);
-            }
           }
         });
       }

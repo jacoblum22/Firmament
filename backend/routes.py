@@ -617,24 +617,39 @@ def expand_bullet_point_endpoint(data: dict):
                         }
 
                         if layer == 1:
-                            cluster["bullet_expansions"][bullet_key][
-                                "layer_1"
-                            ] = expansion_data
+                            cluster["bullet_expansions"][bullet_key] = expansion_data
                         elif layer == 2:
-                            # For layer 2, create a separate entry for the sub-bullet being expanded
-                            # The bullet_point here is actually a sub-bullet from layer 1
-                            sub_bullet_key = (
-                                bullet_key  # This is already the sub-bullet key
-                            )
-
-                            # Store the layer 2 expansion directly under the sub-bullet key
-                            cluster["bullet_expansions"][sub_bullet_key] = {
-                                "layer_2": expansion_data
-                            }
-
-                            print(
-                                f"🔑 Saved layer 2 expansion under key: '{sub_bullet_key}'"
-                            )
+                            # For layer 2, we need to save it nested under the parent bullet
+                            parent_bullet = data.get("parent_bullet", "")
+                            if parent_bullet:
+                                # Extract the actual bullet text from the parent key (remove topic ID prefix)
+                                if parent_bullet.startswith(f"{topic_id}_"):
+                                    parent_bullet_text = parent_bullet[len(f"{topic_id}_"):]
+                                else:
+                                    parent_bullet_text = parent_bullet
+                                
+                                # Find the parent bullet's expansion
+                                parent_found = False
+                                for existing_key, existing_data in cluster["bullet_expansions"].items():
+                                    if existing_key == parent_bullet_text or (existing_data.get("original_bullet") and existing_data["original_bullet"] == parent_bullet_text):
+                                        # Initialize sub_expansions if it doesn't exist
+                                        if "sub_expansions" not in existing_data:
+                                            existing_data["sub_expansions"] = {}
+                                        
+                                        # Save the layer 2 expansion under the parent
+                                        existing_data["sub_expansions"][bullet_key] = expansion_data
+                                        parent_found = True
+                                        print(f"� Saved layer 2 expansion '{bullet_key}' under parent '{existing_key}'")
+                                        break
+                                
+                                if not parent_found:
+                                    print(f"⚠️ Parent bullet not found for layer 2 expansion. Parent: '{parent_bullet_text}'")
+                                    # Fallback: save as separate entry
+                                    cluster["bullet_expansions"][bullet_key] = expansion_data
+                            else:
+                                print(f"⚠️ No parent_bullet provided for layer 2 expansion")
+                                # Fallback: save as separate entry
+                                cluster["bullet_expansions"][bullet_key] = expansion_data
                         else:
                             print(f"⚠️ Unsupported expansion layer: {layer}")
 

@@ -9,8 +9,11 @@ chunks = data["segments"]
 print(f"Processing {len(chunks)} chunks...")
 
 # Process without saving to file to test the basic structure
-result = process_with_bertopic(chunks)
-
+try:
+    result = process_with_bertopic(chunks)
+except Exception as e:
+    print(f"Error during BERTopic processing: {e}")
+    exit(1)
 print(f"Result keys: {list(result.keys())}")
 print(f'Number of segments in result: {len(result.get("segments", []))}')
 
