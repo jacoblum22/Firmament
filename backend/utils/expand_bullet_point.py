@@ -1,5 +1,4 @@
-import json
-import os
+import tiktoken
 import tiktoken
 from dotenv import load_dotenv
 from .openai_client import get_openai_client
