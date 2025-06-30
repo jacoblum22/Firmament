@@ -883,7 +883,7 @@ function App() {
           
           return (
             <li 
-              key={subIdx}
+              key={subBulletKey}
               style={{ 
                 marginBottom: "0.5rem",
                 fontSize: "inherit",
