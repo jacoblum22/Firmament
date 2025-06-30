@@ -1,20 +1,7 @@
-import json
-import os
-from openai import OpenAI
 from dotenv import load_dotenv
+from .openai_client import get_openai_client
 
 load_dotenv()
-
-
-def get_openai_client():
-    """Initialize and return the OpenAI client, handling missing API key gracefully."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError(
-            "OPENAI_API_KEY is not set in the environment variables."
-        )
-    return OpenAI(api_key=api_key)
-
 
 client = get_openai_client()
 
@@ -81,11 +68,19 @@ def expand_bullet_point(
             f"Below are the source text chunks from this topic that you can reference:\n\n"
         )
 
-        # Add the topic chunks as context
-        for i, chunk in enumerate(topic_chunks, 1):
-            prompt += f"Chunk {i}:\n{chunk}\n\n"
+        # Token limit management for GPT-4o-mini (128k context window)
+        # Leave room for response (300 tokens) and safety margin
+        MAX_PROMPT_TOKENS = 120000  # Conservative limit
 
-        prompt += (
+        def estimate_tokens(text: str) -> int:
+            """Rough estimation: ~4 characters per token for English text"""
+            return len(text) // 4
+
+        # Calculate base prompt tokens
+        base_prompt_tokens = estimate_tokens(prompt)
+
+        # Add the instructions that will be appended later
+        instructions = (
             f"Please provide a detailed expansion of the bullet point above. Your response should:\n"
             + specific_instructions
             + f"- Each sub-bullet should start with a dash (-) and contain ONLY ONE specific idea, detail, or example\n"
@@ -97,24 +92,56 @@ def expand_bullet_point(
             f"- Each sub-bullet should provide actionable study information\n\n"
             f"Format your response as a simple list of bullet points, one per line, starting with '-'."
         )
+        instructions_tokens = estimate_tokens(instructions)
+
+        total_tokens = base_prompt_tokens + instructions_tokens
+        chunks_added = 0
+        chunks_omitted = 0
+
+        # Add chunks while staying within token limit
+        for i, chunk in enumerate(topic_chunks, 1):
+            chunk_text = f"Chunk {i}:\n{chunk}\n\n"
+            chunk_tokens = estimate_tokens(chunk_text)
+
+            if total_tokens + chunk_tokens > MAX_PROMPT_TOKENS:
+                chunks_omitted = len(topic_chunks) - chunks_added
+                print(
+                    f"⚠️ Token limit reached. Added {chunks_added}/{len(topic_chunks)} chunks, omitted {chunks_omitted} chunks"
+                )
+                if chunks_omitted > 0:
+                    prompt += f"\n[Note: {chunks_omitted} additional chunks were omitted due to token limit constraints]\n\n"
+                break
+
+            prompt += chunk_text
+            total_tokens += chunk_tokens
+            chunks_added += 1
+
+        prompt += instructions
 
         print(f"🚀 Expanding bullet point (Layer {layer}): {bullet_point[:50]}...")
         print(
-            f"📦 Using {len(topic_chunks)} chunks for context (topic: {topic_heading})"
+            f"📦 Using {chunks_added}/{len(topic_chunks)} chunks for context (topic: {topic_heading})"
         )
+        if chunks_omitted > 0:
+            print(
+                f"🔄 Token management: {chunks_omitted} chunks omitted to stay within {MAX_PROMPT_TOKENS:,} token limit"
+            )
+        print(f"🎯 Estimated prompt tokens: {total_tokens:,}")
 
         # Log chunk statistics for verification
-        if topic_chunks:
-            total_words = sum(len(chunk.split()) for chunk in topic_chunks)
-            avg_words = total_words / len(topic_chunks)
+        if chunks_added > 0:
+            # Only calculate stats for chunks that were actually added
+            used_chunks = topic_chunks[:chunks_added]
+            total_words = sum(len(chunk.split()) for chunk in used_chunks)
+            avg_words = total_words / len(used_chunks)
             print(
                 f"📊 Chunk statistics: {total_words} total words, avg {avg_words:.1f} words per chunk"
             )
-            print(f"📄 First chunk preview: {topic_chunks[0][:100]}...")
-            if len(topic_chunks) > 1:
-                print(f"📄 Last chunk preview: {topic_chunks[-1][:100]}...")
+            print(f"📄 First chunk preview: {used_chunks[0][:100]}...")
+            if len(used_chunks) > 1:
+                print(f"📄 Last chunk preview: {used_chunks[-1][:100]}...")
         else:
-            print("⚠️ Warning: No chunks provided for expansion!")
+            print("⚠️ Warning: No chunks could be added due to token constraints!")
 
         # GPT-4o call
         response = client.chat.completions.create(

@@ -1,20 +1,9 @@
 import json
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
+from .openai_client import get_openai_client
 
 load_dotenv()
-
-
-def get_openai_client():
-    """Initialize and return the OpenAI client, handling missing API key gracefully."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError(
-            "OPENAI_API_KEY is not set in the environment variables."
-        )
-    return OpenAI(api_key=api_key)
-
 
 client = get_openai_client()
 
