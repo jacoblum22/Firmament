@@ -940,7 +940,7 @@ function App() {
           
           return (
             <li 
-              key={idx} 
+              key={bulletKey} 
               style={{ marginBottom: "0.5rem", cursor: "pointer" }}
               onClick={() => {
                 if (isDeveloperMode) {
