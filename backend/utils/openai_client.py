@@ -27,7 +27,7 @@ def get_openai_client():
                 "OPENAI_API_KEY is not set in the environment variables."
             )
         _client_instance = OpenAI(api_key=api_key)
-        print("🔑 OpenAI client initialized successfully")
+        print("[OpenAI] Client initialized successfully")
 
     return _client_instance
 

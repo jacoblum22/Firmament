@@ -1,4 +1,4 @@
-// OffscreenCanvas worker – flow‑field motion + scroll push + glow/twinkle (fixed)
+// Offscconst POP_NORMAL = 80;enCanvas worker – flow‑field motion + scroll push + glow/twinkle (fixed)
 // -----------------------------------------------------------------------------
 //  • Organic motion from a time‑evolving flow field.
 //  • Scroll wheel nudges particles up/down (separate damped component).
@@ -6,11 +6,9 @@
 //    life expires. No wrapping.
 
 // ===== Tunables ==============================================================
-const POP_NORMAL = 50;
-const POP_BOOST = 100;
+const POP_NORMAL = 80;
 
-const ACCENT_BASE = 0.05; // 5% normally
-const ACCENT_BOOST = 0.15; // 15% while boost active
+const ACCENT_BASE = 0.05; // 5% base chance for accent particles
 
 const TRAIL_MAX = 30;
 const TRAIL_FADE_FACTOR = 0.94;
@@ -29,6 +27,31 @@ const SCROLL_SCALE = 0.003; // wheel px → vy impulse
 const IMPULSE_DECAY = 0.9; // shared impulse decay
 const DAMP_FACTOR = 0.92; // per‑particle damping of scrollVy
 const MAX_SCROLL_VY = 5; // clamp scroll‑induced vy
+
+// Performance optimizations
+const SIN_LOOKUP_SIZE = 1024;
+const sinLookup = new Float32Array(SIN_LOOKUP_SIZE);
+const cosLookup = new Float32Array(SIN_LOOKUP_SIZE);
+
+// Pre-calculate sin/cos lookup tables for faster trigonometry
+for (let i = 0; i < SIN_LOOKUP_SIZE; i++) {
+  const angle = (i / SIN_LOOKUP_SIZE) * Math.PI * 2;
+  sinLookup[i] = Math.sin(angle);
+  cosLookup[i] = Math.cos(angle);
+}
+
+// Fast sin/cos using lookup tables
+function fastSin(angle: number): number {
+  const normalized = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const index = Math.floor((normalized / (Math.PI * 2)) * SIN_LOOKUP_SIZE) % SIN_LOOKUP_SIZE;
+  return sinLookup[index];
+}
+
+function fastCos(angle: number): number {
+  const normalized = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const index = Math.floor((normalized / (Math.PI * 2)) * SIN_LOOKUP_SIZE) % SIN_LOOKUP_SIZE;
+  return cosLookup[index];
+}
 // ============================================================================
 
 let nexus: QuantumNexus | null = null;
@@ -51,9 +74,6 @@ self.onmessage = (e) => {
     case "scroll":
       nexus.addScrollImpulse(-e.data.dy * SCROLL_SCALE);
       break;
-    case "boost":
-      nexus.setBoost(!!e.data.value);
-      break;
     case "explode":
       nexus.explode();
       break;
@@ -70,9 +90,6 @@ class QuantumNexus {
   private time = 0;
   private impulse = 0;
 
-  private particleBoost = false; // external toggle
-  private boostLevel = 0; // smoothed 0‑1
-
   constructor(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number) {
     this.ctx = ctx;
     this.width = w;
@@ -83,9 +100,6 @@ class QuantumNexus {
   }
 
   // public controls
-  setBoost(b: boolean) {
-    this.particleBoost = b;
-  }
   addScrollImpulse(dy: number) {
     this.impulse += dy;
   }
@@ -104,9 +118,9 @@ class QuantumNexus {
       let xoff = this.time * FLOW_SPEED * 0.001;
       for (let x = 0; x < cols; x++) {
         const idx = (y * cols + x) * 2;
-        const ang = Math.sin(xoff) * Math.cos(yoff) * Math.PI * 2;
-        this.flowField[idx] = Math.cos(ang);
-        this.flowField[idx + 1] = Math.sin(ang);
+        const ang = fastSin(xoff) * fastCos(yoff) * Math.PI * 2;
+        this.flowField[idx] = fastCos(ang);
+        this.flowField[idx + 1] = fastSin(ang);
         xoff += 0.1;
       }
       yoff += 0.1;
@@ -116,7 +130,7 @@ class QuantumNexus {
   private spawn(n: number) {
     while (n--)
       this.particles.push(
-        new QuantumParticle(this.width, this.height, this.boostLevel)
+        new QuantumParticle(this.width, this.height)
       );
   }
 
@@ -139,11 +153,6 @@ class QuantumNexus {
     this.time++;
     this.updateFlowField();
 
-    // smooth boost interpolation
-    const target = this.particleBoost ? 1 : 0;
-    this.boostLevel += (target - this.boostLevel) * 0.05;
-    this.boostLevel = Math.min(1, Math.max(0, this.boostLevel));
-
     // distribute impulse then decay
     if (this.impulse !== 0) {
       this.particles.forEach((p) => p.applyImpulse(this.impulse));
@@ -153,20 +162,16 @@ class QuantumNexus {
 
     // update & draw
     this.particles = this.particles.filter((p) => {
-      const alive = p.update(this.flowField, this.boostLevel);
-      if (alive) p.draw(this.ctx, this.boostLevel);
+      const alive = p.update(this.flowField);
+      if (alive) p.draw(this.ctx);
       return alive;
     });
-    // dynamic population & spawn cadence
-    const desired = this.boostLevel > 0.5 ? POP_BOOST : POP_NORMAL;
-    if (
-      this.particles.length < desired &&
-      this.time % (this.boostLevel > 0.5 ? 1 : 2) === 0
-    ) {
-      this.particles.push(
-        new QuantumParticle(this.width, this.height, this.boostLevel)
-      );
+    
+    // maintain desired population
+    if (this.particles.length < POP_NORMAL && this.time % 2 === 0) {
+      this.particles.push(new QuantumParticle(this.width, this.height));
     }
+    
     self.requestAnimationFrame(this.animate);
   };
 }
@@ -193,7 +198,7 @@ class QuantumParticle {
   private static accentHues = [185, 315, 35];
   private speedFactor: number;
 
-  constructor(w: number, h: number, boost: number) {
+  constructor(w: number, h: number) {
     this.maxX = w;
     this.maxY = h;
     this.x = Math.random() * w;
@@ -201,9 +206,8 @@ class QuantumParticle {
     this.vx = (Math.random() - 0.5) * 0.8;
     this.vy = (Math.random() - 0.5) * 0.8;
 
-    // ── Accent roll with boost influence ──
-    const prob = ACCENT_BASE + (ACCENT_BOOST - ACCENT_BASE) * boost;
-    this.isAccent = Math.random() < prob;
+    // ── Accent roll (fixed 5% chance) ──
+    this.isAccent = Math.random() < ACCENT_BASE;
 
     this.minSize = this.isAccent ? 2.5 : 1;
     this.size = Math.pow(Math.random(), 0.5) * this.maxSize + this.minSize;
@@ -221,12 +225,11 @@ class QuantumParticle {
     }
 
     this.speedFactor =
-      (0.8 + this.sizeNorm * 0.2) * (this.isAccent ? 2 : 1) * (1 + boost);
+      (0.8 + this.sizeNorm * 0.2) * (this.isAccent ? 2 : 1);
 
     const easedNorm = Math.pow(this.sizeNorm, 2.5);
     this.baseAlpha =
-      ((this.isAccent ? 0.5 : 0.05) + easedNorm * (this.isAccent ? 1 : 0.3)) *
-      (1 + 0.6 * boost);
+      (this.isAccent ? 0.5 : 0.05) + easedNorm * (this.isAccent ? 1 : 0.3);
   }
 
   applyImpulse(dVy: number) {
@@ -235,7 +238,7 @@ class QuantumParticle {
     if (this.scrollVy < -MAX_SCROLL_VY) this.scrollVy = -MAX_SCROLL_VY;
   }
 
-  update(field: number[], boost: number): boolean {
+  update(field: number[]): boolean {
     this.life++;
     this.scrollVy *= DAMP_FACTOR * this.sizeNorm;
 
@@ -253,10 +256,10 @@ class QuantumParticle {
     // wobble rotate
     const ang =
       Math.atan2(this.vy, this.vx) +
-      Math.sin(this.life * 0.05) * COMPLEXITY * 0.05;
+      fastSin(this.life * 0.05) * COMPLEXITY * 0.05;
     const spd = Math.hypot(this.vx, this.vy);
-    this.vx = Math.cos(ang) * spd;
-    this.vy = Math.sin(ang) * spd;
+    this.vx = fastCos(ang) * spd;
+    this.vy = fastSin(ang) * spd;
 
     // move
     this.x += this.vx;
@@ -271,24 +274,23 @@ class QuantumParticle {
     // trail
     this.trail.unshift({ x: this.x, y: this.y, alpha: 1 });
     this.trail.forEach((t) => (t.alpha *= TRAIL_FADE_FACTOR));
-    const trailCap =
-      (this.isAccent ? TRAIL_MAX * 1.5 : TRAIL_MAX) * (1 + 0.5 * boost);
+    const trailCap = this.isAccent ? TRAIL_MAX * 1.5 : TRAIL_MAX;
     if (this.trail.length > trailCap) this.trail.pop();
 
     return this.life < this.maxLife + FADE_FRAMES;
   }
 
-  draw(ctx: OffscreenCanvasRenderingContext2D, boost: number) {
+  draw(ctx: OffscreenCanvasRenderingContext2D) {
     const phaseAlpha = this.alpha();
     if (phaseAlpha <= 0) return;
     const twinkleBase = this.isAccent ? 1 : 0.8;
     const twinkleAmp = this.isAccent ? 0.3 : 0.2;
     const twinkle =
-      twinkleBase + twinkleAmp * Math.sin(this.life * 0.1 + this.hue);
+      twinkleBase + twinkleAmp * fastSin(this.life * 0.1 + this.hue);
     const effAlpha = phaseAlpha * twinkle;
 
     const glowScale = this.isAccent ? 6 : 4;
-    const glowR = this.size * glowScale * (1 + boost * 0.3);
+    const glowR = this.size * glowScale;
 
     // glow & twinkle
     const grad = ctx.createRadialGradient(
@@ -306,17 +308,45 @@ class QuantumParticle {
     ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    // trail
-    ctx.lineWidth = this.size * (this.isAccent ? 1 : 0.6) * (1 + boost * 0.2);
-    for (let i = 0; i < this.trail.length - 1; i++) {
-      const segA =
-        Math.min(this.trail[i].alpha, this.trail[i + 1].alpha) * phaseAlpha;
-      if (segA < 0.02) break;
-      ctx.strokeStyle = `hsla(${this.hue},100%,70%,${segA})`;
-      ctx.beginPath();
-      ctx.moveTo(this.trail[i].x, this.trail[i].y);
-      ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
-      ctx.stroke();
+    // Optimized trail rendering with gradient fading - batch similar alpha segments
+    if (this.trail.length > 1) {
+      ctx.lineWidth = this.size * (this.isAccent ? 1 : 0.6);
+      
+      let currentAlpha = -1;
+      let batchStart = -1;
+      
+      // Use finer quantization for accent particles (more visible gradient steps)
+      const quantizationSteps = this.isAccent ? 20 : 10; // 0.05 vs 0.1 increments
+      
+      for (let i = 0; i < this.trail.length - 1; i++) {
+        const segA = Math.min(this.trail[i].alpha, this.trail[i + 1].alpha) * phaseAlpha;
+        if (segA < 0.02) break; // Early exit for very faint segments
+        
+        // Quantize alpha to reduce stroke operations (finer for accent particles)
+        const quantizedAlpha = Math.round(segA * quantizationSteps) / quantizationSteps;
+        
+        if (quantizedAlpha !== currentAlpha) {
+          // Draw the previous batch if it exists
+          if (batchStart >= 0) {
+            ctx.strokeStyle = `hsla(${this.hue},100%,70%,${currentAlpha})`;
+            ctx.stroke();
+          }
+          
+          // Start new batch
+          currentAlpha = quantizedAlpha;
+          batchStart = i;
+          ctx.beginPath();
+          ctx.moveTo(this.trail[i].x, this.trail[i].y);
+        }
+        
+        ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
+      }
+      
+      // Draw the final batch
+      if (batchStart >= 0 && currentAlpha > 0) {
+        ctx.strokeStyle = `hsla(${this.hue},100%,70%,${currentAlpha})`;
+        ctx.stroke();
+      }
     }
 
     // core
