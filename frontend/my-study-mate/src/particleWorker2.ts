@@ -1,4 +1,4 @@
-// Offscconst POP_NORMAL = 80;enCanvas worker – flow‑field motion + scroll push + glow/twinkle (fixed)
+// OffscreenCanvas worker – flow‑field motion + scroll push + glow/twinkle (fixed)
 // -----------------------------------------------------------------------------
 //  • Organic motion from a time‑evolving flow field.
 //  • Scroll wheel nudges particles up/down (separate damped component).
