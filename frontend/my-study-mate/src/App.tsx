@@ -1,61 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import "./App.css";
-import { useEffect, useRef } from "react";
 import VanillaTilt from "vanilla-tilt";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
-
-// Shared function to get all topic chunks by cross-referencing segment_positions with segments
-const getAllTopicChunks = (
-  topicData: TopicResponse['topics'][string], 
-  allSegments?: Array<{ position: string; text: string }>,
-  topicId?: string,
-  context?: string
-): string[] => {
-  const contextLabel = context || "getAllTopicChunks";
-  console.log(`🔍 ${contextLabel} called for topic ${topicId || 'unknown'}`);
-  console.log(`📊 ${contextLabel} topic data available:`, {
-    hasSegmentPositions: !!topicData.segment_positions,
-    segmentPositionsCount: topicData.segment_positions?.length || 0,
-    examplesCount: topicData.examples?.length || 0,
-    hasAllSegments: !!allSegments,
-    allSegmentsCount: allSegments?.length || 0
-  });
-
-  if (!topicData.segment_positions || !allSegments) {
-    console.warn(`⚠️ ${contextLabel}: Missing segment_positions or segments data, falling back to examples`);
-    console.log(`📝 ${contextLabel} fallback: Using ${topicData.examples?.length || 0} examples instead`);
-    return topicData.examples || [];
-  }
-  
-  // Create a lookup map for faster access
-  const segmentMap = new Map<string, string>();
-  allSegments.forEach(segment => {
-    segmentMap.set(segment.position, segment.text);
-  });
-  console.log(`🗂️ ${contextLabel}: Created segment lookup map with ${segmentMap.size} positions`);
-  
-  // Extract all chunks for this topic
-  const topicChunks = topicData.segment_positions
-    .map((position: string) => segmentMap.get(position))
-    .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-  
-  const improvement = topicChunks.length - (topicData.examples?.length || 0);
-  console.log(`🎯 ${contextLabel}: Successfully extracted ${topicChunks.length} chunks for topic ${topicId || 'unknown'}`);
-  console.log(`📈 ${contextLabel} improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
-  
-  // Log first few chunks for verification (only for main expansion, not debug)
-  if (context === "Expansion" && topicChunks.length > 0) {
-    console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
-    if (topicChunks.length > 1) {
-      console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
-    }
-  }
-  
-  return topicChunks;
-};
 
 type UploadResponse = {
   filename: string;
@@ -172,6 +121,56 @@ function App() {
   } | null>(null);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [expandedBullets, setExpandedBullets] = useState<NestedExpansions>({});
+
+  // Memoize the getAllTopicChunks function to prevent recreating it on every render
+  const memoizedGetAllTopicChunks = useCallback((
+    topicData: TopicResponse['topics'][string], 
+    allSegments?: Array<{ position: string; text: string }>,
+    topicId?: string,
+    context?: string
+  ): string[] => {
+    const contextLabel = context || "getAllTopicChunks";
+    console.log(`🔍 ${contextLabel} called for topic ${topicId || 'unknown'}`);
+    console.log(`📊 ${contextLabel} topic data available:`, {
+      hasSegmentPositions: !!topicData.segment_positions,
+      segmentPositionsCount: topicData.segment_positions?.length || 0,
+      examplesCount: topicData.examples?.length || 0,
+      hasAllSegments: !!allSegments,
+      allSegmentsCount: allSegments?.length || 0
+    });
+
+    if (!topicData.segment_positions || !allSegments) {
+      console.warn(`⚠️ ${contextLabel}: Missing segment_positions or segments data, falling back to examples`);
+      console.log(`📝 ${contextLabel} fallback: Using ${topicData.examples?.length || 0} examples instead`);
+      return topicData.examples || [];
+    }
+    
+    // Create a lookup map for faster access
+    const segmentMap = new Map<string, string>();
+    allSegments.forEach(segment => {
+      segmentMap.set(segment.position, segment.text);
+    });
+    console.log(`🗂️ ${contextLabel}: Created segment lookup map with ${segmentMap.size} positions`);
+    
+    // Extract all chunks for this topic
+    const topicChunks = topicData.segment_positions
+      .map((position: string) => segmentMap.get(position))
+      .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
+    
+    const improvement = topicChunks.length - (topicData.examples?.length || 0);
+    console.log(`🎯 ${contextLabel}: Successfully extracted ${topicChunks.length} chunks for topic ${topicId || 'unknown'}`);
+    console.log(`📈 ${contextLabel} improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
+    
+    // Log first few chunks for verification (only for main expansion, not debug)
+    if (context === "Expansion" && topicChunks.length > 0) {
+      console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
+      if (topicChunks.length > 1) {
+        console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
+      }
+    }
+    
+    return topicChunks;
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -330,16 +329,38 @@ function App() {
   useEffect(() => {
     const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 
+    // Only show progress bar when there's an actual transcription process
     if (status?.stage === "transcribing") {
       setShowProgressBar(true);
       setAllowUnmount(false);
       setProgressBarExited(false);
+      
+      if (typeof status.current === "number" && typeof status.total === "number") {
+        const progress = (status.current / status.total) * 100;
+
+        coreControls.start({
+          width: `${Math.max(progress, 2)}%`,
+          opacity: 1,
+          transition: { duration: 0.4, ease: "easeOut" },
+        });
+
+        glowControls.start({
+          width: `${Math.max(progress, 2)}%`,
+          opacity: 1,
+          transition: { duration: 0.4, ease: "easeOut" },
+        });
+      }
+    } else {
+      // Hide progress bar when no real process is running
+      setShowProgressBar(false);
+      setAllowUnmount(true);
+      setProgressBarExited(true);
     }
 
     if (status?.stage === "done") {
       coreControls.start({
         width: "100%",
-        opacity: 1, // just in case
+        opacity: 1,
         transition: { duration: 0.2 },
       });
       glowControls.start({
@@ -368,26 +389,7 @@ function App() {
       }, 2000);
     }
 
-    if (
-      status?.stage === "transcribing" &&
-      typeof status.current === "number" &&
-      typeof status.total === "number"
-    ) {
-      const progress = (status.current / status.total) * 100;
-
-      coreControls.start({
-        width: `${Math.max(progress, 2)}%`,
-        opacity: 1,
-        transition: { duration: 0.4, ease: "easeOut" },
-      });
-
-      glowControls.start({
-        width: `${Math.max(progress, 2)}%`,
-        opacity: 1,
-        transition: { duration: 0.4, ease: "easeOut" },
-      });
-    }
-
+    // Canvas and particle system initialization
     if (!canvas || typeof OffscreenCanvas === "undefined") return;
 
     if (canvasTransferred.current) return; // 🔐 prevent second transfer
@@ -501,12 +503,12 @@ function App() {
     const topic = topics.topics[topicId];
     
     // Try to get all chunks, fallback to examples if not available
-    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Debug") || topic.examples || [];
+    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Debug") || topic.examples || [];
     
     // Convert topics to the structure expected by the backend
     const allTopics = Object.keys(topics.topics).reduce((acc, id) => {
       const topicData = topics.topics[id];
-      const chunks = getAllTopicChunks(topicData, topics?.segments, id, "Debug-All") || topicData.examples || [];
+      const chunks = memoizedGetAllTopicChunks(topicData, topics?.segments, id, "Debug-All") || topicData.examples || [];
       acc[id] = {
         examples: chunks, // Use all chunks, not just examples
         heading: topicData.heading
@@ -580,7 +582,7 @@ function App() {
     const topic = topics.topics[topicId];
     
     // Try to get all chunks, fallback to examples if not available
-    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Expansion") || topic.examples || [];
+    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Expansion") || topic.examples || [];
     const topicHeading = topic.heading;
 
     console.log("📊 Expansion request data:", { 
@@ -659,7 +661,7 @@ function App() {
     }
 
     // Try to get all chunks, fallback to examples if not available
-    const topicChunks = getAllTopicChunks(topic, topics?.segments, topicId, "Sub-bullet Expansion") || topic.examples || [];
+    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Sub-bullet Expansion") || topic.examples || [];
     const topicHeading = topic.heading || `Topic ${topicId}`;
 
     try {
@@ -876,7 +878,7 @@ function App() {
         listStyleType: depth === 1 ? "circle" : "square",
         color: "#ddd"
       }}>
-        {subBullets.map((subBullet: string, subIdx: number) => {
+        {subBullets.map((subBullet: string) => {
           const cleanedSubBullet = subBullet.replace(/^[-*+]\s*/, '').trim();
           const subBulletKey = `${parentBulletKey}_sub_${subBullet.slice(0, 30)}`;
           const subExpansion = subExpansions[subBulletKey];
@@ -981,7 +983,7 @@ function App() {
           pointerEvents: "none",
         }}
       ></canvas>
-      <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+      <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
         <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
           MyStudyMate
         </div>
@@ -1019,24 +1021,22 @@ function App() {
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault();
-            setDragOver(true);
-
-            // Only assign a hue if not already set
-            if (activeHue === null) {
+            
+            // Only update state if not already in drag state
+            if (!dragOver) {
+              setDragOver(true);
+              
+              // Assign a random hue only on first drag entry
               const randomHue =
                 ACCENT_HUES[Math.floor(Math.random() * ACCENT_HUES.length)];
               setActiveHue(randomHue);
+              
+              // Apply transform only once
+              if (dropZoneRef.current) {
+                dropZoneRef.current.style.transform =
+                  "rotateX(3deg) rotateY(0deg) scale(1.03)";
+              }
             }
-
-            if (dropZoneRef.current) {
-              dropZoneRef.current.style.transform =
-                "rotateX(3deg) rotateY(0deg) scale(1.03)";
-            }
-            particleWorkerRef.current?.postMessage({
-              type: "boost",
-              value: true,
-            });
-            console.log("Boost activated");
           }}
           onDragLeave={() => {
             setDragOver(false);
@@ -1045,11 +1045,7 @@ function App() {
             if (dropZoneRef.current) {
               dropZoneRef.current.style.transform = "";
             }
-            particleWorkerRef.current?.postMessage({
-              type: "boost",
-              value: false,
-            });
-            console.log("Boost deactivated");
+
           }}
           onDrop={(e) => {
             setDragOver(false);
@@ -1057,15 +1053,80 @@ function App() {
             if (dropZoneRef.current) {
               dropZoneRef.current.style.transform = "";
             }
-            particleWorkerRef.current?.postMessage({
-              type: "boost",
-              value: false,
-            });
+
             particleWorkerRef.current?.postMessage({ type: "explode" });
             handleDrop(e);
           }}
         >
-          <p>Drop your file here or click to upload</p>
+          <div className="drop-zone-content">
+            <div style={{
+              fontSize: "3rem",
+              marginBottom: "1.5rem",
+              opacity: dragOver ? 1 : 0.7,
+              transition: "all 0.3s ease",
+              transform: dragOver ? "scale(1.1)" : "scale(1)"
+            }}>
+              {dragOver ? "📂" : "📁"}
+            </div>
+            
+            <h3 style={{
+              margin: "0 0 1rem 0",
+              fontSize: "1.4rem",
+              fontWeight: "600",
+              color: "#fff",
+              opacity: dragOver ? 1 : 0.9,
+              transition: "opacity 0.3s ease"
+            }}>
+              {dragOver ? "Drop your file here!" : "Upload Your Study Material"}
+            </h3>
+            
+            <p style={{
+              margin: "0 0 1.5rem 0",
+              fontSize: "1rem",
+              color: "#ccc",
+              lineHeight: "1.5",
+              opacity: dragOver ? 0.8 : 0.7,
+              transition: "opacity 0.3s ease"
+            }}>
+              {dragOver 
+                ? "Release to start processing..." 
+                : "Drag & drop your file here or click to browse"
+              }
+            </p>
+            
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              justifyContent: "center",
+              marginBottom: "1rem"
+            }}>
+              {[".pdf", ".mp3", ".wav", ".txt", ".m4a"].map((ext) => (
+                <span key={ext} style={{
+                  background: "rgba(255, 255, 255, 0.1)",
+                  color: "#ddd",
+                  padding: "0.3rem 0.8rem",
+                  borderRadius: "20px",
+                  fontSize: "0.8rem",
+                  fontWeight: "500",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  opacity: dragOver ? 0.6 : 0.8,
+                  transition: "opacity 0.3s ease"
+                }}>
+                  {ext}
+                </span>
+              ))}
+            </div>
+            
+            <div style={{
+              fontSize: "0.85rem",
+              color: "#999",
+              opacity: dragOver ? 0.6 : 0.8,
+              transition: "opacity 0.3s ease"
+            }}>
+              💡 Supports PDFs, audio files, and text documents
+            </div>
+          </div>
         </div>
 
         {error && <p style={{ color: "red" }}>{error}</p>}
@@ -1089,7 +1150,9 @@ function App() {
               style={{
                 overflow: "hidden", // Needed for smooth height animation
                 marginTop: "1rem",
-                paddingBottom: "40px", // 🔧 Give space for glow
+                paddingBottom: "60px", // 🔧 Give extra space for enhanced glow
+                paddingLeft: "30px", // ✅ Balanced horizontal space for wider bar
+                paddingRight: "30px", // ✅ Balanced horizontal space for wider bar
               }}
             >
               <motion.p
@@ -1098,23 +1161,32 @@ function App() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
               >
-                {status?.stage === "transcribing" &&
-                typeof status.current === "number" &&
-                typeof status.total === "number"
+                {status?.stage === "uploading"
+                  ? "Uploading file..."
+                  : status?.stage === "preprocessing"
+                  ? "Preprocessing audio..."
+                  : status?.stage === "transcribing" &&
+                    typeof status.current === "number" &&
+                    typeof status.total === "number"
                   ? `Transcribing chunk ${status.current} of ${status.total}…`
+                  : status?.stage === "saving_output"
+                  ? "Saving output..."
                   : isFinishing
                   ? "Finishing up…"
                   : "Beginning transcription…"}
               </motion.p>
 
-              {/* NEW WRAPPER to allow overflow */}
+              {/* Enhanced wrapper to allow glow overflow */}
               <div
                 style={{
                   position: "relative",
                   overflow: "visible", // ✅ Let glow extend outside
-                  padding: "0 32px", // ✅ Prevent horizontal clipping
+                  padding: "20px clamp(20px, 5vw, 40px)", // ✅ Responsive padding that scales with viewport
                   display: "flex",
                   justifyContent: "center",
+                  alignItems: "center",
+                  width: "100%", // ✅ Ensure full width for centering
+                  boxSizing: "border-box", // ✅ Include padding in width calculation
                 }}
               >
                 <div className="neon-progress-wrapper">
@@ -1123,12 +1195,14 @@ function App() {
                     initial={{ width: "0%", opacity: 0 }}
                     animate={coreControls}
                     transition={{ duration: 0.6, ease: "easeOut" }}
+                    style={{ position: "absolute", left: 0, top: 0 }}
                   />
                   <motion.div
                     className="neon-progress-glow"
                     initial={{ width: "0%", opacity: 0 }}
                     animate={glowControls}
                     transition={{ duration: 0.6, ease: "easeOut" }}
+                    style={{ position: "absolute", left: 0, top: 0 }}
                   />
                 </div>
               </div>
@@ -1137,69 +1211,322 @@ function App() {
         </AnimatePresence>
 
         {canShowTranscript && (
-          <div style={{ marginTop: "2rem" }}>
-            <p>
-              <strong>File Uploaded:</strong> {response.filename}
-            </p>
-            <p>
-              <strong>Type:</strong> {response.filetype}
-            </p>
-            <p>
-              <strong>Status:</strong> {response.message}
-            </p>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{ 
+              marginTop: "3rem",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)",
+              borderRadius: "16px",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              padding: "2rem",
+              backdropFilter: "blur(10px)"
+            }}
+          >
+            {/* File Info Header */}
+            <div style={{ 
+              marginBottom: "2rem",
+              background: "rgba(0, 0, 0, 0.3)",
+              borderRadius: "12px",
+              padding: "1.5rem",
+              border: "1px solid rgba(255, 255, 255, 0.1)"
+            }}>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "1rem",
+                marginBottom: "1rem"
+              }}>
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1.2rem"
+                }}>
+                  📄
+                </div>
+                <div>
+                  <h3 style={{ 
+                    margin: 0, 
+                    color: "#fff",
+                    fontSize: "1.2rem",
+                    fontWeight: "600"
+                  }}>
+                    File Successfully Processed
+                  </h3>
+                  <p style={{ 
+                    margin: "0.2rem 0 0 0", 
+                    color: "#999",
+                    fontSize: "0.9rem"
+                  }}>
+                    Ready for analysis and topic extraction
+                  </p>
+                </div>
+              </div>
+              
+              <div style={{ 
+                display: "grid", 
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "1rem"
+              }}>
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "0.5rem",
+                  color: "#ccc"
+                }}>
+                  <span style={{ fontSize: "0.9rem" }}>📁</span>
+                  <div>
+                    <div style={{ fontSize: "0.8rem", color: "#999" }}>Filename</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filename}</div>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "0.5rem",
+                  color: "#ccc"
+                }}>
+                  <span style={{ fontSize: "0.9rem" }}>🏷️</span>
+                  <div>
+                    <div style={{ fontSize: "0.8rem", color: "#999" }}>File Type</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filetype}</div>
+                  </div>
+                </div>
+                
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "0.5rem",
+                  color: "#ccc"
+                }}>
+                  <span style={{ fontSize: "0.9rem" }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: "0.8rem", color: "#999" }}>Status</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: "500", color: "#4ade80" }}>{response.message}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Transcript Display */}
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "0.75rem",
+                marginBottom: "1rem"
+              }}>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: "1.3rem",
+                  fontWeight: "600",
+                  color: "#fff"
+                }}>
+                  📄 Extracted Transcript
+                </h2>
+                <div style={{
+                  background: "rgba(185, 255, 255, 0.1)",
+                  color: "hsl(185, 100%, 70%)",
+                  padding: "0.3rem 0.8rem",
+                  borderRadius: "20px",
+                  fontSize: "0.8rem",
+                  fontWeight: "500",
+                  border: "1px solid rgba(185, 255, 255, 0.2)"
+                }}>
+                  {response.text ? `${Math.round(response.text.length / 1000)}k characters` : "0 characters"}
+                </div>
+              </div>
+              
+              <div style={{
+                background: "rgba(0, 0, 0, 0.4)",
+                borderRadius: "12px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  padding: "0.75rem 1rem",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem"
+                }}>
+                  <div style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#ef4444"
+                  }}></div>
+                  <div style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#f59e0b"
+                  }}></div>
+                  <div style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#10b981"
+                  }}></div>
+                  <span style={{ 
+                    marginLeft: "0.5rem", 
+                    fontSize: "0.8rem", 
+                    color: "#999",
+                    fontFamily: "monospace"
+                  }}>
+                    transcript.txt
+                  </span>
+                </div>
+                
+                <div style={{
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  padding: "1.5rem",
+                  lineHeight: "1.6"
+                }}>
+                  <pre style={{
+                    margin: 0,
+                    fontFamily: "'Fira Code', 'Consolas', monospace",
+                    fontSize: "0.9rem",
+                    color: "#e5e5e5",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word"
+                  }}>
+                    {response.text || "No transcript content available"}
+                  </pre>
+                </div>
+              </div>
+              
+              <div style={{ 
+                marginTop: "0.75rem",
+                fontSize: "0.8rem", 
+                color: "#888",
+                textAlign: "center"
+              }}>
+                💡 This transcript will be segmented and analyzed for key topics below
+              </div>
+            </div>
+          </motion.div>
         )}
 
         {canShowTranscript && (
-          <div style={{ marginTop: "2rem" }}>
-            <h2>📄 Extracted Text</h2>
-            <textarea
-              readOnly
-              value={response.text}
-              style={{
-                width: "100%",
-                height: "300px",
-                padding: "1rem",
-                fontFamily: "monospace",
-                whiteSpace: "pre-wrap",
-              }}
-            />
-          </div>
-        )}
-
-        {canShowTranscript && (
-          <div style={{ marginTop: "1rem", display: "flex", gap: "1rem" }}>
-            <button
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            style={{ 
+              marginTop: "2rem", 
+              display: "flex", 
+              gap: "1rem",
+              flexWrap: "wrap"
+            }}
+          >
+            <motion.button
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleProcessChunks}
               disabled={!!processedChunks}
               style={{
                 ...buttonStyle,
-                opacity: processedChunks ? 0.6 : 1,
+                flex: "1",
+                minWidth: "250px",
+                padding: "1rem 1.5rem",
+                fontSize: "1rem",
+                fontWeight: "600",
+                background: processedChunks 
+                  ? "linear-gradient(135deg, #10b981, #059669)"
+                  : "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
+                opacity: processedChunks ? 0.8 : 1,
                 cursor: processedChunks ? "not-allowed" : "pointer",
+                position: "relative",
+                overflow: "hidden"
               }}
             >
-              {processedChunks
-                ? "Chunks Processed ✔"
-                : "Segment & Optimize Transcript"}
-            </button>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "0.75rem",
+                justifyContent: "center"
+              }}>
+                <span style={{ fontSize: "1.1rem" }}>
+                  {processedChunks ? "✅" : "🔧"}
+                </span>
+                <span>
+                  {processedChunks
+                    ? "Transcript Segmented ✔"
+                    : "Segment & Optimize Transcript"}
+                </span>
+              </div>
+              {!processedChunks && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "-100%",
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                  animation: "shimmer 2s infinite"
+                }} />
+              )}
+            </motion.button>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleGenerateHeadings}
               disabled={!processedChunks || generatingHeadings}
               style={{
                 ...buttonStyle,
+                flex: "1",
+                minWidth: "250px",
+                padding: "1rem 1.5rem",
+                fontSize: "1rem",
+                fontWeight: "600",
+                background: !processedChunks || generatingHeadings 
+                  ? "linear-gradient(135deg, #6b7280, #4b5563)"
+                  : "linear-gradient(135deg, hsl(315, 100%, 60%), hsl(330, 100%, 70%))",
                 opacity: !processedChunks || generatingHeadings ? 0.6 : 1,
-                cursor:
-                  !processedChunks || generatingHeadings
-                    ? "not-allowed"
-                    : "pointer",
+                cursor: !processedChunks || generatingHeadings ? "not-allowed" : "pointer",
+                position: "relative",
+                overflow: "hidden"
               }}
             >
-              {generatingHeadings
-                ? "Generating Headings..."
-                : "Generate Headings with BERTopic"}
-            </button>
-          </div>
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "0.75rem",
+                justifyContent: "center"
+              }}>
+                <span style={{ fontSize: "1.1rem" }}>
+                  {generatingHeadings ? "⏳" : "🧠"}
+                </span>
+                <span>
+                  {generatingHeadings
+                    ? "Generating Topics..."
+                    : "Generate Topics with AI"}
+                </span>
+              </div>
+              {processedChunks && !generatingHeadings && (
+                <div style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "-100%",
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                  animation: "shimmer 2s infinite"
+                }} />
+              )}
+            </motion.button>
+          </motion.div>
         )}
 
         {topics && (
