@@ -23,6 +23,11 @@ class Config {
   }
 
   public getApiUrl(endpoint: string): string {
+    // If endpoint is falsy (empty string or undefined), return base URL unchanged
+    if (!endpoint) {
+      return this.apiBaseUrl;
+    }
+    
     // Remove leading slash if present
     const cleanEndpoint = endpoint.replace(/^\//, '');
     return `${this.apiBaseUrl}/${cleanEndpoint}`;

@@ -21,6 +21,8 @@ services:
       - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Alternative Python-based health check:
+      # test: ["CMD", "python", "healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,6 +32,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -39,9 +42,11 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=studymate_prod
-      - POSTGRES_USER=studymate
-      - POSTGRES_PASSWORD=your-secure-password
+      - POSTGRES_DB=${POSTGRES_DB:-studymate_prod}
+      - POSTGRES_USER=${POSTGRES_USER:-studymate}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    env_file:
+      - .env.production
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped

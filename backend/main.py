@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from datetime import datetime
+from datetime import datetime, timezone
 from routes import router
 from config import settings
 from middleware import SecurityHeadersMiddleware, RateLimitMiddleware
@@ -121,7 +121,7 @@ def health_check():
     return {
         "status": "healthy",
         "environment": settings.environment,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "debug": settings.debug,
         "version": "2.0.0",
     }

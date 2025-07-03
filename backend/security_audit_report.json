@@ -1,0 +1,11 @@
+{
+  "issues": [
+    "Placeholder values in .env.production: ['CHANGE_ME_SECURE_API_KEY_FOR_PRODUCTION', 'CHANGE_ME_SECURE_REDIS_PASSWORD_FOR_PRODUCTION', 'CHANGE_ME_DB_PASSWORD@postgres:5432/studymate_prod', 'CHANGE_ME_SECURE_DB_PASSWORD_FOR_PRODUCTION', 'CHANGE_ME_OPENAI_API_KEY_FOR_PRODUCTION']"
+  ],
+  "recommendations": [],
+  "summary": {
+    "total_issues": 1,
+    "total_recommendations": 0,
+    "status": "FAIL"
+  }
+}

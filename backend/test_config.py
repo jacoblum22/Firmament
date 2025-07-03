@@ -18,23 +18,41 @@ def test_environment_config(env_name):
     print(f"\n🧪 Testing {env_name.upper()} environment")
     print("-" * 40)
 
-    # Clear any existing environment variable
-    if "ENVIRONMENT" in os.environ:
-        del os.environ["ENVIRONMENT"]
+    # Clear all environment variables that might affect the test
+    env_vars_to_clear = [
+        "ENVIRONMENT",
+        "DEBUG",
+        "HOST",
+        "PORT",
+        "RELOAD",
+        "LOG_LEVEL",
+        "RATE_LIMIT_CALLS",
+        "RATE_LIMIT_PERIOD",
+        "ALLOWED_ORIGINS",
+    ]
+
+    for var in env_vars_to_clear:
+        if var in os.environ:
+            del os.environ[var]
 
     # Set environment
     os.environ["ENVIRONMENT"] = env_name
 
     # Clear the module cache to force reload
     import sys
+    import importlib
 
+    # Clear the config module from cache
     if "config" in sys.modules:
         del sys.modules["config"]
 
-    # Import settings (this will reload with new environment)
-    from config import Settings
+    # Import and reload the config module
+    import config
 
-    settings = Settings()
+    importlib.reload(config)
+
+    # Get a fresh Settings instance
+    settings = config.Settings()
 
     # Test basic properties
     assert settings.environment == env_name, f"Environment should be {env_name}"
@@ -83,8 +101,11 @@ def test_config_loading():
     print("\n🔧 Testing configuration file loading")
     print("-" * 40)
 
+    # Get the backend directory path
+    backend_dir = Path(__file__).parent
+
     # Test development config
-    dev_env_file = Path(".env.development")
+    dev_env_file = backend_dir / ".env.development"
     if dev_env_file.exists():
         print(f"✅ Development config file found: {dev_env_file}")
     else:
@@ -92,7 +113,7 @@ def test_config_loading():
         return False
 
     # Test production config
-    prod_env_file = Path(".env.production")
+    prod_env_file = backend_dir / ".env.production"
     if prod_env_file.exists():
         print(f"✅ Production config file found: {prod_env_file}")
     else:
@@ -100,7 +121,7 @@ def test_config_loading():
         return False
 
     # Test example config
-    example_env_file = Path(".env.example")
+    example_env_file = backend_dir / ".env.example"
     if example_env_file.exists():
         print(f"✅ Example config file found: {example_env_file}")
     else:
