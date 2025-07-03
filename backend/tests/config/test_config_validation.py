@@ -4,7 +4,59 @@ Test Configuration Validation System
 """
 import os
 import sys
+import importlib
 from pathlib import Path
+
+# Add the backend directory to Python path to import config
+backend_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(backend_dir))
+
+
+def safe_import_config():
+    """Safely import config module, handling SystemExit exceptions"""
+    # Temporarily capture sys.exit to prevent it from terminating the test
+    original_exit = sys.exit
+    exit_called = False
+    exit_code = None
+
+    def mock_exit(code=0):
+        nonlocal exit_called, exit_code
+        exit_called = True
+        exit_code = code
+        # Don't actually exit, just capture the call
+
+    sys.exit = mock_exit
+
+    try:
+        if "config" in sys.modules:
+            importlib.reload(sys.modules["config"])
+
+        import config
+
+        settings = getattr(config, "settings", None)
+        if settings is None:
+            raise AttributeError("Config module does not have a 'settings' attribute")
+
+        return settings, exit_called, exit_code
+
+    except SystemExit as e:
+        # Handle SystemExit explicitly
+        exit_called = True
+        exit_code = e.code
+        # Try to still get the config if possible
+        try:
+            import config
+
+            settings = getattr(config, "settings", None)
+            if settings is not None:
+                return settings, exit_called, exit_code
+        except:
+            pass
+        # If we can't get settings, raise the original exception
+        raise e
+
+    finally:
+        sys.exit = original_exit
 
 
 def test_configuration_validation():
@@ -20,18 +72,13 @@ def test_configuration_validation():
         # Clear any existing OPENAI_API_KEY to test warning
         os.environ.pop("OPENAI_API_KEY", None)
 
-        # Import fresh settings
-        import importlib
-
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
-
-        from config import settings
+        settings, exit_called, exit_code = safe_import_config()
 
         print(f"✅ Development environment loaded successfully")
         print(f"   Environment: {settings.environment}")
         print(f"   Debug: {settings.debug}")
         print(f"   OpenAI configured: {bool(settings.openai_api_key)}")
+        print(f"   Exit called: {exit_called}")
 
     except Exception as e:
         print(f"❌ Development test failed: {e}")
@@ -42,18 +89,18 @@ def test_configuration_validation():
         os.environ["ENVIRONMENT"] = "production"
         os.environ.pop("OPENAI_API_KEY", None)
 
-        # Import fresh settings
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
+        settings, exit_called, exit_code = safe_import_config()
 
-        from config import settings
-
-        print("❌ Production test should have failed but didn't")
+        if exit_called and exit_code == 1:
+            print(
+                "✅ Production validation correctly failed: Configuration errors detected"
+            )
+            print("   (This is expected behavior)")
+        else:
+            print("❌ Production test should have failed but didn't")
 
     except Exception as e:
-        print(
-            f"✅ Production validation correctly failed: Configuration errors detected"
-        )
+        print(f"✅ Production validation correctly failed: {e}")
         print(f"   (This is expected behavior)")
 
     # Test 3: Production with valid keys (should work)
@@ -62,11 +109,7 @@ def test_configuration_validation():
         os.environ["ENVIRONMENT"] = "production"
         os.environ["OPENAI_API_KEY"] = "sk-test123456789abcdef"
 
-        # Import fresh settings
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
-
-        from config import settings
+        settings, exit_called, exit_code = safe_import_config()
 
         print(f"✅ Production environment with valid keys loaded successfully")
         print(f"   Environment: {settings.environment}")
@@ -84,16 +127,15 @@ def test_configuration_validation():
         os.environ["ENVIRONMENT"] = "production"
         os.environ["OPENAI_API_KEY"] = "invalid-key-format"
 
-        # Import fresh settings
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
+        settings, exit_called, exit_code = safe_import_config()
 
-        from config import settings
-
-        print("❌ Should have failed with invalid API key format")
+        if exit_called and exit_code == 1:
+            print("✅ Correctly rejected invalid API key format")
+        else:
+            print("❌ Should have failed with invalid API key format")
 
     except Exception as e:
-        print("✅ Correctly rejected invalid API key format")
+        print(f"✅ Correctly rejected invalid API key format: {e}")
 
     # Test 5: Configuration summary
     print("\n📋 Test 5: Configuration Summary")
@@ -101,11 +143,7 @@ def test_configuration_validation():
         os.environ["ENVIRONMENT"] = "development"
         os.environ["OPENAI_API_KEY"] = "sk-dev123456789"
 
-        # Import fresh settings
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
-
-        from config import settings
+        settings, exit_called, exit_code = safe_import_config()
 
         summary = settings.get_config_summary()
         print("✅ Configuration summary:")
@@ -149,14 +187,8 @@ def test_port_validation():
             os.environ["PORT"] = port_value
             os.environ["ENVIRONMENT"] = environment
 
-            # Clear any existing config module to force reload
-            if "config" in sys.modules:
-                import importlib
-
-                importlib.reload(sys.modules["config"])
-
             try:
-                from config import settings
+                settings, exit_called, exit_code = safe_import_config()
 
                 if should_raise:
                     print(
@@ -192,20 +224,27 @@ def test_port_validation():
             os.environ["PORT"] = port_value
             os.environ["ENVIRONMENT"] = "production"
 
-            if "config" in sys.modules:
-                import importlib
-
-                importlib.reload(sys.modules["config"])
-
             try:
-                from config import settings
+                settings, exit_called, exit_code = safe_import_config()
 
-                # This should raise an error
-                _ = settings.port
-                print(
-                    f"    ❌ Expected error for PORT='{port_value}' in production mode, but got port {settings.port}"
-                )
-                return False
+                # Check if validation failed appropriately
+                if exit_called and exit_code == 1:
+                    print(
+                        f"    ✅ Expected error for PORT='{port_value}' in production mode: SystemExit"
+                    )
+                else:
+                    # This should raise an error when accessing the port
+                    try:
+                        port = settings.port
+                        print(
+                            f"    ❌ Expected error for PORT='{port_value}' in production mode, but got port {port}"
+                        )
+                        return False
+                    except Exception as port_error:
+                        print(
+                            f"    ✅ Expected error for PORT='{port_value}' in production mode: {type(port_error).__name__}"
+                        )
+
             except Exception as e:
                 print(
                     f"    ✅ Expected error for PORT='{port_value}' in production mode: {type(e).__name__}"

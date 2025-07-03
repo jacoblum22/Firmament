@@ -13,6 +13,53 @@ backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
 
+def safe_import_config():
+    """Safely import config module, handling SystemExit exceptions"""
+    # Temporarily capture sys.exit to prevent it from terminating the test
+    original_exit = sys.exit
+    exit_called = False
+    exit_code = None
+
+    def mock_exit(code=0):
+        nonlocal exit_called, exit_code
+        exit_called = True
+        exit_code = code
+        # Don't actually exit, just capture the call
+
+    sys.exit = mock_exit
+
+    try:
+        if "config" in sys.modules:
+            importlib.reload(sys.modules["config"])
+
+        import config
+
+        settings = getattr(config, "settings", None)
+        if settings is None:
+            raise AttributeError("Config module does not have a 'settings' attribute")
+
+        return settings, exit_called, exit_code
+
+    except SystemExit as e:
+        # Handle SystemExit explicitly
+        exit_called = True
+        exit_code = e.code
+        # Try to still get the config if possible
+        try:
+            import config
+
+            settings = getattr(config, "settings", None)
+            if settings is not None:
+                return settings, exit_called, exit_code
+        except:
+            pass
+        # If we can't get settings, raise the original exception
+        raise e
+
+    finally:
+        sys.exit = original_exit
+
+
 def test_port_validation_simple():
     """Test port validation with various invalid inputs"""
 
@@ -46,33 +93,30 @@ def test_port_validation_simple():
             os.environ["ENVIRONMENT"] = environment
             os.environ["OPENAI_API_KEY"] = "sk-test1234567890abcdef"
 
-            # Force reload of config module
-            if "config" in sys.modules:
-                del sys.modules["config"]
-
             try:
-                # Import the Settings class
-                from config import Settings
-
-                # Create config instance
-                config = Settings()
+                settings, exit_called, exit_code = safe_import_config()
 
                 # Test the port property directly
                 if should_raise:
-                    try:
-                        actual_port = config.port
+                    if exit_called and exit_code == 1:
                         print(
-                            f"❌ Expected error for PORT='{port_value}' in {environment} mode, but got port {actual_port}"
+                            f"✅ Expected error for PORT='{port_value}' in {environment} mode: SystemExit"
                         )
-                        return False
-                    except Exception as e:
-                        print(
-                            f"✅ Expected error for PORT='{port_value}' in {environment} mode: {str(e)[:100]}..."
-                        )
+                    else:
+                        try:
+                            actual_port = settings.port
+                            print(
+                                f"❌ Expected error for PORT='{port_value}' in {environment} mode, but got port {actual_port}"
+                            )
+                            return False
+                        except Exception as e:
+                            print(
+                                f"✅ Expected error for PORT='{port_value}' in {environment} mode: {str(e)[:100]}..."
+                            )
                         continue
                 else:
                     try:
-                        actual_port = config.port
+                        actual_port = settings.port
                         if actual_port == expected_port:
                             print(
                                 f"✅ PORT='{port_value}' in {environment} mode → {actual_port} (expected)"

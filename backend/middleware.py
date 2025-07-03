@@ -121,6 +121,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 logger.error("Redis client is None, falling back to allowing request")
                 return True, 0
 
+            # Ensure connection is still alive
+            try:
+                self.redis_client.ping()
+            except redis.ConnectionError:
+                logger.error("Redis connection lost, attempting to reconnect")
+                self.redis_client = None
+                return True, 0
+
             key = self._redis_key(client_ip)
 
             # Use Redis pipeline for atomic operations
