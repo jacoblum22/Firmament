@@ -3,6 +3,7 @@ import "./App.css";
 import VanillaTilt from "vanilla-tilt";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
+import config from './config';
 
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
 
@@ -185,7 +186,7 @@ function App() {
 
     setError(null);
     try {
-      const res = await fetch("http://localhost:8000/process-chunks", {
+      const res = await fetch(config.getApiUrl("process-chunks"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -218,7 +219,7 @@ function App() {
     setError(null);
 
     try {
-      const res = await fetch("http://localhost:8000/generate-headings", {
+      const res = await fetch(config.getApiUrl("generate-headings"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -266,7 +267,7 @@ function App() {
       setLoading(true);
       setError(null);
 
-      fetch("http://localhost:8000/upload", {
+      fetch(config.getApiUrl("upload"), {
         method: "POST",
         body: formData,
       })
@@ -279,7 +280,7 @@ function App() {
             setJobId(data.job_id);
 
             const evt = new EventSource(
-              `http://localhost:8000/progress/${data.job_id}`
+              config.getApiUrl(`progress/${data.job_id}`)
             );
             evt.onmessage = (event) => {
               const parsed = JSON.parse(event.data);
@@ -457,7 +458,7 @@ function App() {
 
     setError(null);
     try {
-      const res = await fetch("http://localhost:8000/expand-cluster", {
+      const res = await fetch(config.getApiUrl("expand-cluster"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -523,7 +524,7 @@ function App() {
     });
 
     try {
-      const res = await fetch("http://localhost:8000/debug-bullet-point", {
+      const res = await fetch(config.getApiUrl("debug-bullet-point"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -592,7 +593,7 @@ function App() {
     });
 
     try {
-      const res = await fetch("http://localhost:8000/expand-bullet-point", {
+      const res = await fetch(config.getApiUrl("expand-bullet-point"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -665,7 +666,7 @@ function App() {
     const topicHeading = topic.heading || `Topic ${topicId}`;
 
     try {
-      const res = await fetch("http://localhost:8000/expand-bullet-point", {
+      const res = await fetch(config.getApiUrl("expand-bullet-point"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1317,7 +1318,7 @@ function App() {
 
             {/* Transcript Display */}
             <div style={{ marginBottom: "1rem" }}>
-              <div style={{ 
+              <div style={{
                 display: "flex", 
                 alignItems: "center", 
                 gap: "0.75rem",

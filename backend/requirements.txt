@@ -1,1 +1,7 @@
 pytest>=7.0.0
+python-dotenv>=1.0.0
+uvicorn>=0.24.0
+fastapi>=0.104.0
+# Additional dependencies for enhanced configuration
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
