@@ -1,11 +1,16 @@
 import pytest
 import os
-import json
 import tempfile
 import shutil
-from unittest.mock import patch, MagicMock, AsyncMock, mock_open
-from io import BytesIO
-from pydub import AudioSegment
+from unittest.mock import patch, MagicMock, mock_open
+
+# Check for pydub dependency
+try:
+    from pydub import AudioSegment
+
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
 
 
 # Mock the functions we want to test from routes.py
@@ -33,6 +38,9 @@ def set_status(job_id: str, **kwargs):
 
 def convert_m4a_to_wav(input_path: str) -> str:
     """Mock implementation of convert_m4a_to_wav function from routes.py"""
+    if not PYDUB_AVAILABLE:
+        raise ImportError("pydub is required for audio conversion")
+
     output_path = input_path.rsplit(".", 1)[0] + ".wav"
     audio = AudioSegment.from_file(input_path, format="m4a")
     audio.export(output_path, format="wav")
@@ -172,6 +180,7 @@ class TestSetStatus:
 class TestConvertM4aToWav:
     """Test the convert_m4a_to_wav function."""
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("builtins.open", new_callable=mock_open, read_data="fake_audio_data")
     @patch("pydub.AudioSegment.from_file")
     def test_convert_m4a_to_wav_success(self, mock_from_file, mock_open):
@@ -188,6 +197,7 @@ class TestConvertM4aToWav:
         mock_from_file.assert_called_once_with(input_path, format="m4a")
         mock_audio.export.assert_called_once_with(expected_output, format="wav")
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("pydub.AudioSegment.from_file")
     def test_convert_m4a_to_wav_file_load_error(self, mock_from_file):
         """Test that convert_m4a_to_wav handles file load errors."""
@@ -198,6 +208,7 @@ class TestConvertM4aToWav:
         with pytest.raises(Exception, match="File load error"):
             convert_m4a_to_wav(input_path)
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("pydub.AudioSegment.from_file")
     def test_convert_m4a_to_wav_export_error(self, mock_from_file):
         """Test that convert_m4a_to_wav handles export errors."""
@@ -214,6 +225,7 @@ class TestConvertM4aToWav:
 class TestFileProcessing:
     """Test file processing functionality."""
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("builtins.open", new_callable=mock_open, read_data="fake_audio_data")
     @patch("pydub.AudioSegment.from_file")
     def test_m4a_conversion_path_generation(self, mock_from_file, mock_open):
@@ -374,6 +386,7 @@ class TestFileExtensionHandling:
 class TestAudioProcessing:
     """Test audio processing related functionality."""
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("builtins.open", new_callable=mock_open, read_data="fake_audio_data")
     @patch("pydub.AudioSegment.from_file")
     def test_audio_segment_import_handling(self, mock_from_file, mock_open):
@@ -428,6 +441,7 @@ class TestUtilityFunctions:
         assert JOB_STATUS[job_id]["data"] == "important_data"
         assert JOB_STATUS[job_id]["progress"] == 50
 
+    @pytest.mark.skipif(not PYDUB_AVAILABLE, reason="pydub not available")
     @patch("builtins.open", new_callable=mock_open, read_data="fake_audio_data")
     @patch("pydub.AudioSegment.from_file")
     def test_audio_conversion_file_path_handling(self, mock_from_file, mock_open):

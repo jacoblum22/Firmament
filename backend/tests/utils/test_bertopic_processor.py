@@ -1,8 +1,17 @@
 import pytest
 import os
 import json
+import sys
 from unittest.mock import patch, MagicMock
-from backend.utils.bertopic_processor import process_with_bertopic
+
+# Ensure we can import from utils by adding the parent directory to path
+if __name__ == "__main__" or "pytest" in sys.modules:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_dir = os.path.dirname(os.path.dirname(current_dir))
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+
+from utils.bertopic_processor import process_with_bertopic
 
 
 @pytest.fixture
@@ -40,12 +49,12 @@ def mock_bertopic_get_topic():
 
 
 @patch(
-    "backend.utils.bertopic_processor.stopwords.words",
+    "utils.bertopic_processor.stopwords.words",
     return_value=["the", "on", "in", "are", "can"],
 )
-@patch("backend.utils.bertopic_processor.BERTopic")
-@patch("backend.utils.bertopic_processor.generate_cluster_headings")
-@patch("backend.utils.bertopic_processor.pre_cluster_with_kmeans")
+@patch("utils.bertopic_processor.BERTopic")
+@patch("utils.bertopic_processor.generate_cluster_headings")
+@patch("utils.bertopic_processor.pre_cluster_with_kmeans")
 def test_process_with_bertopic_basic(
     mock_pre_cluster,
     mock_generate_headings,
@@ -88,12 +97,12 @@ def test_process_with_bertopic_basic(
 
 
 @patch(
-    "backend.utils.bertopic_processor.stopwords.words",
+    "utils.bertopic_processor.stopwords.words",
     return_value=["the", "on", "in", "are", "can"],
 )
-@patch("backend.utils.bertopic_processor.BERTopic")
-@patch("backend.utils.bertopic_processor.generate_cluster_headings")
-@patch("backend.utils.bertopic_processor.pre_cluster_with_kmeans")
+@patch("utils.bertopic_processor.BERTopic")
+@patch("utils.bertopic_processor.generate_cluster_headings")
+@patch("utils.bertopic_processor.pre_cluster_with_kmeans")
 def test_process_with_bertopic_kmeans_clustering(
     mock_pre_cluster,
     mock_generate_headings,
@@ -142,10 +151,10 @@ def test_process_with_bertopic_kmeans_clustering(
 
 
 @patch(
-    "backend.utils.bertopic_processor.stopwords.words",
+    "utils.bertopic_processor.stopwords.words",
     return_value=["the", "on", "in", "are", "can"],
 )
-@patch("backend.utils.bertopic_processor.generate_cluster_headings")
+@patch("utils.bertopic_processor.generate_cluster_headings")
 def test_process_with_bertopic_empty_chunks(mock_generate_headings, mock_stopwords):
     result = process_with_bertopic([])
     assert result == {
@@ -157,11 +166,11 @@ def test_process_with_bertopic_empty_chunks(mock_generate_headings, mock_stopwor
 
 
 @patch(
-    "backend.utils.bertopic_processor.stopwords.words",
+    "utils.bertopic_processor.stopwords.words",
     return_value=["the", "on", "in", "are", "can"],
 )
-@patch("backend.utils.bertopic_processor.BERTopic")
-@patch("backend.utils.bertopic_processor.generate_cluster_headings")
+@patch("utils.bertopic_processor.BERTopic")
+@patch("utils.bertopic_processor.generate_cluster_headings")
 def test_process_with_bertopic_save_file(
     mock_generate_headings,
     mock_bertopic_cls,
@@ -186,7 +195,7 @@ def test_process_with_bertopic_save_file(
         "os.path.exists", return_value=True
     ):
         # Patch PROCESSED_DIR to tmp_path
-        with patch("backend.utils.bertopic_processor.PROCESSED_DIR", str(tmp_path)):
+        with patch("utils.bertopic_processor.PROCESSED_DIR", str(tmp_path)):
             filename = "testfile.txt"
             result = process_with_bertopic(sample_chunks, filename=filename)
             # Check file exists and content
@@ -203,11 +212,11 @@ def test_process_with_bertopic_save_file(
 
 
 @patch(
-    "backend.utils.bertopic_processor.stopwords.words",
+    "utils.bertopic_processor.stopwords.words",
     return_value=["the", "on", "in", "are", "can"],
 )
-@patch("backend.utils.bertopic_processor.BERTopic")
-@patch("backend.utils.bertopic_processor.generate_cluster_headings")
+@patch("utils.bertopic_processor.BERTopic")
+@patch("utils.bertopic_processor.generate_cluster_headings")
 def test_process_with_bertopic_fallback_parameters(
     mock_generate_headings,
     mock_bertopic_cls,

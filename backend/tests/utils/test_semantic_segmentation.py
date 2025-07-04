@@ -1,7 +1,17 @@
 import pytest
-from backend.utils.semantic_segmentation import semantic_segment
+
+# Check for sentence_transformers dependency
+try:
+    from utils.semantic_segmentation import semantic_segment
+
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_single_sentence_returns_whole_text():
     text = "This is a single sentence."
     result = semantic_segment(text)

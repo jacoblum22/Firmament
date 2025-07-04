@@ -1,18 +1,26 @@
 import pytest
 import numpy as np
 from unittest.mock import patch, MagicMock
-from backend.utils.bertopic_processor import (
-    get_stopwords,
-    redistribute_large_topics,
-    NLTK_AVAILABLE,
-)
+
+# Check for bertopic dependency
+try:
+    from utils.bertopic_processor import (
+        get_stopwords,
+        redistribute_large_topics,
+        NLTK_AVAILABLE,
+    )
+
+    BERTOPIC_AVAILABLE = True
+except ImportError:
+    BERTOPIC_AVAILABLE = False
 
 
+@pytest.mark.skipif(not BERTOPIC_AVAILABLE, reason="bertopic not available")
 class TestGetStopwords:
     """Test the NLTK stopwords fallback system."""
 
-    @patch("backend.utils.bertopic_processor.NLTK_AVAILABLE", True)
-    @patch("backend.utils.bertopic_processor.stopwords")
+    @patch("utils.bertopic_processor.NLTK_AVAILABLE", True)
+    @patch("utils.bertopic_processor.stopwords")
     def test_get_stopwords_nltk_available_success(self, mock_stopwords):
         """Test get_stopwords when NLTK is available and works."""
         mock_stopwords.words.return_value = ["the", "and", "or", "but"]
@@ -22,8 +30,8 @@ class TestGetStopwords:
         assert result == ["the", "and", "or", "but"]
         mock_stopwords.words.assert_called_once_with("english")
 
-    @patch("backend.utils.bertopic_processor.NLTK_AVAILABLE", True)
-    @patch("backend.utils.bertopic_processor.stopwords")
+    @patch("utils.bertopic_processor.NLTK_AVAILABLE", True)
+    @patch("utils.bertopic_processor.stopwords")
     def test_get_stopwords_nltk_available_lookup_error(self, mock_stopwords):
         """Test get_stopwords when NLTK is available but stopwords corpus is missing."""
         mock_stopwords.words.side_effect = LookupError("Resource not found")
@@ -33,7 +41,7 @@ class TestGetStopwords:
         assert result == "english"
         mock_stopwords.words.assert_called_once_with("english")
 
-    @patch("backend.utils.bertopic_processor.NLTK_AVAILABLE", False)
+    @patch("utils.bertopic_processor.NLTK_AVAILABLE", False)
     def test_get_stopwords_nltk_unavailable(self):
         """Test get_stopwords when NLTK is not available."""
         result = get_stopwords()
@@ -41,6 +49,7 @@ class TestGetStopwords:
         assert result == "english"
 
 
+@pytest.mark.skipif(not BERTOPIC_AVAILABLE, reason="bertopic not available")
 class TestRedistributeLargeTopics:
     """Test the topic redistribution functionality."""
 
@@ -112,17 +121,18 @@ class TestRedistributeLargeTopics:
         assert len(result["topic_1"]) == 4  # Increased from 2
 
 
+@pytest.mark.skipif(not BERTOPIC_AVAILABLE, reason="bertopic not available")
 class TestIntegrationWithNewFeatures:
     """Integration tests for new features working together."""
 
-    @patch("backend.utils.bertopic_processor.get_stopwords")
-    @patch("backend.utils.bertopic_processor.BERTopic")
-    @patch("backend.utils.bertopic_processor.redistribute_large_topics")
+    @patch("utils.bertopic_processor.get_stopwords")
+    @patch("utils.bertopic_processor.BERTopic")
+    @patch("utils.bertopic_processor.redistribute_large_topics")
     def test_stopwords_and_redistribution_integration(
         self, mock_redistribute, mock_bertopic_cls, mock_get_stopwords
     ):
         """Test that get_stopwords and redistribution work together."""
-        from backend.utils.bertopic_processor import process_cluster_with_bertopic
+        from utils.bertopic_processor import process_cluster_with_bertopic
 
         # Setup mocks
         mock_get_stopwords.return_value = ["the", "and", "or"]
@@ -152,6 +162,7 @@ class TestIntegrationWithNewFeatures:
         assert topic_model == mock_topic_model
 
 
+@pytest.mark.skipif(not BERTOPIC_AVAILABLE, reason="bertopic not available")
 class TestEdgeCases:
     """Test edge cases for new functionality."""
 

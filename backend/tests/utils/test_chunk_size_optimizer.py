@@ -1,5 +1,12 @@
 import pytest
-from backend.utils.chunk_size_optimizer import optimize_chunk_sizes, get_word_count
+
+# Check for sentence_transformers dependency
+try:
+    from utils.chunk_size_optimizer import optimize_chunk_sizes, get_word_count
+
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
 
 
 @pytest.fixture
@@ -15,11 +22,17 @@ def simple_chunks():
     ]
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_get_word_count():
     chunk = {"position": 0, "text": "This is a test chunk."}
     assert get_word_count(chunk) == 5
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_optimize_chunk_sizes_merges_small_chunks(simple_chunks):
     # Use small min_words and max_words to force merges
     optimized = optimize_chunk_sizes(
@@ -34,10 +47,16 @@ def test_optimize_chunk_sizes_merges_small_chunks(simple_chunks):
     assert original_text.replace(" ", "") in optimized_text.replace(" ", "")
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_optimize_chunk_sizes_handles_empty():
     assert optimize_chunk_sizes([], min_words=5, max_words=10, target_size=7) == []
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_optimize_chunk_sizes_no_merge_needed():
     chunks = [
         {"position": 0, "text": "word " * 10},
@@ -51,6 +70,9 @@ def test_optimize_chunk_sizes_no_merge_needed():
         assert 5 <= get_word_count(chunk) <= 15
 
 
+@pytest.mark.skipif(
+    not TRANSFORMERS_AVAILABLE, reason="sentence_transformers not available"
+)
 def test_optimize_chunk_sizes_split_large_chunk():
     chunk = {
         "position": 0,

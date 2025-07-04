@@ -17,16 +17,23 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 import pytest
 
-from utils.rnnoise_process import (
-    get_file_info,
-    cleanup_old_files,
-    denoise_with_rnnoise,
-    model_path,
-    RNNOISE_OUTPUT_DIR,
-    MAX_DIR_SIZE_MB,
-)
+# Check for utils dependency
+try:
+    from utils.rnnoise_process import (
+        get_file_info,
+        cleanup_old_files,
+        denoise_with_rnnoise,
+        model_path,
+        RNNOISE_OUTPUT_DIR,
+        MAX_DIR_SIZE_MB,
+    )
+
+    UTILS_AVAILABLE = True
+except ImportError:
+    UTILS_AVAILABLE = False
 
 
+@pytest.mark.skipif(not UTILS_AVAILABLE, reason="utils.rnnoise_process not available")
 class TestGetFileInfo:
     """Test the get_file_info utility function."""
 

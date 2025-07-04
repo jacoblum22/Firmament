@@ -1,5 +1,15 @@
 import pytest
-from backend.utils.clean_text import (
+import sys
+import os
+
+# Ensure we can import from utils by adding the parent directory to path
+if __name__ == "__main__" or "pytest" in sys.modules:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_dir = os.path.dirname(os.path.dirname(current_dir))
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+
+from utils.clean_text import (
     remove_filler_words,
     remove_duplicate_phrases,
     restore_punctuation,

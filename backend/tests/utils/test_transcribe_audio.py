@@ -16,18 +16,25 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open, call
 import pytest
-import torch
-from pydub import AudioSegment
 
-from utils.transcribe_audio import (
-    get_device,
-    get_compute_type,
-    prepare_audio_for_whisper,
-    transcribe_audio_in_chunks,
-    TEMP_CHUNKS_DIR,
-)
+# Check for torch dependency
+try:
+    import torch
+    from pydub import AudioSegment
+    from utils.transcribe_audio import (
+        get_device,
+        get_compute_type,
+        prepare_audio_for_whisper,
+        transcribe_audio_in_chunks,
+        TEMP_CHUNKS_DIR,
+    )
+
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
 class TestDeviceAndComputeType:
     """Test device detection and compute type selection."""
 
@@ -66,6 +73,7 @@ class TestDeviceAndComputeType:
         assert get_compute_type("cpu") == "int8"
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
 class TestPrepareAudioForWhisper:
     """Test the audio preparation pipeline."""
 
@@ -226,6 +234,7 @@ class TestPrepareAudioForWhisper:
             prepare_audio_for_whisper(self.test_audio_path)
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
 class TestTranscribeAudioInChunks:
     """Test the main transcription function with chunking."""
 
@@ -495,6 +504,7 @@ class TestTranscribeAudioInChunks:
         )
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
 class TestEdgeCases:
     """Test edge cases and error scenarios."""
 
@@ -594,6 +604,7 @@ class TestEdgeCases:
             os.unlink(temp_path)
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch not available")
 class TestIntegrationScenarios:
     """Test realistic integration scenarios."""
 

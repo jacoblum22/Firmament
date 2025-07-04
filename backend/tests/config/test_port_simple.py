@@ -5,59 +5,26 @@ Simple test to verify port validation improvements
 
 import os
 import sys
-import importlib
 from pathlib import Path
 
-# Add the backend directory to the path
-backend_dir = Path(__file__).parent
-sys.path.insert(0, str(backend_dir))
+# Add the parent directory to path to import test utilities
+test_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(test_dir))
+
+from tests.utils.test_config_helper import import_config, ConfigTestContext
 
 
 def safe_import_config():
-    """Safely import config module, handling SystemExit exceptions"""
-    # Temporarily capture sys.exit to prevent it from terminating the test
-    original_exit = sys.exit
-    exit_called = False
-    exit_code = None
-
-    def mock_exit(code=0):
-        nonlocal exit_called, exit_code
-        exit_called = True
-        exit_code = code
-        # Don't actually exit, just capture the call
-
-    sys.exit = mock_exit
-
+    """Safely import config module using the test helper"""
     try:
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
-
-        import config
-
-        settings = getattr(config, "settings", None)
-        if settings is None:
-            raise AttributeError("Config module does not have a 'settings' attribute")
-
-        return settings, exit_called, exit_code
-
+        Settings, ConfigurationError = import_config()
+        config = Settings()
+        return config, False, None
     except SystemExit as e:
-        # Handle SystemExit explicitly
-        exit_called = True
-        exit_code = e.code
-        # Try to still get the config if possible
-        try:
-            import config
-
-            settings = getattr(config, "settings", None)
-            if settings is not None:
-                return settings, exit_called, exit_code
-        except:
-            pass
-        # If we can't get settings, raise the original exception
-        raise e
-
-    finally:
-        sys.exit = original_exit
+        return None, True, e.code
+    except Exception as e:
+        # For other exceptions, we still want to know about them
+        return None, True, getattr(e, "code", 1)
 
 
 def test_port_validation_simple():
@@ -78,88 +45,80 @@ def test_port_validation_simple():
         ("65536", "production", True, None),  # should raise error
     ]
 
-    # Store original environment
-    original_env = {}
-    for key in ["PORT", "ENVIRONMENT", "OPENAI_API_KEY"]:
-        if key in os.environ:
-            original_env[key] = os.environ[key]
+    for port_value, environment, should_raise, expected_port in test_cases:
+        print(f"\n📋 Testing PORT='{port_value}' in {environment} mode...")
 
-    try:
-        for port_value, environment, should_raise, expected_port in test_cases:
-            print(f"\n📋 Testing PORT='{port_value}' in {environment} mode...")
+        # Store original values
+        original_port = os.environ.get("PORT")
+        original_env = os.environ.get("ENVIRONMENT")
+        original_openai = os.environ.get("OPENAI_API_KEY")
 
+        try:
             # Set environment variables
             os.environ["PORT"] = port_value
             os.environ["ENVIRONMENT"] = environment
             os.environ["OPENAI_API_KEY"] = "sk-test1234567890abcdef"
 
-            try:
-                settings, exit_called, exit_code = safe_import_config()
+            settings, exit_called, exit_code = safe_import_config()
 
-                # Test the port property directly
-                if should_raise:
-                    if exit_called and exit_code == 1:
-                        print(
-                            f"✅ Expected error for PORT='{port_value}' in {environment} mode: SystemExit"
-                        )
-                    else:
-                        try:
-                            actual_port = settings.port
-                            print(
-                                f"❌ Expected error for PORT='{port_value}' in {environment} mode, but got port {actual_port}"
-                            )
-                            return False
-                        except Exception as e:
-                            print(
-                                f"✅ Expected error for PORT='{port_value}' in {environment} mode: {str(e)[:100]}..."
-                            )
-                        continue
+            # Test the port property directly
+            if should_raise:
+                if exit_called and exit_code == 1:
+                    print(
+                        f"✅ Expected error for PORT='{port_value}' in {environment} mode: SystemExit"
+                    )
+                elif settings is None:
+                    print(
+                        f"✅ Expected error for PORT='{port_value}' in {environment} mode: Config failed to load"
+                    )
                 else:
                     try:
                         actual_port = settings.port
-                        if actual_port == expected_port:
-                            print(
-                                f"✅ PORT='{port_value}' in {environment} mode → {actual_port} (expected)"
-                            )
-                        else:
-                            print(
-                                f"❌ PORT='{port_value}' in {environment} mode → {actual_port} (expected {expected_port})"
-                            )
-                            return False
+                        assert (
+                            False
+                        ), f"Expected error for PORT='{port_value}' in {environment} mode, but got port {actual_port}"
                     except Exception as e:
                         print(
-                            f"❌ Unexpected error for PORT='{port_value}' in {environment} mode: {e}"
+                            f"✅ Expected error for PORT='{port_value}' in {environment} mode: {str(e)[:100]}..."
                         )
-                        return False
+            else:
+                assert (
+                    settings is not None
+                ), f"Unexpected config load failure for PORT='{port_value}' in {environment} mode"
 
-            except Exception as e:
-                if should_raise:
-                    print(
-                        f"✅ Expected error for PORT='{port_value}' in {environment} mode: {str(e)[:100]}..."
-                    )
-                else:
-                    print(
-                        f"❌ Unexpected error for PORT='{port_value}' in {environment} mode: {e}"
-                    )
-                    return False
+                actual_port = settings.port
+                assert (
+                    actual_port == expected_port
+                ), f"PORT='{port_value}' in {environment} mode → {actual_port} (expected {expected_port})"
+                print(
+                    f"✅ PORT='{port_value}' in {environment} mode → {actual_port} (expected)"
+                )
 
-    finally:
-        # Restore original environment
-        for key in ["PORT", "ENVIRONMENT", "OPENAI_API_KEY"]:
-            if key in original_env:
-                os.environ[key] = original_env[key]
-            elif key in os.environ:
-                del os.environ[key]
+        finally:
+            # Restore original values
+            if original_port is not None:
+                os.environ["PORT"] = original_port
+            elif "PORT" in os.environ:
+                del os.environ["PORT"]
+
+            if original_env is not None:
+                os.environ["ENVIRONMENT"] = original_env
+            elif "ENVIRONMENT" in os.environ:
+                del os.environ["ENVIRONMENT"]
+
+            if original_openai is not None:
+                os.environ["OPENAI_API_KEY"] = original_openai
+            elif "OPENAI_API_KEY" in os.environ:
+                del os.environ["OPENAI_API_KEY"]
 
     print("\n🎉 All port validation tests passed!")
-    return True
 
 
 if __name__ == "__main__":
-    success = test_port_validation_simple()
-    if success:
+    try:
+        test_port_validation_simple()
         print("\n✅ Port validation test completed successfully!")
         sys.exit(0)
-    else:
-        print("\n❌ Port validation test failed!")
+    except (AssertionError, Exception) as e:
+        print(f"\n❌ Port validation test failed: {e}")
         sys.exit(1)

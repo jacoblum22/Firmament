@@ -4,59 +4,26 @@ Test Configuration Validation System
 """
 import os
 import sys
-import importlib
 from pathlib import Path
 
-# Add the backend directory to Python path to import config
-backend_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(backend_dir))
+# Add the parent directory to path to import test utilities
+test_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(test_dir))
+
+from tests.utils.test_config_helper import import_config, ConfigTestContext
 
 
 def safe_import_config():
-    """Safely import config module, handling SystemExit exceptions"""
-    # Temporarily capture sys.exit to prevent it from terminating the test
-    original_exit = sys.exit
-    exit_called = False
-    exit_code = None
-
-    def mock_exit(code=0):
-        nonlocal exit_called, exit_code
-        exit_called = True
-        exit_code = code
-        # Don't actually exit, just capture the call
-
-    sys.exit = mock_exit
-
+    """Safely import config module using the test helper"""
     try:
-        if "config" in sys.modules:
-            importlib.reload(sys.modules["config"])
-
-        import config
-
-        settings = getattr(config, "settings", None)
-        if settings is None:
-            raise AttributeError("Config module does not have a 'settings' attribute")
-
-        return settings, exit_called, exit_code
-
+        Settings, ConfigurationError = import_config()
+        config = Settings()
+        return config, False, None
     except SystemExit as e:
-        # Handle SystemExit explicitly
-        exit_called = True
-        exit_code = e.code
-        # Try to still get the config if possible
-        try:
-            import config
-
-            settings = getattr(config, "settings", None)
-            if settings is not None:
-                return settings, exit_called, exit_code
-        except:
-            pass
-        # If we can't get settings, raise the original exception
-        raise e
-
-    finally:
-        sys.exit = original_exit
+        return None, True, e.code
+    except Exception as e:
+        # For other exceptions, we still want to know about them
+        return None, True, getattr(e, "code", 1)
 
 
 def test_configuration_validation():
@@ -74,11 +41,16 @@ def test_configuration_validation():
 
         settings, exit_called, exit_code = safe_import_config()
 
-        print(f"✅ Development environment loaded successfully")
-        print(f"   Environment: {settings.environment}")
-        print(f"   Debug: {settings.debug}")
-        print(f"   OpenAI configured: {bool(settings.openai_api_key)}")
-        print(f"   Exit called: {exit_called}")
+        if settings is not None:
+            print(f"✅ Development environment loaded successfully")
+            print(f"   Environment: {settings.environment}")
+            print(f"   Debug: {settings.debug}")
+            print(f"   OpenAI configured: {bool(settings.openai_api_key)}")
+            print(f"   Exit called: {exit_called}")
+        else:
+            print(
+                f"❌ Development test failed: Config import returned None (exit_code: {exit_code})"
+            )
 
     except Exception as e:
         print(f"❌ Development test failed: {e}")
@@ -111,12 +83,17 @@ def test_configuration_validation():
 
         settings, exit_called, exit_code = safe_import_config()
 
-        print(f"✅ Production environment with valid keys loaded successfully")
-        print(f"   Environment: {settings.environment}")
-        print(f"   Debug: {settings.debug}")
-        print(f"   OpenAI configured: {bool(settings.openai_api_key)}")
-        print(f"   Host: {settings.host}")
-        print(f"   Workers: {settings.workers}")
+        if settings is not None:
+            print(f"✅ Production environment with valid keys loaded successfully")
+            print(f"   Environment: {settings.environment}")
+            print(f"   Debug: {settings.debug}")
+            print(f"   OpenAI configured: {bool(settings.openai_api_key)}")
+            print(f"   Host: {settings.host}")
+            print(f"   Workers: {settings.workers}")
+        else:
+            print(
+                f"❌ Production with valid keys failed: Config import returned None (exit_code: {exit_code})"
+            )
 
     except Exception as e:
         print(f"❌ Production with valid keys failed: {e}")
@@ -145,10 +122,15 @@ def test_configuration_validation():
 
         settings, exit_called, exit_code = safe_import_config()
 
-        summary = settings.get_config_summary()
-        print("✅ Configuration summary:")
-        for key, value in summary.items():
-            print(f"   {key}: {value}")
+        if settings is not None:
+            summary = settings.get_config_summary()
+            print("✅ Configuration summary:")
+            for key, value in summary.items():
+                print(f"   {key}: {value}")
+        else:
+            print(
+                f"❌ Configuration summary failed: Config import returned None (exit_code: {exit_code})"
+            )
 
     except Exception as e:
         print(f"❌ Configuration summary failed: {e}")
@@ -187,23 +169,35 @@ def test_port_validation():
             os.environ["PORT"] = port_value
             os.environ["ENVIRONMENT"] = environment
 
+            # Set a valid API key for production tests
+            if environment == "production":
+                os.environ["OPENAI_API_KEY"] = "sk-test123456789abcdef"
+
             try:
                 settings, exit_called, exit_code = safe_import_config()
 
                 if should_raise:
-                    print(
-                        f"    ❌ Expected error for PORT='{port_value}' in {environment} mode, but got port {settings.port}"
-                    )
-                    return False
-                else:
-                    actual_port = settings.port
-                    if actual_port == expected_port:
-                        print(f"    ✅ PORT='{port_value}' → {actual_port}")
+                    if settings is not None:
+                        assert (
+                            False
+                        ), f"Expected error for PORT='{port_value}' in {environment} mode, but got port {settings.port}"
                     else:
                         print(
-                            f"    ❌ PORT='{port_value}' → {actual_port} (expected {expected_port})"
+                            f"    ✅ Expected error for PORT='{port_value}' in {environment} mode: Config import failed"
                         )
-                        return False
+                else:
+                    if settings is not None:
+                        actual_port = settings.port
+                        if actual_port == expected_port:
+                            print(f"    ✅ PORT='{port_value}' → {actual_port}")
+                        else:
+                            assert (
+                                False
+                            ), f"PORT='{port_value}' → {actual_port} (expected {expected_port})"
+                    else:
+                        assert (
+                            False
+                        ), f"Unexpected failure for PORT='{port_value}' in {environment} mode: Config import failed (exit_code: {exit_code})"
 
             except Exception as e:
                 if should_raise:
@@ -211,10 +205,9 @@ def test_port_validation():
                         f"    ✅ Expected error for PORT='{port_value}' in {environment} mode: {e}"
                     )
                 else:
-                    print(
-                        f"    ❌ Unexpected error for PORT='{port_value}' in {environment} mode: {e}"
-                    )
-                    return False
+                    assert (
+                        False
+                    ), f"Unexpected error for PORT='{port_value}' in {environment} mode: {e}"
 
         # Test production mode with invalid ports (should raise)
         print("  Testing invalid ports in production mode...")
@@ -223,6 +216,9 @@ def test_port_validation():
         for port_value in production_error_cases:
             os.environ["PORT"] = port_value
             os.environ["ENVIRONMENT"] = "production"
+            os.environ["OPENAI_API_KEY"] = (
+                "sk-test123456789abcdef"  # Valid key for production
+            )
 
             try:
                 settings, exit_called, exit_code = safe_import_config()
@@ -234,15 +230,19 @@ def test_port_validation():
                     )
                 else:
                     # This should raise an error when accessing the port
-                    try:
-                        port = settings.port
+                    if settings is not None:
+                        try:
+                            port = settings.port
+                            assert (
+                                False
+                            ), f"Expected error for PORT='{port_value}' in production mode, but got port {port}"
+                        except Exception as port_error:
+                            print(
+                                f"    ✅ Expected error for PORT='{port_value}' in production mode: {type(port_error).__name__}"
+                            )
+                    else:
                         print(
-                            f"    ❌ Expected error for PORT='{port_value}' in production mode, but got port {port}"
-                        )
-                        return False
-                    except Exception as port_error:
-                        print(
-                            f"    ✅ Expected error for PORT='{port_value}' in production mode: {type(port_error).__name__}"
+                            f"    ✅ Expected error for PORT='{port_value}' in production mode: Config import failed"
                         )
 
             except Exception as e:
@@ -251,7 +251,7 @@ def test_port_validation():
                 )
 
         print("  ✅ All port validation tests passed!")
-        return True
+        # Return nothing - pytest will handle success/failure via assertions
 
     finally:
         # Restore original values
@@ -264,6 +264,12 @@ def test_port_validation():
             os.environ["ENVIRONMENT"] = original_env
         elif "ENVIRONMENT" in os.environ:
             del os.environ["ENVIRONMENT"]
+
+        # Clean up any test API keys
+        if "OPENAI_API_KEY" in os.environ and os.environ["OPENAI_API_KEY"].startswith(
+            "sk-test"
+        ):
+            del os.environ["OPENAI_API_KEY"]
 
 
 if __name__ == "__main__":
