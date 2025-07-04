@@ -56,12 +56,6 @@ def environment_config_helper(env_name):
                 print("   This is expected if API keys are not configured")
                 return True  # This is actually expected behavior
 
-            if settings is None:
-                if env_name == "production":
-                    print("   This is expected if API keys are not configured")
-                    return True
-                return False
-
             # Test basic properties (INSIDE the context)
             print(f"   Settings environment: {settings.environment}")
             print(f"   Expected environment: {env_name}")
@@ -120,9 +114,8 @@ def test_config_loading():
     print("\n🔧 Testing configuration file loading")
     print("-" * 40)
 
-    # Get the backend directory path (go up 3 levels from tests/config/)
+    # Get the backend directory path (go up 2 levels from tests/config/)
     backend_dir = Path(__file__).parents[2]
-
     # Test development config
     dev_env_file = backend_dir / ".env.development"
     if dev_env_file.exists():

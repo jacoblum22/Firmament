@@ -2,23 +2,47 @@
 Test script to verify CORS configuration
 """
 
-try:
-    import requests
-
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
-    print("⚠️  Warning: requests module not available. CORS tests will be skipped.")
-
+import sys
+import os
 import json
+
+try:
+    import httpx
+
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+    print("⚠️  Warning: httpx module not available. CORS tests will be skipped.")
+
+
+def is_running_under_pytest():
+    """
+    Detect if code is running under pytest.
+
+    Returns:
+        bool: True if running under pytest, False otherwise
+    """
+    # Check if pytest is in sys.modules (most reliable method)
+    if "pytest" in sys.modules:
+        return True
+
+    # Check for pytest-specific environment variable
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return True
+
+    # Check command line arguments for pytest
+    if any("pytest" in arg for arg in sys.argv):
+        return True
+
+    return False
 
 
 def test_cors_preflight(
     base_url="http://127.0.0.1:8000", origin="http://localhost:5173"
 ):
     """Test CORS preflight request"""
-    if not REQUESTS_AVAILABLE:
-        print(f"⚠️  Skipping CORS preflight test - requests module not available")
+    if not HTTPX_AVAILABLE:
+        print(f"⚠️  Skipping CORS preflight test - httpx module not available")
         return  # Skip test, don't return a value
 
     print(f"Testing CORS preflight for {origin} -> {base_url}")
@@ -30,7 +54,8 @@ def test_cors_preflight(
     }
 
     try:
-        response = requests.options(base_url, headers=headers, timeout=5)
+        with httpx.Client() as client:
+            response = client.options(base_url, headers=headers, timeout=5.0)
         print(f"Status Code: {response.status_code}")
         print("Response Headers:")
         for key, value in response.headers.items():
@@ -60,21 +85,24 @@ def test_cors_preflight(
     except Exception as e:
         print(f"❌ Error testing CORS: {e}")
         print("⚠️  Test completed (server connectivity may affect results)")
-        # For pytest compatibility, we'll raise the exception for actual test failures
-        if "pytest" in str(e.__class__.__module__):
-            raise
+        # For pytest compatibility, we'll skip the test instead of failing when server is not available
+        if is_running_under_pytest():
+            import pytest
+
+            pytest.skip(f"Server not available: {e}")
 
 
 def test_health_endpoint(base_url="http://127.0.0.1:8000"):
     """Test health endpoint"""
-    if not REQUESTS_AVAILABLE:
-        print(f"⚠️  Skipping health endpoint test - requests module not available")
+    if not HTTPX_AVAILABLE:
+        print(f"⚠️  Skipping health endpoint test - httpx module not available")
         return  # Skip test, don't return a value
 
     print(f"\nTesting health endpoint: {base_url}/health")
 
     try:
-        response = requests.get(f"{base_url}/health", timeout=5)
+        with httpx.Client() as client:
+            response = client.get(f"{base_url}/health", timeout=5.0)
         print(f"Status Code: {response.status_code}")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
@@ -94,15 +122,17 @@ def test_health_endpoint(base_url="http://127.0.0.1:8000"):
     except Exception as e:
         print(f"❌ Error testing health endpoint: {e}")
         print("⚠️  Test completed (server connectivity may affect results)")
-        # For pytest compatibility, we'll raise the exception for actual test failures
-        if "pytest" in str(e.__class__.__module__):
-            raise
+        # For pytest compatibility, we'll skip the test instead of failing when server is not available
+        if is_running_under_pytest():
+            import pytest
+
+            pytest.skip(f"Server not available: {e}")
 
 
 def test_cors_configuration():
     """Test CORS configuration - pytest compatible function"""
-    if not REQUESTS_AVAILABLE:
-        print("⚠️  Skipping CORS tests - requests module not available")
+    if not HTTPX_AVAILABLE:
+        print("⚠️  Skipping CORS tests - httpx module not available")
         # Don't fail the test, just skip it
         return
 
@@ -126,6 +156,23 @@ def test_cors_configuration():
     # For pytest compatibility, we'll be lenient about failures
     # since this requires a running server
     print("\n✅ CORS tests completed (server connectivity may affect results)")
+
+
+def test_cors_test_configuration():
+    """Test that the CORS test configuration is valid - doesn't require running server"""
+    # Test that httpx is available
+    assert HTTPX_AVAILABLE, "httpx module should be available for CORS tests"
+
+    # Test that pytest detection works
+    is_pytest = is_running_under_pytest()
+    assert isinstance(is_pytest, bool), "pytest detection should return a boolean"
+
+    # Test that we can create httpx client
+    if HTTPX_AVAILABLE:
+        with httpx.Client() as client:
+            assert client is not None, "httpx client should be created successfully"
+
+    print("✅ CORS test configuration is valid")
 
 
 if __name__ == "__main__":

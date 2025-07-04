@@ -2,17 +2,44 @@
 Standalone CORS test script that is more reliable and provides better error handling
 """
 
-import requests
 import json
 import time
-import pytest
 from typing import Dict, Any
+
+# Conditional imports with availability flags
+try:
+    import requests
+
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    print("⚠️  Warning: requests module not available. CORS tests will be skipped.")
+
+try:
+    import pytest
+
+    PYTEST_AVAILABLE = True
+except ImportError:
+    PYTEST_AVAILABLE = False
+    print("⚠️  Warning: pytest module not available. Using fallback skip mechanism.")
+
+    # Define a fallback skip function if pytest is not available
+    class _FallbackSkip:
+        def skip(self, reason: str):
+            print(f"⏭️  Skipping test: {reason}")
+            return
+
+    pytest = _FallbackSkip()
 
 
 def wait_for_server(
     base_url: str = "http://127.0.0.1:8000", max_attempts: int = 5
 ) -> bool:
     """Wait for server to be ready"""
+    if not REQUESTS_AVAILABLE:
+        print("⚠️  Cannot check server status - requests module not available")
+        return False
+
     for attempt in range(max_attempts):
         try:
             response = requests.get(f"{base_url}/health", timeout=2)
@@ -27,6 +54,10 @@ def wait_for_server(
 
 def test_server_health():
     """Test that the server health endpoint is working"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
     base_url = "http://127.0.0.1:8000"
 
     if not wait_for_server(base_url):
@@ -51,6 +82,10 @@ def test_server_health():
 
 def test_cors_allowed_origins():
     """Test CORS for allowed origins"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
     base_url = "http://127.0.0.1:8000"
 
     if not wait_for_server(base_url):
@@ -101,6 +136,10 @@ def test_cors_allowed_origins():
 
 def test_cors_unauthorized_origin():
     """Test CORS for unauthorized origins"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
     base_url = "http://127.0.0.1:8000"
 
     if not wait_for_server(base_url):
@@ -141,6 +180,10 @@ def test_cors_unauthorized_origin():
 
 def test_cors_methods_and_headers():
     """Test that CORS allows the expected methods and headers"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
     base_url = "http://127.0.0.1:8000"
 
     if not wait_for_server(base_url):
@@ -182,6 +225,12 @@ def test_cors_methods_and_headers():
 if __name__ == "__main__":
     print("🧪 Running Standalone CORS Tests")
     print("=" * 50)
+
+    # Check dependencies before running tests
+    if not REQUESTS_AVAILABLE:
+        print("\n❌ Cannot run CORS tests: requests module not available")
+        print("   Install with: pip install requests")
+        exit(1)
 
     try:
         print("\n1. Testing server health...")
