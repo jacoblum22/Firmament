@@ -412,8 +412,6 @@ class TestFileUploadIntegration:
 
     def test_end_to_end_filename_security(self):
         """Test that malicious filenames don't create dangerous files on filesystem"""
-        import tempfile
-        import shutil
         from utils.file_validator import FileValidator
 
         pdf_content = b"%PDF-1.4\nvalid pdf content"

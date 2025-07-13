@@ -351,7 +351,7 @@ def main():
     if not tester.test_server_connectivity():
         return 1
 
-    print(f"\nStarting upload validation tests...")
+    print("\nStarting upload validation tests...")
     print(f"Server: {args.server_url}")
     print(f"Output directory: {args.output_dir}")
 

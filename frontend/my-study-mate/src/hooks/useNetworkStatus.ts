@@ -87,7 +87,21 @@ export const useNetworkStatus = () => {
 
   useEffect(() => {
     // Initialize network utils
-    networkUtils.current = NetworkUtils.getInstance(config.getApiBaseUrl());
+    try {
+      networkUtils.current = NetworkUtils.getInstance(config.getApiBaseUrl());
+    } catch (error) {
+      console.error('Failed to initialize NetworkUtils:', error);
+      setConnectionState(prev => ({
+        ...prev,
+        isInitializing: false,
+        isBackendReachable: false,
+        errorCount: prev.errorCount + 1
+      }));
+      return;
+    }
+
+    // …rest of the effect…
+  }, [config]);
 
     const checkBackendHealthInternal = async () => {
       const healthStatus = await performHealthCheck();

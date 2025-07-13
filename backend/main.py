@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -161,10 +161,14 @@ def detailed_health_check():
     # Check Redis connection if configured
     if settings.redis_url:
         try:
+        try:
             import redis
 
             redis_client = redis.from_url(settings.redis_url, socket_timeout=5)
-            redis_client.ping()
+            try:
+                redis_client.ping()
+            finally:
+                redis_client.close()
             health_status["dependencies"]["redis"] = {
                 "status": "healthy",
                 "latency_ms": None,  # Could measure actual latency
@@ -175,7 +179,6 @@ def detailed_health_check():
                 "error": str(e),
             }
             overall_healthy = False
-
     # Check OpenAI API key configuration
     if settings.openai_api_key:
         health_status["dependencies"]["openai"] = {
@@ -193,7 +196,7 @@ def detailed_health_check():
 
     # Check file system permissions
     try:
-        import tempfile
+        import os
         import os
 
         # Ensure upload directory exists before testing write permissions
@@ -201,10 +204,14 @@ def detailed_health_check():
         os.makedirs(upload_dir, exist_ok=True)
 
         # Test write permissions in configured upload directory
+        # Test write permissions in configured upload directory
         test_file = os.path.join(upload_dir, ".health_check")
-        with open(test_file, "w") as f:
-            f.write("test")
-        os.remove(test_file)
+        try:
+            with open(test_file, "w") as f:
+                f.write("test")
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
 
         health_status["dependencies"]["filesystem"] = {
             "status": "healthy",
