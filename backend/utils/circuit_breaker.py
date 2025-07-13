@@ -77,24 +77,25 @@ class CircuitBreaker:
 
     def record_success(self):
         """Record successful execution"""
-        if self.state == CircuitState.HALF_OPEN:
-            self.state = CircuitState.CLOSED
-            self.failure_count = 0
-            logger.info(f"Circuit breaker {self.name} closing - service recovered")
-        elif self.state == CircuitState.CLOSED:
-            self.failure_count = max(0, self.failure_count - 1)
+        with self._lock:
+            if self.state == CircuitState.HALF_OPEN:
+                self.state = CircuitState.CLOSED
+                self.failure_count = 0
+                logger.info(f"Circuit breaker {self.name} closing - service recovered")
+            elif self.state == CircuitState.CLOSED:
+                self.failure_count = max(0, self.failure_count - 1)
 
     def record_failure(self):
         """Record failed execution"""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
+        with self._lock:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
 
-        if self.failure_count >= self.failure_threshold:
-            self.state = CircuitState.OPEN
-            logger.warning(
-                f"Circuit breaker {self.name} opening - {self.failure_count} failures"
-            )
-
+            if self.failure_count >= self.failure_threshold:
+                self.state = CircuitState.OPEN
+                logger.warning(
+                    f"Circuit breaker {self.name} opening - {self.failure_count} failures"
+                )
     def __call__(self, func: Callable) -> Callable:
         """Decorator to wrap functions with circuit breaker"""
 
