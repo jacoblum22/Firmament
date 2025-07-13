@@ -161,10 +161,14 @@ def detailed_health_check():
     # Check Redis connection if configured
     if settings.redis_url:
         try:
+        try:
             import redis
 
             redis_client = redis.from_url(settings.redis_url, socket_timeout=5)
-            redis_client.ping()
+            try:
+                redis_client.ping()
+            finally:
+                redis_client.close()
             health_status["dependencies"]["redis"] = {
                 "status": "healthy",
                 "latency_ms": None,  # Could measure actual latency
@@ -175,7 +179,6 @@ def detailed_health_check():
                 "error": str(e),
             }
             overall_healthy = False
-
     # Check OpenAI API key configuration
     if settings.openai_api_key:
         health_status["dependencies"]["openai"] = {
