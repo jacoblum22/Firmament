@@ -17,16 +17,38 @@ import sys
 
 
 def download_nltk_data():
-    """Download required NLTK data packages."""
+    """
+    Download required NLTK data packages.
+
+    Uses the NLTK_DATA environment variable if set, otherwise defaults to ~/nltk_data.
+    This ensures compatibility with containerized environments where the home directory
+    may not be writable.
+    """
     try:
         import nltk
 
         print("📦 Setting up NLTK data...")
 
-        # Set NLTK data path
-        nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
-        os.makedirs(nltk_data_dir, exist_ok=True)
-        nltk.data.path = [nltk_data_dir]
+        # Set NLTK data path - check environment variable first, then fall back to default
+        nltk_data_dir = os.environ.get("NLTK_DATA")
+        if nltk_data_dir:
+            print(f"🔧 Using NLTK_DATA environment variable: {nltk_data_dir}")
+        else:
+            nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
+            print(f"🔧 Using default NLTK data directory: {nltk_data_dir}")
+
+        try:
+            os.makedirs(nltk_data_dir, exist_ok=True)
+            nltk.data.path = [nltk_data_dir]
+        except PermissionError:
+            print(f"❌ Permission denied creating directory: {nltk_data_dir}")
+            print(
+                "💡 Try setting NLTK_DATA environment variable to a writable location"
+            )
+            return False
+        except Exception as e:
+            print(f"❌ Error creating NLTK data directory: {e}")
+            return False
 
         # Required NLTK data packages
         required_packages = [
@@ -44,15 +66,18 @@ def download_nltk_data():
         for package in required_packages:
             try:
                 result = nltk.download(package, quiet=True, download_dir=nltk_data_dir)
-                if result:
-                    downloaded.append(package)
-                    print(f"✓ Downloaded: {package}")
+                # Determine the correct path based on package type
+                if "punkt" in package:
+                    nltk.data.find(f"tokenizers/{package}")
+                elif package in ["stopwords", "wordnet", "omw-1.4"]:
+                    nltk.data.find(f"corpora/{package}")
                 else:
-                    print(f"⚠️  Already exists: {package}")
-                    downloaded.append(package)
+                    nltk.data.find(f"taggers/{package}")
+                downloaded.append(package)
+                print(f"✓ Downloaded: {package}")
             except Exception as e:
-                print(f"❌ Failed to download {package}: {e}")
                 failed.append(package)
+                print(f"❌ Failed to download {package}: {e}")
 
         print(f"\n📊 NLTK Data Setup Summary:")
         print(f"   Successfully processed: {len(downloaded)} packages")

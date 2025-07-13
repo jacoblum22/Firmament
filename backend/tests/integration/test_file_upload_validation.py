@@ -470,11 +470,13 @@ class TestFileUploadIntegration:
                 except Exception as e:
                     # If validation fails, that's also acceptable for malicious files
                     # But we need to ensure it fails securely, not with an unhandled exception
-                    assert (
-                        "FileValidationError" in str(type(e))
-                        or "ValueError" in str(type(e))
-                        or "OSError" in str(type(e))
-                    ), f"Unexpected exception type for malicious filename {malicious_filename}: {e}"
+                    from utils.file_validator import FileValidationError
+
+                    # Check for expected exception types
+                    expected_exceptions = (FileValidationError, ValueError, OSError)
+                    assert isinstance(
+                        e, expected_exceptions
+                    ), f"Unexpected exception type {type(e).__name__} for malicious filename {malicious_filename}: {e}"
 
 
 class TestFileUploadErrorHandling:

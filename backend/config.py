@@ -406,10 +406,17 @@ class Settings:
         # Directory path validation
         if not self.upload_directory or self.upload_directory.strip() == "":
             errors.append("Upload directory cannot be empty.")
+        else:
+            # Check for path traversal attempts
+            if ".." in self.upload_directory or self.upload_directory.startswith("/"):
+                errors.append("Upload directory cannot contain '..' or start with '/'.")
 
         if not self.temp_directory or self.temp_directory.strip() == "":
             errors.append("Temp directory cannot be empty.")
-
+        else:
+            # Check for path traversal attempts
+            if ".." in self.temp_directory or self.temp_directory.startswith("/"):
+                errors.append("Temp directory cannot contain '..' or start with '/'.")
         # Report errors and warnings
         if warnings:
             print("⚠️  Configuration Warnings:")

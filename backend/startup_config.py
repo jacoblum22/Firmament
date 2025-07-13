@@ -144,8 +144,15 @@ def configure_torch_for_startup():
         import torch
 
         # Get configurable thread limit from environment variable
-        max_threads = int(os.getenv("TORCH_NUM_THREADS", "4"))
-        current_threads = torch.get_num_threads()
+        try:
+            max_threads = int(os.getenv("TORCH_NUM_THREADS", "4"))
+            if max_threads < 1:
+                print(f"Warning: TORCH_NUM_THREADS must be positive, using default 4")
+                max_threads = 4
+        except ValueError:
+            print(f"Warning: Invalid TORCH_NUM_THREADS value, using default 4")
+            max_threads = 4
+            current_threads = torch.get_num_threads()
 
         # Set number of threads to prevent excessive CPU usage
         if current_threads > max_threads:
@@ -242,7 +249,8 @@ def get_optimal_device_config():
                 print(
                     f"Auto-detected GPU with {gpu_memory_gb:.1f}GB memory, using {compute_type}"
                 )
-            except:
+            except Exception as e:
+                print(f"Warning: Failed to get GPU memory info: {e}")
                 compute_type = "float16"  # Default for CUDA
             return "cuda", compute_type
         else:
