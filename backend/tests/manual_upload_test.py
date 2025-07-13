@@ -13,11 +13,9 @@ Usage:
 import argparse
 import requests
 import os
-import tempfile
 import json
 import time
-from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict
 import sys
 
 # Add the parent directory to Python path so we can import our modules

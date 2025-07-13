@@ -3,13 +3,10 @@ Integration tests for file upload validation.
 Tests the complete upload endpoint with various file scenarios.
 """
 
-import pytest
-import tempfile
 import os
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 from io import BytesIO
-import json
 
 # Import the router and create test app
 from routes import router

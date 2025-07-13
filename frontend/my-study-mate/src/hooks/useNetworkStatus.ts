@@ -26,63 +26,72 @@ export const useNetworkStatus = () => {
   // use the correct return type from setTimeout instead of a plain number
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Shared health check logic
+  const performHealthCheck = useCallback(async () => {
+    if (!networkUtils.current || !navigator.onLine) {
+      return null;
+    }
+
+    try {
+      const healthStatus: HealthStatus = await networkUtils.current.checkBackendHealth();
+      
+      setConnectionState(prev => ({
+        ...prev,
+        isBackendReachable: healthStatus.isOnline,
+        isInitializing: false, // Health check completed
+        latency: healthStatus.latency,
+        lastChecked: healthStatus.lastChecked,
+        errorCount: healthStatus.errorCount,
+        retryAttempt: healthStatus.isOnline ? 0 : prev.retryAttempt
+      }));
+
+      return healthStatus;
+    } catch (error) {
+      console.error('Health check failed:', error);
+      setConnectionState(prev => ({
+        ...prev,
+        isBackendReachable: false,
+        isInitializing: false, // Health check completed
+        lastChecked: new Date(),
+        errorCount: prev.errorCount + 1
+      }));
+      
+      return null;
+    }
+  }, []);
+
+  const scheduleRetryInternal = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
+    setConnectionState(prev => {
+      const nextRetryAttempt = prev.retryAttempt + 1;
+      
+      // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
+      const delay = Math.min(5000 * Math.pow(2, nextRetryAttempt - 1), 60000);
+      
+      retryTimeoutRef.current = window.setTimeout(async () => {
+        const healthStatus = await performHealthCheck();
+        if (!healthStatus?.isOnline) {
+          scheduleRetryInternal();
+        }
+      }, delay);
+
+      return {
+        ...prev,
+        retryAttempt: nextRetryAttempt
+      };
+    });
+  }, [performHealthCheck]);
+
   useEffect(() => {
     // Initialize network utils
     networkUtils.current = NetworkUtils.getInstance(config.getApiBaseUrl());
 
-    const scheduleRetryInternal = () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-
-      setConnectionState(prev => {
-        const nextRetryAttempt = prev.retryAttempt + 1;
-        
-        // Exponential backoff: 5s, 10s, 20s, 40s, max 60s
-        const delay = Math.min(5000 * Math.pow(2, nextRetryAttempt - 1), 60000);
-        
-        retryTimeoutRef.current = window.setTimeout(() => {
-          checkBackendHealthInternal();
-        }, delay);
-
-        return {
-          ...prev,
-          retryAttempt: nextRetryAttempt
-        };
-      });
-    };
-
     const checkBackendHealthInternal = async () => {
-      if (!networkUtils.current || !navigator.onLine) {
-        return;
-      }
-
-      try {
-        const healthStatus: HealthStatus = await networkUtils.current.checkBackendHealth();
-        
-        setConnectionState(prev => ({
-          ...prev,
-          isBackendReachable: healthStatus.isOnline,
-          isInitializing: false, // First health check completed
-          latency: healthStatus.latency,
-          lastChecked: healthStatus.lastChecked,
-          errorCount: healthStatus.errorCount,
-          retryAttempt: healthStatus.isOnline ? 0 : prev.retryAttempt
-        }));
-
-        // If backend is down, schedule a retry
-        if (!healthStatus.isOnline) {
-          scheduleRetryInternal();
-        }
-      } catch (error) {
-        console.error('Health check failed:', error);
-        setConnectionState(prev => ({
-          ...prev,
-          isBackendReachable: false,
-          isInitializing: false, // First health check completed
-          lastChecked: new Date(),
-          errorCount: prev.errorCount + 1
-        }));
+      const healthStatus = await performHealthCheck();
+      if (!healthStatus?.isOnline) {
         scheduleRetryInternal();
       }
     };
@@ -127,36 +136,11 @@ export const useNetworkStatus = () => {
       }
       networkUtils.current?.stopHealthCheck();
     };
-  }, []);
+  }, [performHealthCheck, scheduleRetryInternal]);
 
   const forceHealthCheck = useCallback(async () => {
-    if (!networkUtils.current || !navigator.onLine) {
-      return;
-    }
-
-    try {
-      const healthStatus: HealthStatus = await networkUtils.current.checkBackendHealth();
-      
-      setConnectionState(prev => ({
-        ...prev,
-        isBackendReachable: healthStatus.isOnline,
-        isInitializing: false, // Manual health check completed
-        latency: healthStatus.latency,
-        lastChecked: healthStatus.lastChecked,
-        errorCount: healthStatus.errorCount,
-        retryAttempt: healthStatus.isOnline ? 0 : prev.retryAttempt
-      }));
-    } catch (error) {
-      console.error('Health check failed:', error);
-      setConnectionState(prev => ({
-        ...prev,
-        isBackendReachable: false,
-        isInitializing: false, // Manual health check completed
-        lastChecked: new Date(),
-        errorCount: prev.errorCount + 1
-      }));
-    }
-  }, []);
+    await performHealthCheck();
+  }, [performHealthCheck]);
 
   const isFullyOnline = connectionState.isOnline && connectionState.isBackendReachable;
 

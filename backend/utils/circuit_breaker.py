@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Callable, Any, Optional, Dict, Type, Union
 from functools import wraps
 import asyncio
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,6 @@ class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open"""
 
     pass
-
-
-import threading
-from typing import Optional, Union, Type
 
 
 class CircuitBreaker:

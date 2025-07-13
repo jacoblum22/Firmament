@@ -62,7 +62,7 @@ class NetworkUtils {
 
     const shouldRetry = defaultRetryOptions.retryCondition || ((error) => error.isRetryable);
 
-    let lastError: NetworkError;
+    let lastError: NetworkError = this.createNetworkError(0, 'Request failed');
 
     for (let attempt = 0; attempt <= defaultRetryOptions.maxRetries; attempt++) {
       try {
@@ -115,7 +115,7 @@ class NetworkUtils {
       }
     }
 
-    throw lastError!;
+    throw lastError || new Error('Unexpected error in retry logic');
   }
 
   /**

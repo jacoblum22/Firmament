@@ -47,6 +47,8 @@ class ModelManager:
 
     _instance: Optional["ModelManager"] = None
     _lock = threading.Lock()
+    _whisper_lock = threading.Lock()
+    _bertopic_lock = threading.Lock()
     _whisper_model = None
     _bertopic_model = None
 
@@ -59,54 +61,62 @@ class ModelManager:
     def get_whisper_model(self, model_size: str = "base.en"):
         """Lazy load Whisper model with proper device detection."""
         if self._whisper_model is None:
-            try:
-                from faster_whisper import WhisperModel
+            with self._whisper_lock:
+                # Double-check pattern: check again after acquiring lock
+                if self._whisper_model is None:
+                    try:
+                        from faster_whisper import WhisperModel
 
-                device, compute_type = get_optimal_device_config()
+                        device, compute_type = get_optimal_device_config()
 
-                cache_dir = get_model_cache_dir()
-                model_path = os.path.join(cache_dir, f"faster-whisper-{model_size}")
+                        cache_dir = get_model_cache_dir()
+                        model_path = os.path.join(
+                            cache_dir, f"faster-whisper-{model_size}"
+                        )
 
-                if not os.path.exists(model_path):
-                    print(f"Downloading Whisper model: {model_size}")
+                        if not os.path.exists(model_path):
+                            print(f"Downloading Whisper model: {model_size}")
 
-                self._whisper_model = WhisperModel(
-                    model_size,
-                    download_root=cache_dir,
-                    device=device,
-                    compute_type=compute_type,
-                )
-                print(
-                    f"Whisper model {model_size} loaded successfully on {device} with {compute_type}"
-                )
-            except Exception as e:
-                print(f"Failed to load Whisper model: {e}")
-                raise
+                        self._whisper_model = WhisperModel(
+                            model_size,
+                            download_root=cache_dir,
+                            device=device,
+                            compute_type=compute_type,
+                        )
+                        print(
+                            f"Whisper model {model_size} loaded successfully on {device} with {compute_type}"
+                        )
+                    except Exception as e:
+                        print(f"Failed to load Whisper model: {e}")
+                        raise
         return self._whisper_model
 
     def get_bertopic_model(self):
         """Lazy load BERTopic model."""
         if self._bertopic_model is None:
-            try:
-                from bertopic import BERTopic
-                from sklearn.feature_extraction.text import CountVectorizer
+            with self._bertopic_lock:
+                # Double-check pattern: check again after acquiring lock
+                if self._bertopic_model is None:
+                    try:
+                        from bertopic import BERTopic
+                        from sklearn.feature_extraction.text import CountVectorizer
 
-                # Use lighter configuration for faster startup
-                vectorizer = CountVectorizer(
-                    max_features=1000,  # Limit features for faster processing
-                    stop_words="english",
-                    ngram_range=(1, 2),
-                )
+                        # Use lighter configuration for faster startup
+                        vectorizer = CountVectorizer(
+                            max_features=1000,  # Limit features for faster processing
+                            stop_words="english",
+                            ngram_range=(1, 2),
+                        )
 
-                self._bertopic_model = BERTopic(
-                    vectorizer_model=vectorizer,
-                    verbose=False,  # Reduce output
-                    calculate_probabilities=False,  # Faster processing
-                )
-                print("BERTopic model initialized successfully")
-            except Exception as e:
-                print(f"Failed to initialize BERTopic model: {e}")
-                raise
+                        self._bertopic_model = BERTopic(
+                            vectorizer_model=vectorizer,
+                            verbose=False,  # Reduce output
+                            calculate_probabilities=False,  # Faster processing
+                        )
+                        print("BERTopic model initialized successfully")
+                    except Exception as e:
+                        print(f"Failed to initialize BERTopic model: {e}")
+                        raise
         return self._bertopic_model
 
     def warmup_models(self):
