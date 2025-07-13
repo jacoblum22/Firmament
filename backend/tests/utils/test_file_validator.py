@@ -3,7 +3,6 @@ Tests for file validation utilities.
 """
 
 import pytest
-import os
 from utils.file_validator import FileValidator, FileValidationError
 
 
