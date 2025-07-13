@@ -187,52 +187,36 @@ else:
     def check_imports(self) -> bool:
         """Check that all required modules can be imported"""
 
-        import_tests = [
-            "from utils.file_validator import FileValidator",
-            "from tests.utils.test_file_generators import TestFileGenerator",
-            "from routes import router",
-            "from config import settings",
-            "import fastapi",
-            "import pytest",
-        ]
+        import_mappings = {
+            "from utils.file_validator import FileValidator": (
+                "utils.file_validator",
+                "FileValidator",
+            ),
+            "from tests.utils.test_file_generators import TestFileGenerator": (
+                "tests.utils.test_file_generators",
+                "TestFileGenerator",
+            ),
+            "from routes import router": ("routes", "router"),
+            "from config import settings": ("config", "settings"),
+            "import fastapi": ("fastapi", None),
+            "import pytest": ("pytest", None),
+        }
 
         print("\n" + "=" * 60)
         print("CHECKING IMPORTS")
         print("=" * 60)
 
         all_imports_ok = True
-        for import_test in import_tests:
+        import importlib
+
+        for import_test, (module_name, attr_name) in import_mappings.items():
             try:
-                import importlib
-
-                all_imports_ok = True
-                import_mappings = {
-                    "from utils.file_validator import FileValidator": (
-                        "utils.file_validator",
-                        "FileValidator",
-                    ),
-                    "from tests.utils.test_file_generators import TestFileGenerator": (
-                        "tests.utils.test_file_generators",
-                        "TestFileGenerator",
-                    ),
-                    "from routes import router": ("routes", "router"),
-                    "from config import settings": ("config", "settings"),
-                    "import fastapi": ("fastapi", None),
-                    "import pytest": ("pytest", None),
-                }
-
-                for import_test, (module_name, attr_name) in import_mappings.items():
-                    try:
-                        module = importlib.import_module(module_name)
-                        if attr_name:
-                            getattr(module, attr_name)
-                        print(f"✅ {import_test}")
-                    except Exception as e:
-                        print(f"❌ {import_test} - {str(e)}")
-                        all_imports_ok = False
-                        print(f"✅ {import_test}")
+                module = importlib.import_module(module_name)
+                if attr_name:
+                    getattr(module, attr_name)
+                print(f"✅ {import_test}")
             except Exception as e:
-                print(f"❌ {import_test} - {str(e)}")
+                print(f"❌ {import_test} - {e}")
                 all_imports_ok = False
 
         return all_imports_ok
