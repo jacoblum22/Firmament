@@ -124,15 +124,20 @@ class NetworkUtils {
   public async checkBackendHealth(): Promise<HealthStatus> {
     const startTime = Date.now();
     
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache'
         },
-        signal: AbortSignal.timeout(5000) // 5 second timeout
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
       const latency = Date.now() - startTime;
       
       if (response.ok) {
@@ -151,6 +156,7 @@ class NetworkUtils {
         };
       }
     } catch {
+      clearTimeout(timeoutId);
       this.healthStatus = {
         isOnline: false,
         lastChecked: new Date(),
@@ -206,13 +212,22 @@ class NetworkUtils {
    * Handle various fetch errors and categorize them
    */
   private handleFetchError(err: unknown): NetworkError {
-    const errorObj = err as Error;
-    const error = new Error(errorObj.message || 'Network request failed') as NetworkError;
-    
-    if (errorObj.name === 'AbortError') {
+    let message = 'Network request failed';
+    let name = '';
+
+    if (err instanceof Error) {
+      message = err.message || message;
+      name = err.name;
+    } else if (typeof err === 'string') {
+      message = err;
+    }
+
+    const error = new Error(message) as NetworkError;
+
+    if (name === 'AbortError') {
       error.code = 'TIMEOUT';
       error.isRetryable = true;
-    } else if (errorObj.name === 'TypeError' && errorObj.message?.includes('fetch')) {
+    } else if (name === 'TypeError' && message?.includes('fetch')) {
       error.code = 'NETWORK_ERROR';
       error.isRetryable = true;
     } else {

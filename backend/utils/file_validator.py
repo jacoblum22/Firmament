@@ -60,12 +60,19 @@ class FileValidator:
         if not filename:
             raise FileValidationError("Filename is required")
 
-        # Extract extension
-        parts = filename.split(".")
-        if len(parts) < 2:
+        # Extract extension using os.path.splitext for reliable handling
+        name, ext = os.path.splitext(filename)
+
+        # Check if extension exists
+        if not ext:
             raise FileValidationError("File must have an extension")
 
-        extension = parts[-1].lower()
+        # Remove the leading dot and convert to lowercase
+        extension = ext[1:].lower()
+
+        # Check if extension is empty after removing the dot
+        if not extension:
+            raise FileValidationError("File must have a valid extension")
 
         if extension not in FileValidator.ALLOWED_MIME_TYPES:
             allowed = ", ".join(

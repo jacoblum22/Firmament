@@ -39,6 +39,41 @@ class TestFileValidator:
         with pytest.raises(FileValidationError, match="Filename is required"):
             FileValidator.validate_file_extension("")
 
+    def test_validate_file_extension_multiple_dots(self):
+        """Test that extension validation works correctly with filenames containing multiple dots"""
+        # These should all work correctly with os.path.splitext approach
+        assert (
+            FileValidator.validate_file_extension("my.document.with.dots.pdf") == "pdf"
+        )
+        assert FileValidator.validate_file_extension("version.1.2.backup.txt") == "txt"
+        assert FileValidator.validate_file_extension("audio.track.01.mp3") == "mp3"
+        assert (
+            FileValidator.validate_file_extension("data.export.2024.01.15.wav") == "wav"
+        )
+        assert FileValidator.validate_file_extension("config.dev.local.m4a") == "m4a"
+
+        # Hidden files should work
+        assert FileValidator.validate_file_extension(".hidden.file.pdf") == "pdf"
+
+        # Files ending with double dots should still work
+        assert FileValidator.validate_file_extension("file..pdf") == "pdf"
+
+    def test_validate_file_extension_edge_cases(self):
+        """Test edge cases for file extension validation"""
+        # File ending with just a dot should fail
+        with pytest.raises(
+            FileValidationError, match="File must have a valid extension"
+        ):
+            FileValidator.validate_file_extension("filename.")
+
+        # File starting with dot but no extension should fail
+        with pytest.raises(FileValidationError, match="File must have an extension"):
+            FileValidator.validate_file_extension(".hidden_no_ext")
+
+        # Empty filename should fail
+        with pytest.raises(FileValidationError, match="Filename is required"):
+            FileValidator.validate_file_extension("")
+
     def test_validate_file_size_valid(self):
         """Test validation of valid file sizes"""
         # Small PDF file

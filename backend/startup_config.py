@@ -1,6 +1,14 @@
 """
 Startup configuration to control heavy imports and model loading.
 This helps reduce backend startup time by deferring expensive operations.
+
+Environment Variables:
+- LAZY_LOADING: Enable/disable lazy loading (default: true)
+- PRELOAD_MODELS: Preload models on startup (default: false)
+- MODEL_CACHE_DIR: Directory for caching models (default: ./models)
+- TORCH_NUM_THREADS: Maximum number of PyTorch threads (default: 4)
+- WHISPER_DEVICE: Force specific device for Whisper model (auto-detected if not set)
+- WHISPER_COMPUTE_TYPE: Force specific compute type for Whisper model (auto-selected if not set)
 """
 
 import os
@@ -31,23 +39,30 @@ def get_model_cache_dir() -> str:
     return cache_dir
 
 
+import threading
+
+
 class ModelManager:
     """Singleton to manage model loading and caching."""
 
     _instance: Optional["ModelManager"] = None
+    _lock = threading.Lock()
     _whisper_model = None
     _bertopic_model = None
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
         return cls._instance
 
     def get_whisper_model(self, model_size: str = "base.en"):
-        """Lazy load Whisper model."""
+        """Lazy load Whisper model with proper device detection."""
         if self._whisper_model is None:
             try:
                 from faster_whisper import WhisperModel
+
+                device, compute_type = get_optimal_device_config()
 
                 cache_dir = get_model_cache_dir()
                 model_path = os.path.join(cache_dir, f"faster-whisper-{model_size}")
@@ -56,9 +71,14 @@ class ModelManager:
                     print(f"Downloading Whisper model: {model_size}")
 
                 self._whisper_model = WhisperModel(
-                    model_size, download_root=cache_dir, device="auto"
+                    model_size,
+                    download_root=cache_dir,
+                    device=device,
+                    compute_type=compute_type,
                 )
-                print(f"Whisper model {model_size} loaded successfully")
+                print(
+                    f"Whisper model {model_size} loaded successfully on {device} with {compute_type}"
+                )
             except Exception as e:
                 print(f"Failed to load Whisper model: {e}")
                 raise
@@ -106,22 +126,36 @@ model_manager = ModelManager()
 
 
 def configure_torch_for_startup():
-    """Configure PyTorch for faster startup."""
-    try:
-        import torch
+    """
+    Configure PyTorch for faster startup and optimal performance.
 
-        # Disable CUDA initialization warnings
+    Sets CUDA environment variables before importing torch to ensure proper
+    initialization, configures thread limits based on environment settings,
+    and disables unnecessary features for inference workloads.
+
+    Environment Variables:
+        TORCH_NUM_THREADS: Maximum number of PyTorch threads (default: 4)
+        CUDA_LAUNCH_BLOCKING: CUDA synchronization setting (default: 0)
+    """
+    try:
+        # Set CUDA environment variable before importing torch to ensure it takes effect
         os.environ.setdefault("CUDA_LAUNCH_BLOCKING", "0")
 
+        import torch
+
+        # Get configurable thread limit from environment variable
+        max_threads = int(os.getenv("TORCH_NUM_THREADS", "4"))
+        current_threads = torch.get_num_threads()
+
         # Set number of threads to prevent excessive CPU usage
-        if torch.get_num_threads() > 4:
-            torch.set_num_threads(4)
+        if current_threads > max_threads:
+            torch.set_num_threads(max_threads)
 
         # Disable autograd if not needed for inference
         torch.set_grad_enabled(False)
 
         print(
-            f"PyTorch configured: {torch.get_num_threads()} threads, CUDA available: {torch.cuda.is_available()}"
+            f"PyTorch configured: {torch.get_num_threads()} threads (max: {max_threads}), CUDA available: {torch.cuda.is_available()}"
         )
     except ImportError:
         pass  # PyTorch not available
@@ -138,13 +172,9 @@ def optimize_nltk_startup():
         if os.path.exists(nltk_data_dir):
             nltk.data.path = [nltk_data_dir]
 
-        # Disable SSL certificate verification for NLTK downloads if needed
-        try:
-            _create_unverified_https_context = ssl._create_unverified_context
-        except AttributeError:
-            pass
-        else:
-            ssl._create_default_https_context = _create_unverified_https_context
+        # Note: NLTK data should be pre-downloaded during deployment/setup phase
+        # to avoid runtime downloads and maintain secure HTTPS connections.
+        # Use: python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
 
     except ImportError:
         pass  # NLTK not available
@@ -161,3 +191,64 @@ def apply_startup_optimizations():
             model_manager.warmup_models()
 
         print("Startup optimizations applied")
+
+
+def get_optimal_device_config():
+    """
+    Get optimal device and compute type configuration for ML models.
+
+    Returns:
+        tuple: (device, compute_type) where device is 'cuda' or 'cpu'
+               and compute_type is appropriate for the device
+    """
+    # Valid device options
+    valid_devices = ["cuda", "cpu"]
+    # Valid compute types for each device
+    valid_compute_types = {
+        "cuda": ["float16", "float32", "int8"],
+        "cpu": ["int8", "float32"],
+    }
+
+    # Check for environment variable overrides first
+    env_device = os.getenv("WHISPER_DEVICE")
+    env_compute_type = os.getenv("WHISPER_COMPUTE_TYPE")
+
+    if env_device and env_compute_type:
+        # Validate environment variables
+        if env_device in valid_devices and env_compute_type in valid_compute_types.get(
+            env_device, []
+        ):
+            print(
+                f"Using environment-specified Whisper config: device={env_device}, compute_type={env_compute_type}"
+            )
+            return env_device, env_compute_type
+        else:
+            print(
+                f"Warning: Invalid environment config device={env_device}, compute_type={env_compute_type}. Using auto-detection."
+            )
+
+    # Auto-detect optimal configuration
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            # Check GPU memory for optimal compute type selection
+            try:
+                gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (
+                    1024**3
+                )
+                # Use float16 for GPUs with sufficient memory, int8 for lower memory
+                compute_type = "float16" if gpu_memory_gb >= 6 else "int8"
+                print(
+                    f"Auto-detected GPU with {gpu_memory_gb:.1f}GB memory, using {compute_type}"
+                )
+            except:
+                compute_type = "float16"  # Default for CUDA
+            return "cuda", compute_type
+        else:
+            print("CUDA not available, using CPU with int8")
+            return "cpu", "int8"
+    except ImportError:
+        # Fallback if torch is not available
+        print("PyTorch not available, using CPU with int8")
+        return "cpu", "int8"

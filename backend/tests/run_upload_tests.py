@@ -203,8 +203,34 @@ else:
         all_imports_ok = True
         for import_test in import_tests:
             try:
-                exec(import_test)
-                print(f"✅ {import_test}")
+                import importlib
+
+                all_imports_ok = True
+                import_mappings = {
+                    "from utils.file_validator import FileValidator": (
+                        "utils.file_validator",
+                        "FileValidator",
+                    ),
+                    "from tests.utils.test_file_generators import TestFileGenerator": (
+                        "tests.utils.test_file_generators",
+                        "TestFileGenerator",
+                    ),
+                    "from routes import router": ("routes", "router"),
+                    "from config import settings": ("config", "settings"),
+                    "import fastapi": ("fastapi", None),
+                    "import pytest": ("pytest", None),
+                }
+
+                for import_test, (module_name, attr_name) in import_mappings.items():
+                    try:
+                        module = importlib.import_module(module_name)
+                        if attr_name:
+                            getattr(module, attr_name)
+                        print(f"✅ {import_test}")
+                    except Exception as e:
+                        print(f"❌ {import_test} - {str(e)}")
+                        all_imports_ok = False
+                        print(f"✅ {import_test}")
             except Exception as e:
                 print(f"❌ {import_test} - {str(e)}")
                 all_imports_ok = False

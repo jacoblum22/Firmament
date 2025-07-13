@@ -25,6 +25,10 @@ class CircuitBreakerError(Exception):
     pass
 
 
+import threading
+from typing import Optional, Union, Type
+
+
 class CircuitBreaker:
     def __init__(
         self,
@@ -37,10 +41,18 @@ class CircuitBreaker:
         self.recovery_timeout = recovery_timeout
         self.expected_exception = expected_exception
         self.name = name
+        self._lock = threading.RLock()
 
         self.failure_count = 0
         self.last_failure_time: Optional[float] = None
         self.state = CircuitState.CLOSED
+
+    def reset(self):
+        """Reset circuit breaker to closed state"""
+        with self._lock:
+            self.failure_count = 0
+            self.last_failure_time = None
+            self.state = CircuitState.CLOSED
 
     def can_execute(self) -> bool:
         """Check if function can be executed based on circuit state"""

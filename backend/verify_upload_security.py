@@ -7,7 +7,6 @@ This script provides quick methods to verify that file upload validation is work
 import subprocess
 import sys
 import os
-from pathlib import Path
 
 
 def run_command(cmd, description):

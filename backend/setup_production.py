@@ -142,6 +142,36 @@ def print_deployment_checklist() -> None:
     print("\n" + "=" * 60)
 
 
+def download_nltk_data() -> None:
+    """Download required NLTK data for the application."""
+    try:
+        import nltk
+
+        print("\n📦 Downloading required NLTK data...")
+
+        # Download commonly needed NLTK data
+        required_data = [
+            "punkt",  # Sentence tokenizer
+            "stopwords",  # Stop words
+            "wordnet",  # WordNet lemmatizer
+            "averaged_perceptron_tagger",  # POS tagger
+        ]
+
+        for data_name in required_data:
+            try:
+                nltk.download(data_name, quiet=True)
+                print(f"✓ Downloaded NLTK data: {data_name}")
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to download {data_name}: {e}")
+
+        print("✓ NLTK data download completed")
+
+    except ImportError:
+        print("⚠️  NLTK not installed, skipping data download")
+    except Exception as e:
+        print(f"❌ Error downloading NLTK data: {e}")
+
+
 def main():
     """Main setup function."""
     print("🔐 StudyMate Production Security Setup")
@@ -165,6 +195,9 @@ def main():
 
     # Create secrets reference file
     create_env_secrets_file(secrets)
+
+    # Download NLTK data
+    download_nltk_data()
 
     # Print deployment checklist
     print_deployment_checklist()

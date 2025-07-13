@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
-import json
 from datetime import datetime, timezone
 from routes import router
 from config import settings
@@ -197,8 +196,12 @@ def detailed_health_check():
         import tempfile
         import os
 
-        # Test write permissions in upload directory
-        test_file = os.path.join("uploads", ".health_check")
+        # Ensure upload directory exists before testing write permissions
+        upload_dir = settings.upload_directory
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Test write permissions in configured upload directory
+        test_file = os.path.join(upload_dir, ".health_check")
         with open(test_file, "w") as f:
             f.write("test")
         os.remove(test_file)
@@ -206,12 +209,14 @@ def detailed_health_check():
         health_status["dependencies"]["filesystem"] = {
             "status": "healthy",
             "upload_dir_writable": True,
+            "upload_dir_path": upload_dir,
         }
     except Exception as e:
         health_status["dependencies"]["filesystem"] = {
             "status": "unhealthy",
             "error": str(e),
             "upload_dir_writable": False,
+            "upload_dir_path": settings.upload_directory,
         }
         overall_healthy = False
 

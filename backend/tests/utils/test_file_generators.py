@@ -189,17 +189,26 @@ class TestFileGenerator:
 
     @staticmethod
     def create_oversized_files() -> Dict[str, bytes]:
-        """Create files that exceed size limits for testing"""
+        """
+        Create files that exceed size limits for testing.
+
+        Dynamically uses the actual FileValidator.MAX_FILE_SIZES configuration
+        to ensure generated files exceed the current backend size limits by 20%.
+        This ensures tests remain accurate if configuration limits change.
+        """
         files = {}
 
-        # PDF over 50MB limit
-        files["large_pdf.pdf"] = TestFileGenerator.create_valid_pdf(60.0)
+        # Get actual size limits from FileValidator configuration
+        pdf_limit_mb = FileValidator.MAX_FILE_SIZES["pdf"] / (1024 * 1024)
+        mp3_limit_mb = FileValidator.MAX_FILE_SIZES["mp3"] / (1024 * 1024)
+        txt_limit_mb = FileValidator.MAX_FILE_SIZES["txt"] / (1024 * 1024)
 
-        # MP3 over 200MB limit
-        files["large_mp3.mp3"] = TestFileGenerator.create_valid_mp3(250.0)
-
-        # Text over 10MB limit
-        files["large_text.txt"] = TestFileGenerator.create_valid_text(15.0)
+        # Create files that exceed the actual configured limits by 20%
+        files["large_pdf.pdf"] = TestFileGenerator.create_valid_pdf(pdf_limit_mb * 1.2)
+        files["large_mp3.mp3"] = TestFileGenerator.create_valid_mp3(mp3_limit_mb * 1.2)
+        files["large_text.txt"] = TestFileGenerator.create_valid_text(
+            txt_limit_mb * 1.2
+        )
 
         return files
 
@@ -320,7 +329,9 @@ class TestFileGenerators:
 
         # Should pass our validator
         extension, safe_filename = FileValidator.validate_upload(
-            pdf_content, "test.pdf", max_size_override=50 * 1024 * 1024
+            pdf_content,
+            "test.pdf",
+            max_size_override=FileValidator.MAX_FILE_SIZES["pdf"],
         )
         assert extension == "pdf"
 
@@ -340,7 +351,9 @@ class TestFileGenerators:
 
         # Should pass our validator
         extension, safe_filename = FileValidator.validate_upload(
-            mp3_content, "test.mp3", max_size_override=200 * 1024 * 1024
+            mp3_content,
+            "test.mp3",
+            max_size_override=FileValidator.MAX_FILE_SIZES["mp3"],
         )
         assert extension == "mp3"
 
@@ -359,7 +372,9 @@ class TestFileGenerators:
 
         # Should pass our validator
         extension, safe_filename = FileValidator.validate_upload(
-            wav_content, "test.wav", max_size_override=500 * 1024 * 1024
+            wav_content,
+            "test.wav",
+            max_size_override=FileValidator.MAX_FILE_SIZES["wav"],
         )
         assert extension == "wav"
 
@@ -378,7 +393,9 @@ class TestFileGenerators:
 
         # Should pass our validator
         extension, safe_filename = FileValidator.validate_upload(
-            m4a_content, "test.m4a", max_size_override=200 * 1024 * 1024
+            m4a_content,
+            "test.m4a",
+            max_size_override=FileValidator.MAX_FILE_SIZES["m4a"],
         )
         assert extension == "m4a"
 
@@ -395,7 +412,9 @@ class TestFileGenerators:
 
         # Should pass our validator
         extension, safe_filename = FileValidator.validate_upload(
-            text_content, "test.txt", max_size_override=10 * 1024 * 1024
+            text_content,
+            "test.txt",
+            max_size_override=FileValidator.MAX_FILE_SIZES["txt"],
         )
         assert extension == "txt"
 
@@ -413,8 +432,10 @@ class TestFileGenerators:
             # These files should NOT pass validation (except txt files with script content)
             if not filename.endswith(".txt"):
                 with pytest.raises(FileValidationError):
+                    # Use a high size limit to ensure failure is due to content, not size
+                    max_limit = max(FileValidator.MAX_FILE_SIZES.values())
                     FileValidator.validate_upload(
-                        content, filename, max_size_override=100 * 1024 * 1024
+                        content, filename, max_size_override=max_limit
                     )
 
     def test_create_oversized_files(self):
@@ -424,15 +445,21 @@ class TestFileGenerators:
         # Should have several oversized files
         assert len(oversized_files) >= 2
 
-        # Each file should be reasonably large (some may not be exactly over the limit due to implementation)
+        # Each file should be larger than the configured limits
         for filename, content in oversized_files.items():
-            assert len(content) > 10 * 1024 * 1024  # At least 10MB
+            extension = filename.split(".")[-1]
+            configured_limit = FileValidator.MAX_FILE_SIZES.get(
+                extension, 10 * 1024 * 1024
+            )
 
-            # These files should be rejected for size (test with lower limits to ensure rejection)
+            # File should be larger than the configured limit
+            assert (
+                len(content) > configured_limit
+            ), f"Oversized {extension} file ({len(content)} bytes) should exceed limit ({configured_limit} bytes)"
+
+            # These files should be rejected when using the default limits (no override)
             with pytest.raises(FileValidationError):
-                FileValidator.validate_upload(
-                    content, filename, max_size_override=5 * 1024 * 1024
-                )  # 5MB limit
+                FileValidator.validate_upload(content, filename)  # Use default limits
 
     def test_generator_basic_functionality(self):
         """Test basic functionality of file generators"""

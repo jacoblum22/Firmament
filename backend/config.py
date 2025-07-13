@@ -224,6 +224,16 @@ class Settings:
         # Whether to validate file content (signatures) - can be disabled for performance
         return os.getenv("UPLOAD_VALIDATE_CONTENT", "true").lower() == "true"
 
+    @property
+    def upload_directory(self) -> str:
+        # Directory for storing uploaded files
+        return os.getenv("UPLOAD_DIRECTORY", "uploads")
+
+    @property
+    def temp_directory(self) -> str:
+        # Directory for temporary file chunks during processing
+        return os.getenv("TEMP_DIRECTORY", "temp_chunks")
+
     # Logging Configuration
     @property
     def log_level(self) -> str:
@@ -392,6 +402,13 @@ class Settings:
             errors.append(
                 f"Invalid upload max size: {self.upload_max_size}. Must be positive."
             )
+
+        # Directory path validation
+        if not self.upload_directory or self.upload_directory.strip() == "":
+            errors.append("Upload directory cannot be empty.")
+
+        if not self.temp_directory or self.temp_directory.strip() == "":
+            errors.append("Temp directory cannot be empty.")
 
         # Report errors and warnings
         if warnings:

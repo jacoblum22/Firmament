@@ -23,6 +23,9 @@ COPY --chown=appuser:appuser requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Download NLTK data to avoid runtime downloads (only if NLTK is installed)
+RUN python -c "try: import nltk; print('NLTK found, downloading data...'); nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True); nltk.download('wordnet', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True); print('NLTK data downloaded successfully') except ImportError: print('NLTK not installed, skipping data download')" || true
+
 # Copy application code
 COPY --chown=appuser:appuser . .
 

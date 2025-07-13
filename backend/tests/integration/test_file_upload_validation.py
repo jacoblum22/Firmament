@@ -111,27 +111,112 @@ class TestFileUploadIntegration:
         assert "File is empty" in response.json()["detail"]
 
     def test_malicious_filename_sanitization(self):
-        """Test that malicious filenames are sanitized"""
+        """Test that malicious filenames are properly rejected or sanitized for security"""
         pdf_content = b"%PDF-1.4\nvalid pdf content"
 
-        # Try various malicious filenames
-        malicious_names = [
-            "../../../etc/passwd.pdf",
-            "file<script>alert('xss')</script>.pdf",
-            "file|dangerous.pdf",
-            "normal_file.pdf",  # This should work fine
+        # Test cases categorized by expected behavior
+        rejection_test_cases = [
+            {
+                "filename": "../../../etc/passwd.pdf",
+                "description": "Path traversal attack",
+                "expected_error_pattern": "invalid path characters",
+            },
+            {
+                "filename": "file<script>alert('xss')</script>.pdf",
+                "description": "XSS injection with dangerous characters",
+                "expected_error_pattern": "invalid path characters",  # Contains / in </script>
+            },
+            {
+                "filename": "file|dangerous>redirect.pdf",
+                "description": "Shell injection characters",
+                "expected_error_pattern": "dangerous character",
+            },
+            {
+                "filename": 'file"with"quotes*.pdf',
+                "description": "Filename with quotes and wildcards",
+                "expected_error_pattern": "dangerous character",
+            },
+            {
+                "filename": "file\x00null.pdf",
+                "description": "Null byte injection",
+                "expected_error_pattern": "null bytes",
+            },
+            {
+                "filename": "subdir/file.pdf",
+                "description": "Path separator in filename",
+                "expected_error_pattern": "invalid path characters",
+            },
+            {
+                "filename": "subdir\\file.pdf",
+                "description": "Windows path separator in filename",
+                "expected_error_pattern": "invalid path characters",
+            },
         ]
 
-        for filename in malicious_names:
+        # Test cases that should be accepted
+        accepted_test_cases = [
+            {
+                "filename": "normal_file.pdf",
+                "description": "Normal filename (control case)",
+            },
+            {
+                "filename": "file_with-underscores_and_dashes.pdf",
+                "description": "Filename with safe special characters",
+            },
+            {"filename": "file123.pdf", "description": "Filename with numbers"},
+            {"filename": "UPPERCASE_FILE.PDF", "description": "Uppercase filename"},
+        ]
+
+        # Test cases that should be rejected with 400 status
+        for test_case in rejection_test_cases:
+            filename = test_case["filename"]
+            description = test_case["description"]
+            expected_error = test_case["expected_error_pattern"]
+
             files = {"file": (filename, BytesIO(pdf_content), "application/pdf")}
             response = client.post("/upload", files=files)
 
-            if filename == "normal_file.pdf":
-                assert response.status_code == 200
+            # Special handling for null byte case - FastAPI might URL-encode it
+            if "null" in description.lower() and "\x00" in filename:
+                # Null bytes might be handled differently by FastAPI (URL-encoded)
+                # Accept either rejection or acceptance (will fail later in processing)
+                assert response.status_code in [
+                    200,
+                    400,
+                ], f"Unexpected status for {description}: {filename}, got {response.status_code}"
+                if response.status_code == 400:
+                    error_detail = response.json().get("detail", "")
+                    assert (
+                        expected_error.lower() in error_detail.lower()
+                    ), f"Expected error pattern '{expected_error}' not found in '{error_detail}' for {description}"
             else:
-                # Malicious filenames should either be rejected or sanitized
-                # The response should be successful but filename should be sanitized
-                assert response.status_code in [200, 400]
+                # Should be rejected with 400 status
+                assert (
+                    response.status_code == 400
+                ), f"Expected rejection for {description}: {filename}, got {response.status_code}"
+
+                # Verify error message contains expected pattern
+                error_detail = response.json().get("detail", "")
+                assert (
+                    expected_error.lower() in error_detail.lower()
+                ), f"Expected error pattern '{expected_error}' not found in '{error_detail}' for {description}"
+
+        # Test cases that should be accepted with 200 status
+        for test_case in accepted_test_cases:
+            filename = test_case["filename"]
+            description = test_case["description"]
+
+            files = {"file": (filename, BytesIO(pdf_content), "application/pdf")}
+            response = client.post("/upload", files=files)
+
+            # Should be accepted
+            assert (
+                response.status_code == 200
+            ), f"Expected acceptance for {description}: {filename}, got {response.status_code}"
+
+            data = response.json()
+            assert "job_id" in data
+            assert "message" in data
 
     def test_missing_filename(self):
         """Test handling of uploads without filename"""
@@ -231,6 +316,165 @@ class TestFileUploadIntegration:
             response = client.post("/upload", files=files)
             # Should either work or be sanitized appropriately
             assert response.status_code in [200, 400]
+
+    def test_filename_sanitization_security_validation(self):
+        """Test filename sanitization security by validating the FileValidator directly"""
+        from utils.file_validator import FileValidator
+
+        # Test cases with expected sanitized output
+        sanitization_test_cases = [
+            {
+                "input": "../../../etc/passwd.pdf",
+                "expected_output": "passwd.pdf",  # Should remove path traversal
+                "forbidden_patterns": ["../", "/etc/", "/"],
+            },
+            {
+                "input": "file<script>alert('xss')</script>.pdf",
+                "expected_output": "script_.pdf",  # Dangerous chars become underscores, 'file' is removed due to '<'
+                "forbidden_patterns": [
+                    "<",
+                    ">",
+                ],  # Only check for the actual dangerous characters
+            },
+            {
+                "input": 'dangerous"file|name*.pdf',
+                "expected_output": "dangerous_file_name_.pdf",  # Quotes, pipes, asterisks become underscores
+                "forbidden_patterns": ['"', "|", "*"],
+            },
+            {
+                "input": "file\x00null\x00byte.pdf",
+                "expected_output": "filenullbyte.pdf",  # Null bytes removed
+                "forbidden_patterns": ["\x00"],
+            },
+            {
+                "input": "normal_filename.pdf",
+                "expected_output": "normal_filename.pdf",  # Should remain unchanged
+                "forbidden_patterns": [],
+            },
+            {
+                "input": "subdir/malicious\\file.pdf",
+                "expected_output": "file.pdf",  # Path separators become underscores, basename only
+                "forbidden_patterns": [
+                    "/",
+                    "\\",
+                ],  # Check that path separators are gone
+            },
+        ]
+
+        for test_case in sanitization_test_cases:
+            input_filename = test_case["input"]
+            expected_output = test_case["expected_output"]
+            forbidden_patterns = test_case["forbidden_patterns"]
+
+            # Test the sanitization function directly
+            safe_filename = FileValidator.get_safe_filename(input_filename)
+
+            # Verify the output matches expected sanitized filename
+            assert (
+                safe_filename == expected_output
+            ), f"Expected sanitized filename '{expected_output}' but got '{safe_filename}' for input '{input_filename}'"
+
+            # Verify safe filename doesn't contain dangerous patterns
+            for forbidden in forbidden_patterns:
+                assert (
+                    forbidden not in safe_filename
+                ), f"Sanitized filename '{safe_filename}' still contains dangerous pattern '{forbidden}'"
+
+            # Additional security checks
+            self._verify_filename_security(safe_filename)
+
+    def _verify_filename_security(self, filename: str):
+        """Helper method to verify filename meets security requirements"""
+        # Verify no path traversal is possible
+        assert not filename.startswith(
+            "/"
+        ), "Sanitized filename starts with absolute path"
+        assert not filename.startswith(
+            "\\"
+        ), "Sanitized filename starts with absolute path"
+        assert "../" not in filename, "Sanitized filename contains path traversal"
+        assert "..\\" not in filename, "Sanitized filename contains path traversal"
+
+        # Verify no null bytes
+        assert "\x00" not in filename, "Sanitized filename contains null bytes"
+
+        # Verify no dangerous characters remain
+        dangerous_chars = ["<", ">", ":", '"', "|", "?", "*"]
+        for char in dangerous_chars:
+            assert (
+                char not in filename
+            ), f"Sanitized filename contains dangerous character: {char}"
+
+        # Verify reasonable length (should be <= 255 chars)
+        assert (
+            len(filename) <= 255
+        ), f"Sanitized filename too long: {len(filename)} chars"
+
+        # Verify filename is not empty and not just dots/spaces
+        assert filename.strip(" ."), "Sanitized filename is empty or only dots/spaces"
+
+    def test_end_to_end_filename_security(self):
+        """Test that malicious filenames don't create dangerous files on filesystem"""
+        import tempfile
+        import shutil
+        from utils.file_validator import FileValidator
+
+        pdf_content = b"%PDF-1.4\nvalid pdf content"
+
+        # Create a temporary directory to test file creation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            malicious_filenames = [
+                "../../../etc/passwd.pdf",
+                "..\\..\\..\\windows\\system32\\evil.pdf",
+                "file<script>.pdf",
+                "dangerous|file.pdf",
+                "file\x00injection.pdf",
+            ]
+
+            for malicious_filename in malicious_filenames:
+                # Test the full validation pipeline
+                try:
+                    extension, safe_filename = FileValidator.validate_upload(
+                        pdf_content, malicious_filename, max_size_override=None
+                    )
+
+                    # Verify the safe filename is actually safe for filesystem operations
+                    test_file_path = os.path.join(temp_dir, safe_filename)
+
+                    # This should not escape the temp directory
+                    normalized_temp = os.path.normpath(temp_dir)
+                    normalized_file = os.path.normpath(test_file_path)
+
+                    assert normalized_file.startswith(
+                        normalized_temp
+                    ), f"Sanitized filename allows directory traversal: {safe_filename}"
+
+                    # Try to write the file - should not raise exceptions
+                    with open(test_file_path, "wb") as f:
+                        f.write(pdf_content)
+
+                    # Verify file was created with safe name
+                    assert os.path.exists(
+                        test_file_path
+                    ), f"File was not created with safe filename: {safe_filename}"
+
+                    # Verify only expected file exists (no traversal occurred)
+                    files_in_temp = os.listdir(temp_dir)
+                    assert (
+                        len(files_in_temp) == 1
+                    ), f"Unexpected files created: {files_in_temp}"
+
+                    # Clean up for next iteration
+                    os.remove(test_file_path)
+
+                except Exception as e:
+                    # If validation fails, that's also acceptable for malicious files
+                    # But we need to ensure it fails securely, not with an unhandled exception
+                    assert (
+                        "FileValidationError" in str(type(e))
+                        or "ValueError" in str(type(e))
+                        or "OSError" in str(type(e))
+                    ), f"Unexpected exception type for malicious filename {malicious_filename}: {e}"
 
 
 class TestFileUploadErrorHandling:

@@ -5,33 +5,42 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 import config from './config';
 import { ConnectionStatus } from './components/ConnectionStatus';
+import { ConnectionScreen } from './components/ConnectionScreen';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
-import apiService from './services/apiService';
+import apiService, { 
+  TopicResponse, 
+  UploadResponse, 
+  BulletPointExpandResponse as ExpandedBulletResult 
+} from './services/apiService';
 
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
 
-type UploadResponse = {
-  filename: string;
-  filetype: string;
-  message: string;
-  text?: string;
-  transcription_file?: string;
-};
-
-type DebugResult = {
-  bullet_point: string;
-  top_similar_chunks: { chunk: string; similarity: number }[];
-  most_similar_chunk: string;
-  similarity_to_current_topic: number;
-  topic_similarities: { [key: string]: number };
-};
-
-type ExpandedBulletResult = {
-  original_bullet: string;
-  expanded_bullets: string[];  // Changed from expanded_content to expanded_bullets
-  topic_heading: string;
-  chunks_used: number;
-};
+/**
+ * Configuration constants for file upload validation
+ * Centralized to ensure consistency across UI and validation logic
+ * This configuration is used throughout the app for file validation and UI displays
+ */
+const FILE_VALIDATION = {
+  /** Maximum file size in megabytes */
+  MAX_SIZE_MB: 100,
+  /** Maximum file size in bytes (computed from MB) */
+  MAX_SIZE_BYTES: 100 * 1024 * 1024,
+  /** Allowed file extensions (must include leading dot) */
+  ALLOWED_EXTENSIONS: ['.pdf', '.mp3', '.wav', '.txt', '.m4a'] as const,
+  /** 
+   * Corresponding MIME types for additional validation if needed in future
+   * Maps to: PDF documents, MP3 audio, WAV audio, plain text, M4A audio
+   */
+  ALLOWED_MIME_TYPES: [
+    'application/pdf',      // .pdf
+    'audio/mpeg',          // .mp3
+    'audio/wav',           // .wav
+    'audio/wave',          // .wav (alternative)
+    'text/plain',          // .txt
+    'audio/mp4',           // .m4a
+    'audio/x-m4a'          // .m4a (alternative)
+  ] as const
+} as const;
 
 type NestedExpansions = {
   [bulletKey: string]: {
@@ -43,51 +52,6 @@ type NestedExpansions = {
 type BulletExpansion = {
   expansion: ExpandedBulletResult;
   subExpansions?: NestedExpansions;
-};
-
-type TopicResponse = {
-  num_chunks: number;
-  num_topics: number;
-  total_tokens_used: number;
-  segments?: Array<{ position: string; text: string }>; // Added segments
-  topics: {
-    [key: string]: {
-      concepts: string[];
-      heading: string;
-      summary: string;
-      keywords: string[];
-      examples: string[];
-      segment_positions?: string[]; // Added segment_positions
-      stats: {
-        num_chunks: number;
-        min_size: number;
-        mean_size: number;
-        max_size: number;
-      };
-      bullet_points?: string[];
-      bullet_expansions?: {
-        [bulletKey: string]: {
-          original_bullet?: string;
-          expanded_bullets: string[];
-          layer: number;
-          topic_heading: string;
-          chunks_used: number;
-          timestamp: string;
-          sub_expansions?: {
-            [subBulletKey: string]: {
-              original_bullet?: string;
-              expanded_bullets: string[];
-              layer: number;
-              topic_heading: string;
-              chunks_used: number;
-              timestamp: string;
-            };
-          };
-        };
-      };
-      debugResult?: DebugResult;
-    };
-  };
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -129,177 +93,6 @@ function App() {
 
   // Network status for connection handling
   const { isBackendReachable, isInitializing, forceHealthCheck } = useNetworkStatus();
-
-  // Connection Screen Component
-  const ConnectionScreen = () => (
-    <div style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      fontFamily: '"Outfit", sans-serif',
-      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
-      color: '#fff'
-    }}>
-      {/* Logo/Branding */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="label"
-        style={{ 
-          fontSize: '3rem',
-          marginBottom: '1rem',
-          textAlign: 'center'
-        }}
-      >
-        MyStudyMate
-      </motion.div>
-
-      {/* Status Message */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.2 }}
-        style={{
-          textAlign: 'center',
-          marginBottom: '3rem'
-        }}
-      >
-        <div style={{
-          fontSize: '1.5rem',
-          marginBottom: '1rem',
-          background: 'linear-gradient(135deg, hsl(185, 100%, 70%), hsl(315, 100%, 70%))',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
-        }}>
-          Connecting to StudyMate...
-        </div>
-        
-        {/* Animated dots */}
-        <div style={{ fontSize: '1.2rem', color: '#888' }}>
-          <motion.span
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
-          >
-            •
-          </motion.span>
-          <motion.span
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
-            style={{ margin: '0 0.5rem' }}
-          >
-            •
-          </motion.span>
-          <motion.span
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
-          >
-            •
-          </motion.span>
-        </div>
-      </motion.div>
-
-      {/* Status Details */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.4 }}
-        style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          padding: '2rem',
-          backdropFilter: 'blur(10px)',
-          textAlign: 'center',
-          maxWidth: '400px',
-          marginBottom: '2rem'
-        }}
-      >
-        <div style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
-          {!navigator.onLine ? (
-            <>
-              <div style={{ color: '#ff6b6b', marginBottom: '0.5rem' }}>
-                🌐 No Internet Connection
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Please check your internet connection and try again.
-              </div>
-            </>
-          ) : isInitializing ? (
-            <>
-              <div style={{ color: '#6bcf7f', marginBottom: '0.5rem' }}>
-                ✅ Establishing Connection
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Just a moment while we connect to StudyMate...
-              </div>
-            </>
-          ) : !isBackendReachable ? (
-            <>
-              <div style={{ color: '#ffd93d', marginBottom: '0.5rem' }}>
-                🔧 Backend Unavailable
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                The StudyMate server is currently unreachable. We're working to reconnect automatically.
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ color: '#6bcf7f', marginBottom: '0.5rem' }}>
-                ✅ Connection Established
-              </div>
-              <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Connected to StudyMate! Redirecting...
-              </div>
-            </>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Retry Button */}
-      <motion.button
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.6 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={forceHealthCheck}
-        style={{
-          background: 'linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))',
-          border: 'none',
-          borderRadius: '12px',
-          padding: '1rem 2rem',
-          color: '#fff',
-          fontSize: '1.1rem',
-          fontWeight: '600',
-          cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(0, 150, 255, 0.3)',
-          fontFamily: 'inherit'
-        }}
-      >
-        🔄 Retry Connection
-      </motion.button>
-
-      {/* Footer message */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.8 }}
-        style={{
-          marginTop: '3rem',
-          color: '#666',
-          fontSize: '0.9rem',
-          textAlign: 'center'
-        }}
-      >
-        StudyMate automatically retries the connection every few seconds.
-      </motion.div>
-    </div>
-  );
 
   // Memoize the getAllTopicChunks function to prevent recreating it on every render
   const memoizedGetAllTopicChunks = useCallback((
@@ -351,24 +144,63 @@ function App() {
     return topicChunks;
   }, []);
 
+  /**
+   * Utility function to safely extract and normalize file extension
+   * Handles edge cases like:
+   * - Files without extensions
+   * - Hidden files (starting with .)
+   * - Files ending with . 
+   * - Invalid filenames
+   * @param filename - The filename to extract extension from
+   * @returns Normalized extension with leading dot (e.g., ".pdf") or empty string if invalid
+   */
+  const getFileExtension = (filename: string): string => {
+    if (!filename || typeof filename !== 'string') {
+      return '';
+    }
+    
+    // Handle filenames without extensions
+    const lastDotIndex = filename.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === 0 || lastDotIndex === filename.length - 1) {
+      return '';
+    }
+    
+    // Extract extension and normalize (lowercase, include dot)
+    const extension = filename.slice(lastDotIndex).toLowerCase().trim();
+    
+    // Validate extension format (should start with dot and have at least one character after)
+    if (!extension.startsWith('.') || extension.length < 2) {
+      return '';
+    }
+    
+    return extension;
+  };
+
   // File validation utility
   const validateFile = (file: File): string | null => {
-    // Check file size (50MB for dev, 100MB for prod)
-    const maxSize = 100 * 1024 * 1024; // 100MB in bytes
-    if (file.size > maxSize) {
-      return `File too large. Maximum size: ${maxSize / (1024 * 1024)}MB, your file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`;
+    // Check if file object is valid
+    if (!file || !(file instanceof File)) {
+      return 'Invalid file object.';
     }
 
-    // Check file type
-    const allowedTypes = ['.pdf', '.mp3', '.wav', '.txt', '.m4a'];
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-    if (!allowedTypes.includes(fileExtension)) {
-      return `Unsupported file type: ${fileExtension}. Supported types: ${allowedTypes.join(', ')}`;
+    // Check file size
+    if (file.size > FILE_VALIDATION.MAX_SIZE_BYTES) {
+      return `File too large. Maximum size: ${FILE_VALIDATION.MAX_SIZE_MB}MB, your file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`;
     }
 
     // Check if file is empty
     if (file.size === 0) {
       return 'File is empty. Please select a valid file.';
+    }
+
+    // Extract and validate file extension
+    const fileExtension = getFileExtension(file.name);
+    if (!fileExtension) {
+      return `Unable to determine file type. Please ensure your file has a valid extension. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
+    }
+
+    if (!(FILE_VALIDATION.ALLOWED_EXTENSIONS as readonly string[]).includes(fileExtension)) {
+      return `Unsupported file type: ${fileExtension}. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
     }
 
     return null; // No errors
@@ -414,11 +246,9 @@ function App() {
 
     try {
       const data = await apiService.generateHeadings(response.filename);
-      // Cast to the expected type since apiService has generic types
-      const topicsData = data as TopicResponse;
-      setTopics(topicsData);
+      setTopics(data);
       // Load saved expansions when topics are loaded
-      loadSavedExpansions(topicsData);
+      loadSavedExpansions(data);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to generate headings.");
     } finally {
@@ -910,9 +740,10 @@ function App() {
           newExpandedBullets[frontendKey] = {
             expansion: {
               original_bullet: originalBullet,
-              expanded_bullets: expansionData.expanded_bullets,
-              topic_heading: expansionData.topic_heading,
-              chunks_used: expansionData.chunks_used
+              expanded_bullets: expansionData.expanded_bullets || [],
+              topic_heading: expansionData.topic_heading || '',
+              chunks_used: expansionData.chunks_used || 0,
+              layer: expansionData.layer || 1
             },
             subExpansions: {}
           };
@@ -934,9 +765,10 @@ function App() {
               newExpandedBullets[frontendKey].subExpansions![subFrontendKey] = {
                 expansion: {
                   original_bullet: originalSubBullet,
-                  expanded_bullets: subExpansionData.expanded_bullets,
-                  topic_heading: subExpansionData.topic_heading,
-                  chunks_used: subExpansionData.chunks_used
+                  expanded_bullets: subExpansionData.expanded_bullets || [],
+                  topic_heading: subExpansionData.topic_heading || '',
+                  chunks_used: subExpansionData.chunks_used || 0,
+                  layer: subExpansionData.layer || 2
                 },
                 subExpansions: {}
               };
@@ -1152,7 +984,11 @@ function App() {
       ></canvas>
       
       {(isInitializing || !isBackendReachable) ? (
-        <ConnectionScreen />
+        <ConnectionScreen 
+          isInitializing={isInitializing}
+          isBackendReachable={isBackendReachable}
+          forceHealthCheck={forceHealthCheck}
+        />
       ) : (
         <>
           <ConnectionStatus />
@@ -1172,7 +1008,7 @@ function App() {
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept=".pdf,.mp3,.wav,.txt,.m4a"
+              accept={FILE_VALIDATION.ALLOWED_EXTENSIONS.join(',')}
               style={{ display: "none" }}
             />
 
@@ -1274,7 +1110,7 @@ function App() {
                   justifyContent: "center",
                   marginBottom: "1rem"
                 }}>
-                  {[".pdf", ".mp3", ".wav", ".txt", ".m4a"].map((ext) => (
+                  {FILE_VALIDATION.ALLOWED_EXTENSIONS.map((ext) => (
                     <span key={ext} style={{
                       background: "rgba(255, 255, 255, 0.1)",
                       color: "#ddd",
@@ -1778,8 +1614,8 @@ function App() {
                         fontSize: "0.8rem", 
                         color: "#999" 
                       }}>
-                        <span>{topic.stats.num_chunks} chunks</span>
-                        <span>Avg: {Math.round(topic.stats.mean_size)} words</span>
+                        <span>{topic.stats?.num_chunks || 0} chunks</span>
+                        <span>Avg: {Math.round(topic.stats?.mean_size || 0)} words</span>
                       </div>
 
                       {/* Expand/Collapse buttons */}

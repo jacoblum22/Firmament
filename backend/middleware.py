@@ -261,7 +261,11 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 extra={
                     "method": request.method,
                     "path": request.url.path,
-                    "client_ip": request.client.host if request.client else "unknown",
+                    "client_ip": (
+                        getattr(request.client, "host", "unknown")
+                        if request.client
+                        else "unknown"
+                    ),
                     "user_agent": request.headers.get("user-agent", "unknown"),
                 },
             )
