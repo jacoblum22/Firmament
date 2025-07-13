@@ -201,10 +201,14 @@ def detailed_health_check():
         os.makedirs(upload_dir, exist_ok=True)
 
         # Test write permissions in configured upload directory
+        # Test write permissions in configured upload directory
         test_file = os.path.join(upload_dir, ".health_check")
-        with open(test_file, "w") as f:
-            f.write("test")
-        os.remove(test_file)
+        try:
+            with open(test_file, "w") as f:
+                f.write("test")
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
 
         health_status["dependencies"]["filesystem"] = {
             "status": "healthy",
