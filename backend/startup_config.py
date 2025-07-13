@@ -152,7 +152,9 @@ def configure_torch_for_startup():
         except ValueError:
             print(f"Warning: Invalid TORCH_NUM_THREADS value, using default 4")
             max_threads = 4
-            current_threads = torch.get_num_threads()
+
+        # Get current thread count
+        current_threads = torch.get_num_threads()
 
         # Set number of threads to prevent excessive CPU usage
         if current_threads > max_threads:
