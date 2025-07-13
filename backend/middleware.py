@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Optional, Tuple
 from functools import lru_cache
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -243,3 +244,41 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return response
 
         return await call_next(request)
+
+
+class ErrorHandlingMiddleware(BaseHTTPMiddleware):
+    """Enhanced error handling middleware with proper logging and user-friendly responses"""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as exc:
+            # Log the error
+            logger.error(
+                f"Request failed: {request.method} {request.url.path}",
+                exc_info=True,
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "client_ip": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("user-agent", "unknown"),
+                },
+            )
+
+            # Return user-friendly error response
+            error_response = {
+                "error": "Internal server error",
+                "message": "An unexpected error occurred. Please try again later.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "request_id": getattr(request.state, "request_id", None),
+            }
+
+            # In debug mode, include more details
+            if settings.debug:
+                error_response["debug"] = {
+                    "type": type(exc).__name__,
+                    "details": str(exc),
+                }
+
+            return JSONResponse(status_code=500, content=error_response)

@@ -97,8 +97,10 @@ class Settings:
             # Add common development origins if not already present
             dev_origins = [
                 "http://localhost:5173",
+                "http://localhost:5174",  # Add port 5174 for Vite dev server
                 "http://localhost:3000",
                 "http://127.0.0.1:5173",
+                "http://127.0.0.1:5174",  # Add port 5174 for Vite dev server
                 "http://127.0.0.1:3000",
             ]
             for origin in dev_origins:
@@ -192,12 +194,35 @@ class Settings:
         return int(os.getenv("UPLOAD_MAX_SIZE", default_size))
 
     @property
-    def upload_directory(self) -> str:
-        return os.getenv("UPLOAD_DIRECTORY", "uploads")
+    def upload_max_size_pdf(self) -> int:
+        # PDF-specific size limit (default: 50MB)
+        return int(os.getenv("UPLOAD_MAX_SIZE_PDF", "52428800"))  # 50MB
 
     @property
-    def temp_directory(self) -> str:
-        return os.getenv("TEMP_DIRECTORY", "temp_chunks")
+    def upload_max_size_audio(self) -> int:
+        # Audio file size limit (default: 200MB for compressed, 500MB for WAV)
+        return int(os.getenv("UPLOAD_MAX_SIZE_AUDIO", "209715200"))  # 200MB
+
+    @property
+    def upload_max_size_wav(self) -> int:
+        # WAV file size limit (default: 500MB for uncompressed audio)
+        return int(os.getenv("UPLOAD_MAX_SIZE_WAV", "524288000"))  # 500MB
+
+    @property
+    def upload_max_size_text(self) -> int:
+        # Text file size limit (default: 10MB)
+        return int(os.getenv("UPLOAD_MAX_SIZE_TEXT", "10485760"))  # 10MB
+
+    @property
+    def upload_allowed_extensions(self) -> list:
+        # Allowed file extensions
+        extensions = os.getenv("UPLOAD_ALLOWED_EXTENSIONS", "pdf,mp3,wav,txt,m4a")
+        return [ext.strip().lower() for ext in extensions.split(",")]
+
+    @property
+    def upload_validate_content(self) -> bool:
+        # Whether to validate file content (signatures) - can be disabled for performance
+        return os.getenv("UPLOAD_VALIDATE_CONTENT", "true").lower() == "true"
 
     # Logging Configuration
     @property
