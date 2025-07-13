@@ -26,8 +26,6 @@ export const useNetworkStatus = () => {
   // use the correct return type from setTimeout instead of a plain number
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // … elsewhere in your effect/cleanup …
-        clearTimeout(retryTimeoutRef.current as ReturnType<typeof setTimeout>);
   useEffect(() => {
     // Initialize network utils
     networkUtils.current = NetworkUtils.getInstance(config.getApiBaseUrl());
