@@ -193,7 +193,7 @@ def detailed_health_check():
 
     # Check file system permissions
     try:
-        import tempfile
+        import os
         import os
 
         # Ensure upload directory exists before testing write permissions
