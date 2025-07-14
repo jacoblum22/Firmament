@@ -189,10 +189,12 @@ class ApiService {
     formData.append('file', file);
 
     try {
-      const response = await this.enhancedFetch('upload', {
+      // Use direct fetch for file uploads to avoid Content-Type issues
+      const url = config.getApiUrl('upload');
+      const response = await this.networkUtils.fetchWithRetry(url, {
         method: 'POST',
         body: formData,
-        headers: {}, // Don't set Content-Type for FormData
+        // Don't set any headers - let the browser handle multipart/form-data
       }, {
         maxRetries: 2, // Fewer retries for uploads
         baseDelay: 2000 // Longer delay between retries

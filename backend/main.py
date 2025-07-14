@@ -51,6 +51,20 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None,
 )
 
+
+# Add debug middleware to log upload requests
+@app.middleware("http")
+async def debug_upload_requests(request: Request, call_next):
+    if request.url.path == "/upload":
+        logger.debug(f"Upload request to {request.url.path}")
+        logger.debug(f"Method: {request.method}")
+        logger.debug(f"Headers: {dict(request.headers)}")
+        logger.debug(f"Content-Type: {request.headers.get('content-type', 'Not set')}")
+
+    response = await call_next(request)
+    return response
+
+
 # Log startup information
 logger.info(f"Starting StudyMate API in {settings.environment} mode")
 logger.info(f"Debug mode: {settings.debug}")

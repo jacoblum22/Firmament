@@ -99,16 +99,35 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     job_id = str(uuid4())
     set_status(job_id, stage="uploading")
 
+    # Debug logging to help diagnose 422 errors
+    print(f"[{job_id[:8]}] Upload request received:")
+    print(f"[{job_id[:8]}] File: {file.filename}")
+    print(f"[{job_id[:8]}] Content-Type: {file.content_type}")
+    print(f"[{job_id[:8]}] Size: {file.size if hasattr(file, 'size') else 'unknown'}")
+
     # Read file content NOW, while request is active
-    file_bytes = await file.read()
+    try:
+        file_bytes = await file.read()
+        print(
+            f"[{job_id[:8]}] File read successfully, size: {len(file_bytes)} bytes ({len(file_bytes)/(1024*1024):.1f}MB)"
+        )
+    except Exception as e:
+        print(f"[{job_id[:8]}] Failed to read file: {e}")
+        raise HTTPException(
+            status_code=400, detail=f"Failed to read uploaded file: {str(e)}"
+        )
+
     filename = file.filename or "uploaded_file"
 
     try:
         # Comprehensive file validation
+        print(f"[{job_id[:8]}] Starting file validation...")
         extension, safe_filename = FileValidator.validate_upload(
             file_bytes, filename, settings.upload_max_size
         )
+        print(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
     except FileValidationError as e:
+        print(f"[{job_id[:8]}] File validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
     def process_file(file_bytes: bytes, filename: str, safe_filename: str):
