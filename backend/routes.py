@@ -108,11 +108,15 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     # Read file content NOW, while request is active
     try:
         file_bytes = await file.read()
-        print(f"[{job_id[:8]}] File read successfully, size: {len(file_bytes)} bytes ({len(file_bytes)/(1024*1024):.1f}MB)")
+        print(
+            f"[{job_id[:8]}] File read successfully, size: {len(file_bytes)} bytes ({len(file_bytes)/(1024*1024):.1f}MB)"
+        )
     except Exception as e:
         print(f"[{job_id[:8]}] Failed to read file: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
-    
+        raise HTTPException(
+            status_code=400, detail=f"Failed to read uploaded file: {str(e)}"
+        )
+
     filename = file.filename or "uploaded_file"
 
     try:
