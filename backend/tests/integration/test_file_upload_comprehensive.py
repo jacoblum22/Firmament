@@ -5,14 +5,13 @@ This includes both unit tests and integration tests.
 
 import pytest
 import tempfile
-import os
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 from io import BytesIO
 import time
 
 # Import test utilities
-from tests.utils.test_file_generators import TestFileGenerator, TestFileValidator
+from tests.utils.test_file_generators import TestFileGenerator
 
 # Import the components to test
 from utils.file_validator import FileValidator, FileValidationError
