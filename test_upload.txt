@@ -1,0 +1,3 @@
+This is a test document to verify that file uploads are working correctly through the frontend.
+It contains sample text that should be processed by the StudyMate application.
+The text is long enough to ensure proper processing and validation.
