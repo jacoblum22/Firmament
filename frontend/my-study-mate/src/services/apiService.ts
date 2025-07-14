@@ -202,7 +202,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Upload failed. Please try again.');
     }
@@ -225,7 +225,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to process chunks. Please try again.');
     }
@@ -245,7 +245,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to generate headings. Please try again.');
     }
@@ -265,7 +265,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to expand cluster. Please try again.');
     }
@@ -285,7 +285,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to debug bullet point. Please try again.');
     }
@@ -305,7 +305,7 @@ class ApiService {
     } catch (error) {
       if (error instanceof Error) {
         const networkError = error as NetworkError;
-        throw new Error(this.networkUtils.getErrorMessage(networkError));
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to expand bullet point. Please try again.');
     }

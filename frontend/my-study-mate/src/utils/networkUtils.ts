@@ -6,6 +6,13 @@ export interface NetworkError extends Error {
   isRetryable: boolean;
 }
 
+export interface ErrorDetails {
+  error: string;
+  details: string;
+  user_action: string;
+  error_code: string;
+}
+
 export interface RetryOptions {
   maxRetries: number;
   baseDelay: number;
@@ -277,27 +284,67 @@ class NetworkUtils {
   /**
    * Get user-friendly error message
    */
-  public getErrorMessage(error: NetworkError): string {
+  public getErrorMessage(error: NetworkError): ErrorDetails {
     switch (error.code) {
       case 'NETWORK_ERROR':
-        return 'Unable to connect to the server. Please check your internet connection and try again.';
+        return {
+          error: 'Connection problem',
+          details: 'Unable to connect to the server.',
+          user_action: 'Please check your internet connection and try again.',
+          error_code: 'network_error'
+        };
       case 'TIMEOUT':
-        return 'The request timed out. The server might be experiencing high load.';
+        return {
+          error: 'Request timed out',
+          details: 'The server took too long to respond.',
+          user_action: 'The server might be experiencing high load. Please try again in a moment.',
+          error_code: 'timeout'
+        };
       case 'SERVER_ERROR':
         if (error.statusCode === 429) {
-          return 'Too many requests. Please wait a moment and try again.';
+          return {
+            error: 'Too many requests',
+            details: 'You\'re making requests too quickly.',
+            user_action: 'Please wait a moment and try again.',
+            error_code: 'rate_limited'
+          };
         }
-        return 'The server is experiencing issues. Please try again in a few moments.';
+        return {
+          error: 'Server error',
+          details: 'The server is experiencing technical difficulties.',
+          user_action: 'Please try again in a few moments.',
+          error_code: 'server_error'
+        };
       case 'CLIENT_ERROR':
         if (error.statusCode === 404) {
-          return 'The requested resource was not found.';
+          return {
+            error: 'Resource not found',
+            details: 'The requested resource could not be found.',
+            user_action: 'Please refresh the page and try again.',
+            error_code: 'not_found'
+          };
         }
         if (error.statusCode === 400) {
-          return 'Invalid request. Please check your input and try again.';
+          return {
+            error: 'Invalid request',
+            details: 'There was an issue with your request.',
+            user_action: 'Please check your input and try again.',
+            error_code: 'bad_request'
+          };
         }
-        return 'There was an error with your request. Please try again.';
+        return {
+          error: 'Request error',
+          details: 'There was an error with your request.',
+          user_action: 'Please try again.',
+          error_code: 'client_error'
+        };
       default:
-        return 'An unexpected error occurred. Please try again.';
+        return {
+          error: 'Unexpected error',
+          details: 'An unexpected error occurred.',
+          user_action: 'Please try again.',
+          error_code: 'unknown_error'
+        };
     }
   }
 }
