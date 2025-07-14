@@ -4,31 +4,43 @@ import VanillaTilt from "vanilla-tilt";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 import config from './config';
+import { ConnectionStatus } from './components/ConnectionStatus';
+import { ConnectionScreen } from './components/ConnectionScreen';
+import { useNetworkStatus } from './hooks/useNetworkStatus';
+import apiService, { 
+  TopicResponse, 
+  UploadResponse, 
+  BulletPointExpandResponse as ExpandedBulletResult 
+} from './services/apiService';
 
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
 
-type UploadResponse = {
-  filename: string;
-  filetype: string;
-  message: string;
-  text?: string;
-  transcription_file?: string;
-};
-
-type DebugResult = {
-  bullet_point: string;
-  top_similar_chunks: { chunk: string; similarity: number }[];
-  most_similar_chunk: string;
-  similarity_to_current_topic: number;
-  topic_similarities: { [key: string]: number };
-};
-
-type ExpandedBulletResult = {
-  original_bullet: string;
-  expanded_bullets: string[];  // Changed from expanded_content to expanded_bullets
-  topic_heading: string;
-  chunks_used: number;
-};
+/**
+ * Configuration constants for file upload validation
+ * Centralized to ensure consistency across UI and validation logic
+ * This configuration is used throughout the app for file validation and UI displays
+ */
+const FILE_VALIDATION = {
+  /** Maximum file size in megabytes */
+  MAX_SIZE_MB: 100,
+  /** Maximum file size in bytes (computed from MB) */
+  MAX_SIZE_BYTES: 100 * 1024 * 1024,
+  /** Allowed file extensions (must include leading dot) */
+  ALLOWED_EXTENSIONS: ['.pdf', '.mp3', '.wav', '.txt', '.m4a'] as const,
+  /** 
+   * Corresponding MIME types for additional validation if needed in future
+   * Maps to: PDF documents, MP3 audio, WAV audio, plain text, M4A audio
+   */
+  ALLOWED_MIME_TYPES: [
+    'application/pdf',      // .pdf
+    'audio/mpeg',          // .mp3
+    'audio/wav',           // .wav
+    'audio/wave',          // .wav (alternative)
+    'text/plain',          // .txt
+    'audio/mp4',           // .m4a
+    'audio/x-m4a'          // .m4a (alternative)
+  ] as const
+} as const;
 
 type NestedExpansions = {
   [bulletKey: string]: {
@@ -40,51 +52,6 @@ type NestedExpansions = {
 type BulletExpansion = {
   expansion: ExpandedBulletResult;
   subExpansions?: NestedExpansions;
-};
-
-type TopicResponse = {
-  num_chunks: number;
-  num_topics: number;
-  total_tokens_used: number;
-  segments?: Array<{ position: string; text: string }>; // Added segments
-  topics: {
-    [key: string]: {
-      concepts: string[];
-      heading: string;
-      summary: string;
-      keywords: string[];
-      examples: string[];
-      segment_positions?: string[]; // Added segment_positions
-      stats: {
-        num_chunks: number;
-        min_size: number;
-        mean_size: number;
-        max_size: number;
-      };
-      bullet_points?: string[];
-      bullet_expansions?: {
-        [bulletKey: string]: {
-          original_bullet?: string;
-          expanded_bullets: string[];
-          layer: number;
-          topic_heading: string;
-          chunks_used: number;
-          timestamp: string;
-          sub_expansions?: {
-            [subBulletKey: string]: {
-              original_bullet?: string;
-              expanded_bullets: string[];
-              layer: number;
-              topic_heading: string;
-              chunks_used: number;
-              timestamp: string;
-            };
-          };
-        };
-      };
-      debugResult?: DebugResult;
-    };
-  };
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -111,6 +78,7 @@ function App() {
   const [dragOver, setDragOver] = useState(false);
   const [generatingHeadings, setGeneratingHeadings] = useState(false);
   const [activeHue, setActiveHue] = useState<number | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
   const [showProgressBar, setShowProgressBar] = useState(false);
@@ -122,6 +90,9 @@ function App() {
   } | null>(null);
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [expandedBullets, setExpandedBullets] = useState<NestedExpansions>({});
+
+  // Network status for connection handling
+  const { isBackendReachable, isInitializing, forceHealthCheck } = useNetworkStatus();
 
   // Memoize the getAllTopicChunks function to prevent recreating it on every render
   const memoizedGetAllTopicChunks = useCallback((
@@ -173,9 +144,80 @@ function App() {
     return topicChunks;
   }, []);
 
+  /**
+   * Utility function to safely extract and normalize file extension
+   * Handles edge cases like:
+   * - Files without extensions
+   * - Hidden files (starting with .)
+   * - Files ending with . 
+   * - Invalid filenames
+   * @param filename - The filename to extract extension from
+   * @returns Normalized extension with leading dot (e.g., ".pdf") or empty string if invalid
+   */
+  const getFileExtension = (filename: string): string => {
+    if (!filename || typeof filename !== 'string') {
+      return '';
+    }
+    
+    // Handle filenames without extensions
+    const lastDotIndex = filename.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === 0 || lastDotIndex === filename.length - 1) {
+      return '';
+    }
+    
+    // Extract extension and normalize (lowercase, include dot)
+    const extension = filename.slice(lastDotIndex).toLowerCase().trim();
+    
+    // Validate extension format (should start with dot and have at least one character after)
+    if (!extension.startsWith('.') || extension.length < 2) {
+      return '';
+    }
+    
+    return extension;
+  };
+
+  // File validation utility
+  const validateFile = (file: File): string | null => {
+    // Check if file object is valid
+    if (!file || !(file instanceof File)) {
+      return 'Invalid file object.';
+    }
+
+    // Check file size
+    if (file.size > FILE_VALIDATION.MAX_SIZE_BYTES) {
+      return `File too large. Maximum size: ${FILE_VALIDATION.MAX_SIZE_MB}MB, your file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`;
+    }
+
+    // Check if file is empty
+    if (file.size === 0) {
+      return 'File is empty. Please select a valid file.';
+    }
+
+    // Extract and validate file extension
+    const fileExtension = getFileExtension(file.name);
+    if (!fileExtension) {
+      return `Unable to determine file type. Please ensure your file has a valid extension. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
+    }
+
+    if (!(FILE_VALIDATION.ALLOWED_EXTENSIONS as readonly string[]).includes(fileExtension)) {
+      return `Unsupported file type: ${fileExtension}. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
+    }
+
+    return null; // No errors
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      
+      // Validate the selected file
+      const validationError = validateFile(selectedFile);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
+      setFile(selectedFile);
       setResponse(null);
       setTopics(null);
     }
@@ -186,29 +228,13 @@ function App() {
 
     setError(null);
     try {
-      const res = await fetch(config.getApiUrl("process-chunks"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: response.text,
-          filename: response.filename,
-        }),
+      const data = await apiService.processChunks(response.text, response.filename);
+      setProcessedChunks({
+        num_chunks: data.num_chunks,
+        total_words: data.total_words,
       });
-
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setProcessedChunks({
-          num_chunks: data.num_chunks,
-          total_words: data.total_words,
-        });
-      }
-    } catch {
-      setError("Failed to process chunks.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to process chunks.");
     }
   };
 
@@ -219,31 +245,18 @@ function App() {
     setError(null);
 
     try {
-      const res = await fetch(config.getApiUrl("generate-headings"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ filename: response.filename }),
-      });
-
-      const data = await res.json();
-
-      if (data.error) {
-        setError(data.error);
-      } else {
-        setTopics(data);
-        // Load saved expansions when topics are loaded
-        loadSavedExpansions(data);
-      }
-    } catch {
-      setError("Failed to generate headings.");
+      const data = await apiService.generateHeadings(response.filename);
+      setTopics(data);
+      // Load saved expansions when topics are loaded
+      loadSavedExpansions(data);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to generate headings.");
     } finally {
       setGeneratingHeadings(false);
     }
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
 
     const droppedFiles = e.dataTransfer.files;
@@ -256,64 +269,58 @@ function App() {
 
     if (droppedFiles && droppedFiles.length > 0) {
       const file = droppedFiles[0];
+
+      // Validate the dropped file
+      const validationError = validateFile(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+
       setFile(file);
       setResponse(null);
       setTopics(null);
 
       // Immediately upload the file
-      const formData = new FormData();
-      formData.append("file", file);
-
       setLoading(true);
       setError(null);
 
-      fetch(config.getApiUrl("upload"), {
-        method: "POST",
-        body: formData,
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.error) {
-            setError(data.error);
-            setResponse(null);
-          } else {
-            setJobId(data.job_id);
+      try {
+        const data = await apiService.uploadFile(file);
+        setJobId(data.job_id);
 
-            const evt = new EventSource(
-              config.getApiUrl(`progress/${data.job_id}`)
-            );
-            evt.onmessage = (event) => {
-              const parsed = JSON.parse(event.data);
-              setStatus(parsed);
+        const evt = new EventSource(
+          config.getApiUrl(`progress/${data.job_id}`)
+        );
+        evt.onmessage = (event) => {
+          const parsed = JSON.parse(event.data);
+          setStatus(parsed);
 
-              // Once done, set final result into response state
-              if (parsed.stage === "done" && parsed.result) {
-                setResponse(parsed.result);
-                if (parsed.result.topics) {
-                  const topicsData = { ...parsed.result, topics: parsed.result.topics };
-                  setTopics(topicsData);
-                  // Load saved expansions when topics are loaded from upload
-                  loadSavedExpansions(topicsData);
-                }
-              }
-
-              // Auto-close when finished
-              if (["done", "error"].includes(parsed.stage)) {
-                evt.close();
-              }
-            };
-            evt.onerror = () => {
-              evt.close();
-              setError("Lost connection to server.");
-            };
+          // Once done, set final result into response state
+          if (parsed.stage === "done" && parsed.result) {
+            setResponse(parsed.result);
+            if (parsed.result.topics) {
+              const topicsData = { ...parsed.result, topics: parsed.result.topics };
+              setTopics(topicsData);
+              // Load saved expansions when topics are loaded from upload
+              loadSavedExpansions(topicsData);
+            }
           }
-        })
-        .catch(() => {
-          setError("Upload failed. Try again.");
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+
+          // Auto-close when finished
+          if (["done", "error"].includes(parsed.stage)) {
+            evt.close();
+          }
+        };
+        evt.onerror = () => {
+          evt.close();
+          setError("Lost connection to server. Please check your network connection and try again.");
+        };
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Upload failed. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -328,7 +335,7 @@ function App() {
   const canvasTransferred = useRef(false);
   const particleWorkerRef = useRef<Worker | null>(null);
   useEffect(() => {
-    const canvas = document.getElementById("canvas") as HTMLCanvasElement;
+    const canvas = canvasRef.current;
 
     // Only show progress bar when there's an actual transcription process
     if (status?.stage === "transcribing") {
@@ -458,38 +465,26 @@ function App() {
 
     setError(null);
     try {
-      const res = await fetch(config.getApiUrl("expand-cluster"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filename: response.filename,
-          cluster_id: clusterId,
-        }),
+      const data = await apiService.expandCluster({
+        filename: response.filename,
+        cluster_id: clusterId,
       });
+      const clusterData = data as { cluster?: { bullet_points?: string[] } }; // Type assertion for legacy API
+      console.log("Received bullet points:", clusterData.cluster?.bullet_points);
+      // Update the specific topic with the expanded cluster data
+      setTopics((prevTopics) => {
+        if (!prevTopics) return prevTopics;
 
-      const data = await res.json();
+        const updatedTopics = { ...prevTopics.topics };
+        updatedTopics[clusterId] = {
+          ...updatedTopics[clusterId],
+          bullet_points: clusterData.cluster?.bullet_points,
+        };
 
-      if (data.error) {
-        setError(data.error);
-      } else {
-        console.log("Received bullet points:", data.cluster.bullet_points);
-        // Update the specific topic with the expanded cluster data
-        setTopics((prevTopics) => {
-          if (!prevTopics) return prevTopics;
-
-          const updatedTopics = { ...prevTopics.topics };
-          updatedTopics[clusterId] = {
-            ...updatedTopics[clusterId],
-            bullet_points: data.cluster.bullet_points,
-          };
-
-          return { ...prevTopics, topics: updatedTopics };
-        });
-      }
-    } catch {
-      setError("Failed to expand cluster.");
+        return { ...prevTopics, topics: updatedTopics };
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to expand cluster.");
     }
   };
 
@@ -745,9 +740,10 @@ function App() {
           newExpandedBullets[frontendKey] = {
             expansion: {
               original_bullet: originalBullet,
-              expanded_bullets: expansionData.expanded_bullets,
-              topic_heading: expansionData.topic_heading,
-              chunks_used: expansionData.chunks_used
+              expanded_bullets: expansionData.expanded_bullets || [],
+              topic_heading: expansionData.topic_heading || '',
+              chunks_used: expansionData.chunks_used || 0,
+              layer: expansionData.layer || 1
             },
             subExpansions: {}
           };
@@ -769,9 +765,10 @@ function App() {
               newExpandedBullets[frontendKey].subExpansions![subFrontendKey] = {
                 expansion: {
                   original_bullet: originalSubBullet,
-                  expanded_bullets: subExpansionData.expanded_bullets,
-                  topic_heading: subExpansionData.topic_heading,
-                  chunks_used: subExpansionData.chunks_used
+                  expanded_bullets: subExpansionData.expanded_bullets || [],
+                  topic_heading: subExpansionData.topic_heading || '',
+                  chunks_used: subExpansionData.chunks_used || 0,
+                  layer: subExpansionData.layer || 2
                 },
                 subExpansions: {}
               };
@@ -974,8 +971,9 @@ function App() {
 
   return (
     <>
+      {/* Single canvas for particle system - works for both connection screen and main UI */}
       <canvas
-        id="canvas"
+        ref={canvasRef}
         style={{
           position: "fixed",
           top: 0,
@@ -984,712 +982,724 @@ function App() {
           pointerEvents: "none",
         }}
       ></canvas>
-      <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
-        <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
-          MyStudyMate
-        </div>
-        <div
-          className="glow-text fade-in"
-          data-text="Smarter Studying Starts Here."
-          style={{ animationDelay: "0.4s" }}
-        >
-          Smarter Studying Starts Here.
-        </div>
-
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".pdf,.mp3,.wav,.txt,.m4a"
-          style={{ display: "none" }}
+      
+      {(isInitializing || !isBackendReachable) ? (
+        <ConnectionScreen 
+          isInitializing={isInitializing}
+          isBackendReachable={isBackendReachable}
+          forceHealthCheck={forceHealthCheck}
         />
-
-        <div
-          ref={dropZoneRef}
-          className={`drop-zone ${dragOver ? "drag-over" : ""}`}
-          style={{
-            marginTop: "4rem",
-            ...(dragOver &&
-              activeHue !== null &&
-              ({
-                "--accent-hue": `${activeHue}`,
-              } as React.CSSProperties)),
-            borderColor:
-              dragOver && activeHue !== null
-                ? `hsl(${activeHue}, 100%, 60%)`
-                : undefined,
-          }}
-          onClick={() => fileInputRef.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            
-            // Only update state if not already in drag state
-            if (!dragOver) {
-              setDragOver(true);
-              
-              // Assign a random hue only on first drag entry
-              const randomHue =
-                ACCENT_HUES[Math.floor(Math.random() * ACCENT_HUES.length)];
-              setActiveHue(randomHue);
-              
-              // Apply transform only once
-              if (dropZoneRef.current) {
-                dropZoneRef.current.style.transform =
-                  "rotateX(3deg) rotateY(0deg) scale(1.03)";
-              }
-            }
-          }}
-          onDragLeave={() => {
-            setDragOver(false);
-            setActiveHue(null); // Reset for next hover
-
-            if (dropZoneRef.current) {
-              dropZoneRef.current.style.transform = "";
-            }
-
-          }}
-          onDrop={(e) => {
-            setDragOver(false);
-            setActiveHue(null); // Reset for next hover
-            if (dropZoneRef.current) {
-              dropZoneRef.current.style.transform = "";
-            }
-
-            particleWorkerRef.current?.postMessage({ type: "explode" });
-            handleDrop(e);
-          }}
-        >
-          <div className="drop-zone-content">
-            <div style={{
-              fontSize: "3rem",
-              marginBottom: "1.5rem",
-              opacity: dragOver ? 1 : 0.7,
-              transition: "all 0.3s ease",
-              transform: dragOver ? "scale(1.1)" : "scale(1)"
-            }}>
-              {dragOver ? "📂" : "📁"}
+      ) : (
+        <>
+          <ConnectionStatus />
+          <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
+            <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
+              MyStudyMate
             </div>
-            
-            <h3 style={{
-              margin: "0 0 1rem 0",
-              fontSize: "1.4rem",
-              fontWeight: "600",
-              color: "#fff",
-              opacity: dragOver ? 1 : 0.9,
-              transition: "opacity 0.3s ease"
-            }}>
-              {dragOver ? "Drop your file here!" : "Upload Your Study Material"}
-            </h3>
-            
-            <p style={{
-              margin: "0 0 1.5rem 0",
-              fontSize: "1rem",
-              color: "#ccc",
-              lineHeight: "1.5",
-              opacity: dragOver ? 0.8 : 0.7,
-              transition: "opacity 0.3s ease"
-            }}>
-              {dragOver 
-                ? "Release to start processing..." 
-                : "Drag & drop your file here or click to browse"
-              }
-            </p>
-            
-            <div style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.5rem",
-              justifyContent: "center",
-              marginBottom: "1rem"
-            }}>
-              {[".pdf", ".mp3", ".wav", ".txt", ".m4a"].map((ext) => (
-                <span key={ext} style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  color: "#ddd",
-                  padding: "0.3rem 0.8rem",
-                  borderRadius: "20px",
-                  fontSize: "0.8rem",
-                  fontWeight: "500",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
+            <div
+              className="glow-text fade-in"
+              data-text="Smarter Studying Starts Here."
+              style={{ animationDelay: "0.4s" }}
+            >
+              Smarter Studying Starts Here.
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept={FILE_VALIDATION.ALLOWED_EXTENSIONS.join(',')}
+              style={{ display: "none" }}
+            />
+
+            <div
+              ref={dropZoneRef}
+              className={`drop-zone ${dragOver ? "drag-over" : ""}`}
+              style={{
+                marginTop: "4rem",
+                ...(dragOver &&
+                  activeHue !== null &&
+                  ({
+                    "--accent-hue": `${activeHue}`,
+                  } as React.CSSProperties)),
+                borderColor:
+                  dragOver && activeHue !== null
+                    ? `hsl(${activeHue}, 100%, 60%)`
+                    : undefined,
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                
+                // Only update state if not already in drag state
+                if (!dragOver) {
+                  setDragOver(true);
+                  
+                  // Assign a random hue only on first drag entry
+                  const randomHue =
+                    ACCENT_HUES[Math.floor(Math.random() * ACCENT_HUES.length)];
+                  setActiveHue(randomHue);
+                  
+                  // Apply transform only once
+                  if (dropZoneRef.current) {
+                    dropZoneRef.current.style.transform =
+                      "rotateX(3deg) rotateY(0deg) scale(1.03)";
+                  }
+                }
+              }}
+              onDragLeave={() => {
+                setDragOver(false);
+                setActiveHue(null); // Reset for next hover
+
+                if (dropZoneRef.current) {
+                  dropZoneRef.current.style.transform = "";
+                }
+
+              }}
+              onDrop={(e) => {
+                setDragOver(false);
+                setActiveHue(null); // Reset for next hover
+                if (dropZoneRef.current) {
+                  dropZoneRef.current.style.transform = "";
+                }
+
+                particleWorkerRef.current?.postMessage({ type: "explode" });
+                handleDrop(e);
+              }}
+            >
+              <div className="drop-zone-content">
+                <div style={{
+                  fontSize: "3rem",
+                  marginBottom: "1.5rem",
+                  opacity: dragOver ? 1 : 0.7,
+                  transition: "all 0.3s ease",
+                  transform: dragOver ? "scale(1.1)" : "scale(1)"
+                }}>
+                  {dragOver ? "📂" : "📁"}
+                </div>
+                
+                <h3 style={{
+                  margin: "0 0 1rem 0",
+                  fontSize: "1.4rem",
+                  fontWeight: "600",
+                  color: "#fff",
+                  opacity: dragOver ? 1 : 0.9,
+                  transition: "opacity 0.3s ease"
+                }}>
+                  {dragOver ? "Drop your file here!" : "Upload Your Study Material"}
+                </h3>
+                
+                <p style={{
+                  margin: "0 0 1.5rem 0",
+                  fontSize: "1rem",
+                  color: "#ccc",
+                  lineHeight: "1.5",
+                  opacity: dragOver ? 0.8 : 0.7,
+                  transition: "opacity 0.3s ease"
+                }}>
+                  {dragOver 
+                    ? "Release to start processing..." 
+                    : "Drag & drop your file here or click to browse"
+                  }
+                </p>
+                
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                  justifyContent: "center",
+                  marginBottom: "1rem"
+                }}>
+                  {FILE_VALIDATION.ALLOWED_EXTENSIONS.map((ext) => (
+                    <span key={ext} style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "#ddd",
+                      padding: "0.3rem 0.8rem",
+                      borderRadius: "20px",
+                      fontSize: "0.8rem",
+                      fontWeight: "500",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      opacity: dragOver ? 0.6 : 0.8,
+                      transition: "opacity 0.3s ease"
+                    }}>
+                      {ext}
+                    </span>
+                  ))}
+                </div>
+                
+                <div style={{
+                  fontSize: "0.85rem",
+                  color: "#999",
                   opacity: dragOver ? 0.6 : 0.8,
                   transition: "opacity 0.3s ease"
                 }}>
-                  {ext}
-                </span>
-              ))}
+                  💡 Supports PDFs, audio files, and text documents
+                </div>
+              </div>
             </div>
-            
-            <div style={{
-              fontSize: "0.85rem",
-              color: "#999",
-              opacity: dragOver ? 0.6 : 0.8,
-              transition: "opacity 0.3s ease"
-            }}>
-              💡 Supports PDFs, audio files, and text documents
-            </div>
-          </div>
-        </div>
 
-        {error && <p style={{ color: "red" }}>{error}</p>}
+            {error && <p style={{ color: "red" }}>{error}</p>}
 
-        <AnimatePresence
-          onExitComplete={() => {
-            setProgressBarExited(true);
-          }}
-        >
-          {showProgressBar && (
-            <motion.div
-              key="progress"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={
-                allowUnmount
-                  ? { opacity: 0, height: 0, transition: { duration: 0.4 } }
-                  : {} // prevents auto exit until we say so
-              }
-              transition={{ duration: 0.4 }}
-              style={{
-                overflow: "hidden", // Needed for smooth height animation
-                marginTop: "1rem",
-                paddingBottom: "60px", // 🔧 Give extra space for enhanced glow
-                paddingLeft: "30px", // ✅ Balanced horizontal space for wider bar
-                paddingRight: "30px", // ✅ Balanced horizontal space for wider bar
+            <AnimatePresence
+              onExitComplete={() => {
+                setProgressBarExited(true);
               }}
             >
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                {status?.stage === "uploading"
-                  ? "Uploading file..."
-                  : status?.stage === "preprocessing"
-                  ? "Preprocessing audio..."
-                  : status?.stage === "transcribing" &&
-                    typeof status.current === "number" &&
-                    typeof status.total === "number"
-                  ? `Transcribing chunk ${status.current} of ${status.total}…`
-                  : status?.stage === "saving_output"
-                  ? "Saving output..."
-                  : isFinishing
-                  ? "Finishing up…"
-                  : "Beginning transcription…"}
-              </motion.p>
+              {showProgressBar && (
+                <motion.div
+                  key="progress"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={
+                    allowUnmount
+                      ? { opacity: 0, height: 0, transition: { duration: 0.4 } }
+                      : {} // prevents auto exit until we say so
+                  }
+                  transition={{ duration: 0.4 }}
+                  style={{
+                    overflow: "hidden", // Needed for smooth height animation
+                    marginTop: "1rem",
+                    paddingBottom: "60px", // 🔧 Give extra space for enhanced glow
+                    paddingLeft: "30px", // ✅ Balanced horizontal space for wider bar
+                    paddingRight: "30px", // ✅ Balanced horizontal space for wider bar
+                  }}
+                >
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    {status?.stage === "uploading"
+                      ? "Uploading file..."
+                      : status?.stage === "preprocessing"
+                      ? "Preprocessing audio..."
+                      : status?.stage === "transcribing" &&
+                        typeof status.current === "number" &&
+                        typeof status.total === "number"
+                      ? `Transcribing chunk ${status.current} of ${status.total}…`
+                      : status?.stage === "saving_output"
+                      ? "Saving output..."
+                      : isFinishing
+                      ? "Finishing up…"
+                      : "Beginning transcription…"}
+                  </motion.p>
 
-              {/* Enhanced wrapper to allow glow overflow */}
-              <div
-                style={{
-                  position: "relative",
-                  overflow: "visible", // ✅ Let glow extend outside
-                  padding: "20px clamp(20px, 5vw, 40px)", // ✅ Responsive padding that scales with viewport
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  width: "100%", // ✅ Ensure full width for centering
-                  boxSizing: "border-box", // ✅ Include padding in width calculation
+                  {/* Enhanced wrapper to allow glow overflow */}
+                  <div
+                    style={{
+                      position: "relative",
+                      overflow: "visible", // ✅ Let glow extend outside
+                      padding: "20px clamp(20px, 5vw, 40px)", // ✅ Responsive padding that scales with viewport
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      width: "100%", // ✅ Ensure full width for centering
+                      boxSizing: "border-box", // ✅ Include padding in width calculation
+                    }}
+                  >
+                    <div className="neon-progress-wrapper">
+                      <motion.div
+                        className="neon-progress-core"
+                        initial={{ width: "0%", opacity: 0 }}
+                        animate={coreControls}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        style={{ position: "absolute", left: 0, top: 0 }}
+                      />
+                      <motion.div
+                        className="neon-progress-glow"
+                        initial={{ width: "0%", opacity: 0 }}
+                        animate={glowControls}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        style={{ position: "absolute", left: 0, top: 0 }}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {canShowTranscript && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                style={{ 
+                  marginTop: "3rem",
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  padding: "2rem",
+                  backdropFilter: "blur(10px)"
                 }}
               >
-                <div className="neon-progress-wrapper">
-                  <motion.div
-                    className="neon-progress-core"
-                    initial={{ width: "0%", opacity: 0 }}
-                    animate={coreControls}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                    style={{ position: "absolute", left: 0, top: 0 }}
-                  />
-                  <motion.div
-                    className="neon-progress-glow"
-                    initial={{ width: "0%", opacity: 0 }}
-                    animate={glowControls}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                    style={{ position: "absolute", left: 0, top: 0 }}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {canShowTranscript && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            style={{ 
-              marginTop: "3rem",
-              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)",
-              borderRadius: "16px",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              padding: "2rem",
-              backdropFilter: "blur(10px)"
-            }}
-          >
-            {/* File Info Header */}
-            <div style={{ 
-              marginBottom: "2rem",
-              background: "rgba(0, 0, 0, 0.3)",
-              borderRadius: "12px",
-              padding: "1.5rem",
-              border: "1px solid rgba(255, 255, 255, 0.1)"
-            }}>
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "1rem",
-                marginBottom: "1rem"
-              }}>
-                <div style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  background: "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "1.2rem"
-                }}>
-                  📄
-                </div>
-                <div>
-                  <h3 style={{ 
-                    margin: 0, 
-                    color: "#fff",
-                    fontSize: "1.2rem",
-                    fontWeight: "600"
-                  }}>
-                    File Successfully Processed
-                  </h3>
-                  <p style={{ 
-                    margin: "0.2rem 0 0 0", 
-                    color: "#999",
-                    fontSize: "0.9rem"
-                  }}>
-                    Ready for analysis and topic extraction
-                  </p>
-                </div>
-              </div>
-              
-              <div style={{ 
-                display: "grid", 
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "1rem"
-              }}>
+                {/* File Info Header */}
                 <div style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "0.5rem",
-                  color: "#ccc"
-                }}>
-                  <span style={{ fontSize: "0.9rem" }}>📁</span>
-                  <div>
-                    <div style={{ fontSize: "0.8rem", color: "#999" }}>Filename</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filename}</div>
-                  </div>
-                </div>
-                
-                <div style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "0.5rem",
-                  color: "#ccc"
-                }}>
-                  <span style={{ fontSize: "0.9rem" }}>🏷️</span>
-                  <div>
-                    <div style={{ fontSize: "0.8rem", color: "#999" }}>File Type</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filetype}</div>
-                  </div>
-                </div>
-                
-                <div style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "0.5rem",
-                  color: "#ccc"
-                }}>
-                  <span style={{ fontSize: "0.9rem" }}>✅</span>
-                  <div>
-                    <div style={{ fontSize: "0.8rem", color: "#999" }}>Status</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: "500", color: "#4ade80" }}>{response.message}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Transcript Display */}
-            <div style={{ marginBottom: "1rem" }}>
-              <div style={{
-                display: "flex", 
-                alignItems: "center", 
-                gap: "0.75rem",
-                marginBottom: "1rem"
-              }}>
-                <h2 style={{ 
-                  margin: 0, 
-                  fontSize: "1.3rem",
-                  fontWeight: "600",
-                  color: "#fff"
-                }}>
-                  📄 Extracted Transcript
-                </h2>
-                <div style={{
-                  background: "rgba(185, 255, 255, 0.1)",
-                  color: "hsl(185, 100%, 70%)",
-                  padding: "0.3rem 0.8rem",
-                  borderRadius: "20px",
-                  fontSize: "0.8rem",
-                  fontWeight: "500",
-                  border: "1px solid rgba(185, 255, 255, 0.2)"
-                }}>
-                  {response.text ? `${Math.round(response.text.length / 1000)}k characters` : "0 characters"}
-                </div>
-              </div>
-              
-              <div style={{
-                background: "rgba(0, 0, 0, 0.4)",
-                borderRadius: "12px",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                overflow: "hidden"
-              }}>
-                <div style={{
-                  background: "rgba(255, 255, 255, 0.05)",
-                  padding: "0.75rem 1rem",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem"
-                }}>
-                  <div style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: "#ef4444"
-                  }}></div>
-                  <div style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: "#f59e0b"
-                  }}></div>
-                  <div style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: "#10b981"
-                  }}></div>
-                  <span style={{ 
-                    marginLeft: "0.5rem", 
-                    fontSize: "0.8rem", 
-                    color: "#999",
-                    fontFamily: "monospace"
-                  }}>
-                    transcript.txt
-                  </span>
-                </div>
-                
-                <div style={{
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  padding: "1.5rem",
-                  lineHeight: "1.6"
-                }}>
-                  <pre style={{
-                    margin: 0,
-                    fontFamily: "'Fira Code', 'Consolas', monospace",
-                    fontSize: "0.9rem",
-                    color: "#e5e5e5",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word"
-                  }}>
-                    {response.text || "No transcript content available"}
-                  </pre>
-                </div>
-              </div>
-              
-              <div style={{ 
-                marginTop: "0.75rem",
-                fontSize: "0.8rem", 
-                color: "#888",
-                textAlign: "center"
-              }}>
-                💡 This transcript will be segmented and analyzed for key topics below
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {canShowTranscript && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            style={{ 
-              marginTop: "2rem", 
-              display: "flex", 
-              gap: "1rem",
-              flexWrap: "wrap"
-            }}
-          >
-            <motion.button
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleProcessChunks}
-              disabled={!!processedChunks}
-              style={{
-                ...buttonStyle,
-                flex: "1",
-                minWidth: "250px",
-                padding: "1rem 1.5rem",
-                fontSize: "1rem",
-                fontWeight: "600",
-                background: processedChunks 
-                  ? "linear-gradient(135deg, #10b981, #059669)"
-                  : "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
-                opacity: processedChunks ? 0.8 : 1,
-                cursor: processedChunks ? "not-allowed" : "pointer",
-                position: "relative",
-                overflow: "hidden"
-              }}
-            >
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "0.75rem",
-                justifyContent: "center"
-              }}>
-                <span style={{ fontSize: "1.1rem" }}>
-                  {processedChunks ? "✅" : "🔧"}
-                </span>
-                <span>
-                  {processedChunks
-                    ? "Transcript Segmented ✔"
-                    : "Segment & Optimize Transcript"}
-                </span>
-              </div>
-              {!processedChunks && (
-                <div style={{
-                  position: "absolute",
-                  top: 0,
-                  left: "-100%",
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                  animation: "shimmer 2s infinite"
-                }} />
-              )}
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleGenerateHeadings}
-              disabled={!processedChunks || generatingHeadings}
-              style={{
-                ...buttonStyle,
-                flex: "1",
-                minWidth: "250px",
-                padding: "1rem 1.5rem",
-                fontSize: "1rem",
-                fontWeight: "600",
-                background: !processedChunks || generatingHeadings 
-                  ? "linear-gradient(135deg, #6b7280, #4b5563)"
-                  : "linear-gradient(135deg, hsl(315, 100%, 60%), hsl(330, 100%, 70%))",
-                opacity: !processedChunks || generatingHeadings ? 0.6 : 1,
-                cursor: !processedChunks || generatingHeadings ? "not-allowed" : "pointer",
-                position: "relative",
-                overflow: "hidden"
-              }}
-            >
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "0.75rem",
-                justifyContent: "center"
-              }}>
-                <span style={{ fontSize: "1.1rem" }}>
-                  {generatingHeadings ? "⏳" : "🧠"}
-                </span>
-                <span>
-                  {generatingHeadings
-                    ? "Generating Topics..."
-                    : "Generate Topics with AI"}
-                </span>
-              </div>
-              {processedChunks && !generatingHeadings && (
-                <div style={{
-                  position: "absolute",
-                  top: 0,
-                  left: "-100%",
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                  animation: "shimmer 2s infinite"
-                }} />
-              )}
-            </motion.button>
-          </motion.div>
-        )}
-
-        {topics && (
-          <div style={{ marginTop: "2rem" }}>
-            <h2>📊 Generated Topics</h2>
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
-            >
-              {Object.entries(topics.topics).map(([topicId, topic]) => (
-                <div key={topicId} style={{ 
-                  background: "rgba(255, 255, 255, 0.05)", 
-                  padding: "1.5rem", 
+                  marginBottom: "2rem",
+                  background: "rgba(0, 0, 0, 0.3)",
                   borderRadius: "12px",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                  textAlign: "left"
+                  padding: "1.5rem",
+                  border: "1px solid rgba(255, 255, 255, 0.1)"
                 }}>
-                  <h3 style={{ 
-                    margin: "0 0 1rem 0", 
-                    color: "#fff",
-                    fontSize: "1.4rem"
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "1rem",
+                    marginBottom: "1rem"
                   }}>
-                    {topic.heading}
-                  </h3>
-                  
-                  {topic.concepts && topic.concepts.length > 0 && (
-                    <div style={{ marginBottom: "1rem" }}>
-                      <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                        Key Concepts:
-                      </strong>
-                      <div style={{ 
-                        display: "flex", 
-                        flexWrap: "wrap", 
-                        gap: "0.5rem", 
-                        marginTop: "0.5rem" 
+                    <div style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.2rem"
+                    }}>
+                      📄
+                    </div>
+                    <div>
+                      <h3 style={{ 
+                        margin: 0, 
+                        color: "#fff",
+                        fontSize: "1.2rem",
+                        fontWeight: "600"
                       }}>
-                        {topic.concepts.map((concept, idx) => (
-                          <span key={idx} style={{
-                            background: "rgba(185, 100%, 50%, 0.2)",
-                            color: "hsl(185, 100%, 70%)",
-                            padding: "0.3rem 0.8rem",
-                            borderRadius: "20px",
-                            fontSize: "0.85rem",
-                            border: "1px solid rgba(185, 100%, 50%, 0.3)"
-                          }}>
-                            {concept}
-                          </span>
-                        ))}
+                        File Successfully Processed
+                      </h3>
+                      <p style={{ 
+                        margin: "0.2rem 0 0 0", 
+                        color: "#999",
+                        fontSize: "0.9rem"
+                      }}>
+                        Ready for analysis and topic extraction
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div style={{ 
+                    display: "grid", 
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "1rem"
+                  }}>
+                    <div style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "0.5rem",
+                      color: "#ccc"
+                    }}>
+                      <span style={{ fontSize: "0.9rem" }}>📁</span>
+                      <div>
+                        <div style={{ fontSize: "0.8rem", color: "#999" }}>Filename</div>
+                        <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filename}</div>
                       </div>
                     </div>
-                  )}
-                  
-                  <div style={{ 
-                    marginBottom: "1rem",
-                    background: "rgba(255, 255, 255, 0.03)",
-                    padding: "1rem",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.1)"
-                  }}>
-                    <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                      Summary:
-                    </strong>
-                    <p style={{ 
-                      margin: "0.5rem 0 0 0", 
-                      color: topic.summary ? "#ddd" : "#888",
-                      lineHeight: "1.5",
-                      fontSize: "0.95rem",
-                      fontStyle: topic.summary ? "normal" : "italic"
-                    }}>
-                      {topic.summary || "Summary not available for this topic."}
-                    </p>
-                  </div>
-                  
-                  <div style={{ 
-                    display: "flex", 
-                    gap: "1rem", 
-                    fontSize: "0.8rem", 
-                    color: "#999" 
-                  }}>
-                    <span>{topic.stats.num_chunks} chunks</span>
-                    <span>Avg: {Math.round(topic.stats.mean_size)} words</span>
-                  </div>
-
-                  {/* Expand/Collapse buttons */}
-                  <div style={{ 
-                    marginTop: "1rem", 
-                    display: "flex", 
-                    flexDirection: "column", 
-                    gap: "0.5rem" 
-                  }}>
-                    <button
-                      onClick={() => handleExpandCluster(topicId)}
-                      style={{
-                        ...buttonStyle,
-                        background: "hsl(185, 100%, 50%)",
-                      }}
-                    >
-                      {topic.bullet_points
-                        ? "Regenerate Insights"
-                        : "Expand Cluster for More Insights"}
-                    </button>
-                  </div>
-
-                  {/* Bullet points section */}
-                  {topic.bullet_points && topic.bullet_points.length > 0 && (
+                    
                     <div style={{ 
-                      marginTop: "1rem", 
-                      padding: "1rem", 
-                      background: "rgba(255, 255, 255, 0.04)", 
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255, 255, 255, 0.1)"
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "0.5rem",
+                      color: "#ccc"
                     }}>
-                      <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                        Key Bullet Points:
-                      </strong>
-                      {renderBulletPoints(topic.bullet_points, topicId)}
+                      <span style={{ fontSize: "0.9rem" }}>🏷️</span>
+                      <div>
+                        <div style={{ fontSize: "0.8rem", color: "#999" }}>File Type</div>
+                        <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filetype}</div>
+                      </div>
                     </div>
-                  )}
-
-                  {/* Debugging result section */}
-                  {renderDebugResult(topicId)}
+                    
+                    <div style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "0.5rem",
+                      color: "#ccc"
+                    }}>
+                      <span style={{ fontSize: "0.9rem" }}>✅</span>
+                      <div>
+                        <div style={{ fontSize: "0.8rem", color: "#999" }}>Status</div>
+                        <div style={{ fontSize: "0.95rem", fontWeight: "500", color: "#4ade80" }}>{response.message}</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ))}
+
+                {/* Transcript Display */}
+                <div style={{ marginBottom: "1rem" }}>
+                  <div style={{
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "0.75rem",
+                    marginBottom: "1rem"
+                  }}>
+                    <h2 style={{ 
+                      margin: 0, 
+                      fontSize: "1.3rem",
+                      fontWeight: "600",
+                      color: "#fff"
+                    }}>
+                      📄 Extracted Transcript
+                    </h2>
+                    <div style={{
+                      background: "rgba(185, 255, 255, 0.1)",
+                      color: "hsl(185, 100%, 70%)",
+                      padding: "0.3rem 0.8rem",
+                      borderRadius: "20px",
+                      fontSize: "0.8rem",
+                      fontWeight: "500",
+                      border: "1px solid rgba(185, 255, 255, 0.2)"
+                    }}>
+                      {response.text ? `${Math.round(response.text.length / 1000)}k characters` : "0 characters"}
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    background: "rgba(0, 0, 0, 0.4)",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    overflow: "hidden"
+                  }}>
+                    <div style={{
+                      background: "rgba(255, 255, 255, 0.05)",
+                      padding: "0.75rem 1rem",
+                      borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem"
+                    }}>
+                      <div style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#ef4444"
+                      }}></div>
+                      <div style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#f59e0b"
+                      }}></div>
+                      <div style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        background: "#10b981"
+                      }}></div>
+                      <span style={{ 
+                        marginLeft: "0.5rem", 
+                        fontSize: "0.8rem", 
+                        color: "#999",
+                        fontFamily: "monospace"
+                      }}>
+                        transcript.txt
+                      </span>
+                    </div>
+                    
+                    <div style={{
+                      maxHeight: "400px",
+                      overflowY: "auto",
+                      padding: "1.5rem",
+                      lineHeight: "1.6"
+                    }}>
+                      <pre style={{
+                        margin: 0,
+                        fontFamily: "'Fira Code', 'Consolas', monospace",
+                        fontSize: "0.9rem",
+                        color: "#e5e5e5",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word"
+                      }}>
+                        {response.text || "No transcript content available"}
+                      </pre>
+                    </div>
+                  </div>
+                  
+                  <div style={{ 
+                    marginTop: "0.75rem",
+                    fontSize: "0.8rem", 
+                    color: "#888",
+                    textAlign: "center"
+                  }}>
+                    💡 This transcript will be segmented and analyzed for key topics below
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {canShowTranscript && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                style={{ 
+                  marginTop: "2rem", 
+                  display: "flex", 
+                  gap: "1rem",
+                  flexWrap: "wrap"
+                }}
+              >
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleProcessChunks}
+                  disabled={!!processedChunks}
+                  style={{
+                    ...buttonStyle,
+                    flex: "1",
+                    minWidth: "250px",
+                    padding: "1rem 1.5rem",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    background: processedChunks 
+                      ? "linear-gradient(135deg, #10b981, #059669)"
+                      : "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
+                    opacity: processedChunks ? 0.8 : 1,
+                    cursor: processedChunks ? "not-allowed" : "pointer",
+                    position: "relative",
+                    overflow: "hidden"
+                  }}
+                >
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "0.75rem",
+                    justifyContent: "center"
+                  }}>
+                    <span style={{ fontSize: "1.1rem" }}>
+                      {processedChunks ? "✅" : "🔧"}
+                    </span>
+                    <span>
+                      {processedChunks
+                        ? "Transcript Segmented ✔"
+                        : "Segment & Optimize Transcript"}
+                    </span>
+                  </div>
+                  {!processedChunks && (
+                    <div style={{
+                      position: "absolute",
+                      top: 0,
+                      left: "-100%",
+                      width: "100%",
+                      height: "100%",
+                      background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                      animation: "shimmer 2s infinite"
+                    }} />
+                  )}
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleGenerateHeadings}
+                  disabled={!processedChunks || generatingHeadings}
+                  style={{
+                    ...buttonStyle,
+                    flex: "1",
+                    minWidth: "250px",
+                    padding: "1rem 1.5rem",
+                    fontSize: "1rem",
+                    fontWeight: "600",
+                    background: !processedChunks || generatingHeadings 
+                      ? "linear-gradient(135deg, #6b7280, #4b5563)"
+                      : "linear-gradient(135deg, hsl(315, 100%, 60%), hsl(330, 100%, 70%))",
+                    opacity: !processedChunks || generatingHeadings ? 0.6 : 1,
+                    cursor: !processedChunks || generatingHeadings ? "not-allowed" : "pointer",
+                    position: "relative",
+                    overflow: "hidden"
+                  }}
+                >
+                  <div style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "0.75rem",
+                    justifyContent: "center"
+                  }}>
+                    <span style={{ fontSize: "1.1rem" }}>
+                      {generatingHeadings ? "⏳" : "🧠"}
+                    </span>
+                    <span>
+                      {generatingHeadings
+                        ? "Generating Topics..."
+                        : "Generate Topics with AI"}
+                    </span>
+                  </div>
+                  {processedChunks && !generatingHeadings && (
+                    <div style={{
+                      position: "absolute",
+                      top: 0,
+                      left: "-100%",
+                      width: "100%",
+                      height: "100%",
+                      background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                      animation: "shimmer 2s infinite"
+                    }} />
+                  )}
+                </motion.button>
+              </motion.div>
+            )}
+
+            {topics && (
+              <div style={{ marginTop: "2rem" }}>
+                <h2>📊 Generated Topics</h2>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
+                >
+                  {Object.entries(topics.topics).map(([topicId, topic]) => (
+                    <div key={topicId} style={{ 
+                      background: "rgba(255, 255, 255, 0.05)", 
+                      padding: "1.5rem", 
+                      borderRadius: "12px",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      textAlign: "left"
+                    }}>
+                      <h3 style={{ 
+                        margin: "0 0 1rem 0", 
+                        color: "#fff",
+                        fontSize: "1.4rem"
+                      }}>
+                        {topic.heading}
+                      </h3>
+                      
+                      {topic.concepts && topic.concepts.length > 0 && (
+                        <div style={{ marginBottom: "1rem" }}>
+                          <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
+                            Key Concepts:
+                          </strong>
+                          <div style={{ 
+                            display: "flex", 
+                            flexWrap: "wrap", 
+                            gap: "0.5rem", 
+                            marginTop: "0.5rem" 
+                          }}>
+                            {topic.concepts.map((concept, idx) => (
+                              <span key={idx} style={{
+                                background: "rgba(185, 100%, 50%, 0.2)",
+                                color: "hsl(185, 100%, 70%)",
+                                padding: "0.3rem 0.8rem",
+                                borderRadius: "20px",
+                                fontSize: "0.85rem",
+                                border: "1px solid rgba(185, 100%, 50%, 0.3)"
+                              }}>
+                                {concept}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div style={{ 
+                        marginBottom: "1rem",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        padding: "1rem",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255, 255, 255, 0.1)"
+                      }}>
+                        <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
+                          Summary:
+                        </strong>
+                        <p style={{ 
+                          margin: "0.5rem 0 0 0", 
+                          color: topic.summary ? "#ddd" : "#888",
+                          lineHeight: "1.5",
+                          fontSize: "0.95rem",
+                          fontStyle: topic.summary ? "normal" : "italic"
+                        }}>
+                          {topic.summary || "Summary not available for this topic."}
+                        </p>
+                      </div>
+                      
+                      <div style={{ 
+                        display: "flex", 
+                        gap: "1rem", 
+                        fontSize: "0.8rem", 
+                        color: "#999" 
+                      }}>
+                        <span>{topic.stats?.num_chunks || 0} chunks</span>
+                        <span>Avg: {Math.round(topic.stats?.mean_size || 0)} words</span>
+                      </div>
+
+                      {/* Expand/Collapse buttons */}
+                      <div style={{ 
+                        marginTop: "1rem", 
+                        display: "flex", 
+                        flexDirection: "column", 
+                        gap: "0.5rem" 
+                      }}>
+                        <button
+                          onClick={() => handleExpandCluster(topicId)}
+                          style={{
+                            ...buttonStyle,
+                            background: "hsl(185, 100%, 50%)",
+                          }}
+                        >
+                          {topic.bullet_points
+                            ? "Regenerate Insights"
+                            : "Expand Cluster for More Insights"}
+                        </button>
+                      </div>
+
+                      {/* Bullet points section */}
+                      {topic.bullet_points && topic.bullet_points.length > 0 && (
+                        <div style={{ 
+                          marginTop: "1rem", 
+                          padding: "1rem", 
+                          background: "rgba(255, 255, 255, 0.04)", 
+                          borderRadius: "8px",
+                          border: "1px solid rgba(255, 255, 255, 0.1)"
+                        }}>
+                          <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
+                            Key Bullet Points:
+                          </strong>
+                          {renderBulletPoints(topic.bullet_points, topicId)}
+                        </div>
+                      )}
+
+                      {/* Debugging result section */}
+                      {renderDebugResult(topicId)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Developer Mode Toggle */}
+            <div style={{ 
+              position: "fixed", 
+              top: "1rem", 
+              right: "1rem", 
+              zIndex: 1000,
+              background: "rgba(0, 0, 0, 0.8)",
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              border: "1px solid rgba(255, 255, 255, 0.2)"
+            }}>
+              <label style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "0.5rem", 
+                color: "#fff",
+                fontSize: "0.9rem",
+                cursor: "pointer"
+              }}>
+                <input
+                  type="checkbox"
+                  checked={isDeveloperMode}
+                  onChange={(e) => setIsDeveloperMode(e.target.checked)}
+                  style={{ margin: 0 }}
+                />
+                Developer Mode
+              </label>
+              <div style={{ 
+                fontSize: "0.75rem", 
+                color: "#999", 
+                marginTop: "0.2rem" 
+              }}>
+                {isDeveloperMode ? "🔧 Click bullets to debug" : "📖 Click bullets to expand"}
+              </div>
             </div>
           </div>
-        )}
-
-        {/* Developer Mode Toggle */}
-        <div style={{ 
-          position: "fixed", 
-          top: "1rem", 
-          right: "1rem", 
-          zIndex: 1000,
-          background: "rgba(0, 0, 0, 0.8)",
-          padding: "0.5rem 1rem",
-          borderRadius: "8px",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
-        }}>
-          <label style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "0.5rem", 
-            color: "#fff",
-            fontSize: "0.9rem",
-            cursor: "pointer"
-          }}>
-            <input
-              type="checkbox"
-              checked={isDeveloperMode}
-              onChange={(e) => setIsDeveloperMode(e.target.checked)}
-              style={{ margin: 0 }}
-            />
-            Developer Mode
-          </label>
-          <div style={{ 
-            fontSize: "0.75rem", 
-            color: "#999", 
-            marginTop: "0.2rem" 
-          }}>
-            {isDeveloperMode ? "🔧 Click bullets to debug" : "📖 Click bullets to expand"}
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </>
   );
 }

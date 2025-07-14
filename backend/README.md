@@ -20,13 +20,18 @@ FastAPI backend for StudyMate v2 with comprehensive CORS configuration and secur
    pip install -r requirements.txt
    ```
 
-2. **Configure environment**
+2. **Setup NLTK data (recommended)**
+   ```bash
+   python setup_nltk_data.py
+   ```
+
+3. **Configure environment**
    ```bash
    cp .env.example .env.development
    # Edit .env.development with your settings
    ```
 
-3. **Run development server**
+4. **Run development server**
    ```bash
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
@@ -129,6 +134,7 @@ curl -H "Origin: http://localhost:5173" \
 - [ ] Update `.env.production` with actual domains
 - [ ] Update `TrustedHostMiddleware` allowed hosts in `main.py`
 - [ ] Set `ENVIRONMENT=production`
+- [ ] Run NLTK data setup: `python setup_nltk_data.py`
 - [ ] Test CORS with production frontend
 - [ ] Verify security headers
 - [ ] Test rate limiting

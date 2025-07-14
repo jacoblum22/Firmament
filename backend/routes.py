@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from starlette.responses import StreamingResponse
 import os
 from pydub import AudioSegment
@@ -7,16 +7,24 @@ from uuid import uuid4
 from fastapi import BackgroundTasks
 import asyncio
 from datetime import datetime
+from config import settings
+from utils.file_validator import FileValidator, FileValidationError
 
-# Import with fallback for testing environments
-try:
-    from utils.bullet_point_debugger import debug_bullet_point
-except ImportError:
-    from typing import Dict, Any
 
-    # Fallback function for testing environments where utils may not be available
-    def debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
-        return {"error": "bullet_point_debugger not available"}
+# Lazy import with fallback for testing environments
+def get_bullet_point_debugger():
+    try:
+        from utils.bullet_point_debugger import debug_bullet_point
+
+        return debug_bullet_point
+    except ImportError:
+        from typing import Dict, Any
+
+        # Fallback function for testing environments where utils may not be available
+        def debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
+            return {"error": "bullet_point_debugger not available"}
+
+        return debug_bullet_point
 
 
 router = APIRouter()
@@ -90,14 +98,24 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     job_id = str(uuid4())
     set_status(job_id, stage="uploading")
 
-    def process_file(file_bytes: bytes, filename: str):
+    # Read file content NOW, while request is active
+    file_bytes = await file.read()
+    filename = file.filename or "uploaded_file"
+
+    try:
+        # Comprehensive file validation
+        extension, safe_filename = FileValidator.validate_upload(
+            file_bytes, filename, settings.upload_max_size
+        )
+    except FileValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    def process_file(file_bytes: bytes, filename: str, safe_filename: str):
         try:
             ext = filename.split(".")[-1].lower()
 
-            if ext not in ["pdf", "mp3", "wav", "txt", "m4a"]:
-                return {"error": "Unsupported file type."}
-
-            file_location = os.path.join(UPLOAD_DIR, filename)
+            # Use safe filename for file operations
+            file_location = os.path.join(UPLOAD_DIR, safe_filename)
 
             # Save the original file to the 'uploads' folder
             with open(file_location, "wb") as f:
@@ -300,59 +318,75 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             print(f"[{job_id[:8]}] [ERROR]: {e}")
             set_status(job_id, stage="error", error=str(e))
 
-    # Read file content NOW, while request is active
-    file_bytes = await file.read()
-    filename = file.filename or "uploaded_file"
-
     # Validate file extension before processing
     ext = filename.split(".")[-1].lower()
     if ext not in ["pdf", "mp3", "wav", "txt", "m4a"]:
         return {"error": "Unsupported file type."}
 
     # Start background task and pass the raw data
-    background_tasks.add_task(process_file, file_bytes, filename)
+    background_tasks.add_task(process_file, file_bytes, filename, safe_filename)
 
     return {"job_id": job_id, "message": "Upload accepted. Processing started."}
 
 
-# Import utils modules with fallbacks for testing environments
-try:
-    from utils.semantic_segmentation import semantic_segment
-except ImportError:
+# Lazy import utils modules
+def get_semantic_segment():
+    try:
+        from utils.semantic_segmentation import semantic_segment
 
-    def semantic_segment(text, similarity_threshold=0.3):
-        return [
-            {"start": 0, "end": len(text), "text": text}
-        ]  # Fallback: return whole text as single segment
+        return semantic_segment
+    except ImportError:
 
+        def semantic_segment(text, similarity_threshold=0.3):
+            return [
+                {"start": 0, "end": len(text), "text": text}
+            ]  # Fallback: return whole text as single segment
 
-try:
-    from utils.filter_chunks import filter_chunks
-except ImportError:
-
-    def filter_chunks(chunks, min_words=5, max_stopword_ratio=0.9):
-        return chunks  # Fallback: return chunks unchanged
+        return semantic_segment
 
 
-try:
-    from utils.chunk_size_optimizer import optimize_chunk_sizes
-except ImportError:
+def get_filter_chunks():
+    try:
+        from utils.filter_chunks import filter_chunks
 
-    def optimize_chunk_sizes(chunks, min_words=50, max_words=150, target_size=100):
-        return chunks  # Fallback: return chunks unchanged
+        return filter_chunks
+    except ImportError:
+
+        def filter_chunks(chunks, min_words=5, max_stopword_ratio=0.9):
+            return chunks  # Fallback: return chunks unchanged
+
+        return filter_chunks
 
 
-try:
-    from utils.bertopic_processor import process_with_bertopic
-except ImportError:
+def get_optimize_chunk_sizes():
+    try:
+        from utils.chunk_size_optimizer import optimize_chunk_sizes
 
-    def process_with_bertopic(chunks, filename=None):
-        return {
-            "topics": {},
-            "num_chunks": len(chunks),
-            "num_topics": 0,
-            "total_tokens_used": 0,
-        }
+        return optimize_chunk_sizes
+    except ImportError:
+
+        def optimize_chunk_sizes(chunks, min_words=50, max_words=150, target_size=100):
+            return chunks  # Fallback: return chunks unchanged
+
+        return optimize_chunk_sizes
+
+
+def get_bertopic_processor():
+    try:
+        from utils.bertopic_processor import process_with_bertopic
+
+        return process_with_bertopic
+    except ImportError:
+
+        def process_with_bertopic(chunks, filename=None):
+            return {
+                "topics": {},
+                "num_chunks": len(chunks),
+                "num_topics": 0,
+                "total_tokens_used": 0,
+            }
+
+        return process_with_bertopic
 
 
 @router.post("/test-bertopic")
@@ -362,6 +396,13 @@ def test_bertopic(data: dict):
     filename = os.path.splitext(full_filename)[
         0
     ]  # Step 1: Segment → Filter → Optimize (using our improved pipeline)
+
+    # Use lazy-loaded functions
+    semantic_segment = get_semantic_segment()
+    filter_chunks = get_filter_chunks()
+    optimize_chunk_sizes = get_optimize_chunk_sizes()
+    process_with_bertopic = get_bertopic_processor()
+
     raw_chunks = semantic_segment(text, similarity_threshold=0.5)
     filtered_chunks = filter_chunks(raw_chunks, min_words=4, max_stopword_ratio=0.75)
     chunks = optimize_chunk_sizes(
@@ -385,6 +426,12 @@ def process_chunks(data: dict):
     text = data.get("text", "")
     full_filename = data.get("filename", "default")
     filename = os.path.splitext(full_filename)[0]  # Step 1: Chunking pipeline
+
+    # Use lazy-loaded functions
+    semantic_segment = get_semantic_segment()
+    filter_chunks = get_filter_chunks()
+    optimize_chunk_sizes = get_optimize_chunk_sizes()
+
     raw_chunks = semantic_segment(text, similarity_threshold=0.5)
     filtered_chunks = filter_chunks(raw_chunks, min_words=4, max_stopword_ratio=0.75)
     chunks = optimize_chunk_sizes(
@@ -460,6 +507,7 @@ def generate_headings(data: dict):
         return {"error": f"Chunks not found for filename: {filename}"}
 
     # Run BERTopic
+    process_with_bertopic = get_bertopic_processor()
     result = process_with_bertopic(chunks, filename)
 
     # Save full result
@@ -550,6 +598,7 @@ def debug_bullet_point_endpoint(data: dict):
         }
 
     try:
+        debug_bullet_point = get_bullet_point_debugger()
         result: Dict[str, Any] = debug_bullet_point(bullet_point, chunks, topics)
 
         # Convert numpy types to native Python types
