@@ -161,7 +161,6 @@ def detailed_health_check():
     # Check Redis connection if configured
     if settings.redis_url:
         try:
-        try:
             import redis
 
             redis_client = redis.from_url(settings.redis_url, socket_timeout=5)
@@ -196,7 +195,6 @@ def detailed_health_check():
 
     # Check file system permissions
     try:
-        import os
         import os
 
         # Ensure upload directory exists before testing write permissions

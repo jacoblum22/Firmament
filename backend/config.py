@@ -191,48 +191,402 @@ class Settings:
         default_size = (
             "52428800" if self.is_development else "104857600"
         )  # 50MB / 100MB
-        return int(os.getenv("UPLOAD_MAX_SIZE", default_size))
+        size_str = os.getenv("UPLOAD_MAX_SIZE", default_size)
+
+        try:
+            size = int(size_str)
+        except (ValueError, TypeError):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_MAX_SIZE value '{size_str}'. Must be a valid integer representing bytes."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        # Validate size range (1MB to 1GB)
+        min_size = 1024 * 1024  # 1MB
+        max_size = 1024 * 1024 * 1024  # 1GB
+        if not (min_size <= size <= max_size):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_MAX_SIZE value {size} bytes ({size // 1024 // 1024}MB) is out of range. "
+                    f"Must be between {min_size // 1024 // 1024}MB and {max_size // 1024 // 1024}MB."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: UPLOAD_MAX_SIZE {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        return size
 
     @property
     def upload_max_size_pdf(self) -> int:
-        # PDF-specific size limit (default: 50MB)
-        return int(os.getenv("UPLOAD_MAX_SIZE_PDF", "52428800"))  # 50MB
+        # PDF-specific size limit (default: 50MB dev, 100MB prod)
+        default_size = "52428800" if self.is_development else "104857600"
+        size_str = os.getenv("UPLOAD_MAX_SIZE_PDF", default_size)
+
+        try:
+            size = int(size_str)
+        except (ValueError, TypeError):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_MAX_SIZE_PDF value '{size_str}'. Must be a valid integer representing bytes."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_PDF value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        # Validate size range (1MB to 500MB for PDFs)
+        min_size = 1024 * 1024  # 1MB
+        max_size = 500 * 1024 * 1024  # 500MB
+        if not (min_size <= size <= max_size):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_MAX_SIZE_PDF value {size} bytes ({size // 1024 // 1024}MB) is out of range. "
+                    f"Must be between {min_size // 1024 // 1024}MB and {max_size // 1024 // 1024}MB."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: UPLOAD_MAX_SIZE_PDF {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        return size
 
     @property
     def upload_max_size_audio(self) -> int:
-        # Audio file size limit (default: 200MB for compressed, 500MB for WAV)
-        return int(os.getenv("UPLOAD_MAX_SIZE_AUDIO", "209715200"))  # 200MB
+        # Audio file size limit (default: 200MB dev, 300MB prod)
+        default_size = (
+            "209715200" if self.is_development else "314572800"
+        )  # 200MB / 300MB
+        size_str = os.getenv("UPLOAD_MAX_SIZE_AUDIO", default_size)
+
+        try:
+            size = int(size_str)
+        except (ValueError, TypeError):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_MAX_SIZE_AUDIO value '{size_str}'. Must be a valid integer representing bytes."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_AUDIO value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        # Validate size range (1MB to 1GB for audio)
+        min_size = 1024 * 1024  # 1MB
+        max_size = 1024 * 1024 * 1024  # 1GB
+        if not (min_size <= size <= max_size):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_MAX_SIZE_AUDIO value {size} bytes ({size // 1024 // 1024}MB) is out of range. "
+                    f"Must be between {min_size // 1024 // 1024}MB and {max_size // 1024 // 1024}MB."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: UPLOAD_MAX_SIZE_AUDIO {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        return size
 
     @property
     def upload_max_size_wav(self) -> int:
-        # WAV file size limit (default: 500MB for uncompressed audio)
-        return int(os.getenv("UPLOAD_MAX_SIZE_WAV", "524288000"))  # 500MB
+        # WAV file size limit (default: 500MB dev, 800MB prod)
+        default_size = (
+            "524288000" if self.is_development else "838860800"
+        )  # 500MB / 800MB
+        size_str = os.getenv("UPLOAD_MAX_SIZE_WAV", default_size)
+
+        try:
+            size = int(size_str)
+        except (ValueError, TypeError):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_MAX_SIZE_WAV value '{size_str}'. Must be a valid integer representing bytes."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_WAV value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        # Validate size range (1MB to 2GB for WAV files)
+        min_size = 1024 * 1024  # 1MB
+        max_size = 2 * 1024 * 1024 * 1024  # 2GB
+        if not (min_size <= size <= max_size):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_MAX_SIZE_WAV value {size} bytes ({size // 1024 // 1024}MB) is out of range. "
+                    f"Must be between {min_size // 1024 // 1024}MB and {max_size // 1024 // 1024}MB."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: UPLOAD_MAX_SIZE_WAV {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        return size
 
     @property
     def upload_max_size_text(self) -> int:
-        # Text file size limit (default: 10MB)
-        return int(os.getenv("UPLOAD_MAX_SIZE_TEXT", "10485760"))  # 10MB
+        # Text file size limit (default: 10MB dev, 20MB prod)
+        default_size = "10485760" if self.is_development else "20971520"  # 10MB / 20MB
+        size_str = os.getenv("UPLOAD_MAX_SIZE_TEXT", default_size)
+
+        try:
+            size = int(size_str)
+        except (ValueError, TypeError):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_MAX_SIZE_TEXT value '{size_str}'. Must be a valid integer representing bytes."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_TEXT value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        # Validate size range (100KB to 100MB for text files)
+        min_size = 100 * 1024  # 100KB
+        max_size = 100 * 1024 * 1024  # 100MB
+        if not (min_size <= size <= max_size):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_MAX_SIZE_TEXT value {size} bytes ({size // 1024}KB) is out of range. "
+                    f"Must be between {min_size // 1024}KB and {max_size // 1024 // 1024}MB."
+                )
+            else:
+                default_int = int(default_size)
+                print(
+                    f"⚠️  Warning: UPLOAD_MAX_SIZE_TEXT {size // 1024}KB is out of range. Using default {default_int // 1024 // 1024}MB."
+                )
+                return default_int
+
+        return size
 
     @property
     def upload_allowed_extensions(self) -> list:
         # Allowed file extensions
-        extensions = os.getenv("UPLOAD_ALLOWED_EXTENSIONS", "pdf,mp3,wav,txt,m4a")
-        return [ext.strip().lower() for ext in extensions.split(",")]
+        extensions_str = os.getenv("UPLOAD_ALLOWED_EXTENSIONS", "pdf,mp3,wav,txt,m4a")
+
+        if not extensions_str or extensions_str.strip() == "":
+            if self.is_production:
+                raise ConfigurationError(
+                    "UPLOAD_ALLOWED_EXTENSIONS cannot be empty. Please specify allowed file extensions."
+                )
+            else:
+                print(
+                    "⚠️  Warning: UPLOAD_ALLOWED_EXTENSIONS is empty. Using default extensions."
+                )
+                extensions_str = "pdf,mp3,wav,txt,m4a"
+
+        try:
+            extensions = [ext.strip().lower() for ext in extensions_str.split(",")]
+            # Remove empty extensions
+            extensions = [ext for ext in extensions if ext]
+
+            if not extensions:
+                if self.is_production:
+                    raise ConfigurationError(
+                        "UPLOAD_ALLOWED_EXTENSIONS contains no valid extensions after processing."
+                    )
+                else:
+                    print(
+                        "⚠️  Warning: No valid extensions found. Using default extensions."
+                    )
+                    return ["pdf", "mp3", "wav", "txt", "m4a"]
+
+            # Validate extension format (no dots, alphanumeric + common chars)
+            import re
+
+            valid_ext_pattern = re.compile(r"^[a-z0-9]+$")
+            invalid_extensions = [
+                ext for ext in extensions if not valid_ext_pattern.match(ext)
+            ]
+
+            if invalid_extensions:
+                if self.is_production:
+                    raise ConfigurationError(
+                        f"Invalid file extensions found: {invalid_extensions}. "
+                        f"Extensions must contain only letters and numbers."
+                    )
+                else:
+                    print(
+                        f"⚠️  Warning: Invalid extensions removed: {invalid_extensions}"
+                    )
+                    extensions = [
+                        ext for ext in extensions if valid_ext_pattern.match(ext)
+                    ]
+
+            # Warn if common extensions are missing in development
+            if self.is_development:
+                recommended_extensions = {"pdf", "mp3", "wav", "txt", "m4a"}
+                missing_recommended = recommended_extensions - set(extensions)
+                if missing_recommended:
+                    print(
+                        f"⚠️  Notice: Recommended extensions not included: {missing_recommended}"
+                    )
+
+            return extensions
+
+        except Exception as e:
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Error processing UPLOAD_ALLOWED_EXTENSIONS: {e}"
+                )
+            else:
+                print(f"⚠️  Warning: Error processing extensions: {e}. Using defaults.")
+                return ["pdf", "mp3", "wav", "txt", "m4a"]
 
     @property
     def upload_validate_content(self) -> bool:
         # Whether to validate file content (signatures) - can be disabled for performance
-        return os.getenv("UPLOAD_VALIDATE_CONTENT", "true").lower() == "true"
+        validate_str = os.getenv("UPLOAD_VALIDATE_CONTENT", "true").lower()
+
+        if validate_str not in ["true", "false", "1", "0", "yes", "no"]:
+            if self.is_production:
+                raise ConfigurationError(
+                    f"Invalid UPLOAD_VALIDATE_CONTENT value '{validate_str}'. "
+                    f"Must be one of: true, false, 1, 0, yes, no"
+                )
+            else:
+                print(
+                    f"⚠️  Warning: Invalid UPLOAD_VALIDATE_CONTENT value '{validate_str}'. Using default 'true'."
+                )
+                validate_str = "true"
+
+        # More permissive in development for faster testing
+        if self.is_development and validate_str == "true":
+            print(
+                "💡 Tip: Set UPLOAD_VALIDATE_CONTENT=false in development to speed up file uploads during testing."
+            )
+
+        return validate_str in ["true", "1", "yes"]
 
     @property
     def upload_directory(self) -> str:
         # Directory for storing uploaded files
-        return os.getenv("UPLOAD_DIRECTORY", "uploads")
+        directory = os.getenv("UPLOAD_DIRECTORY", "uploads").strip()
+
+        if not directory:
+            if self.is_production:
+                raise ConfigurationError(
+                    "UPLOAD_DIRECTORY cannot be empty. Please specify a valid directory path."
+                )
+            else:
+                print("⚠️  Warning: UPLOAD_DIRECTORY is empty. Using default 'uploads'.")
+                directory = "uploads"
+
+        # Security validation: prevent path traversal
+        if ".." in directory:
+            raise ConfigurationError(
+                f"UPLOAD_DIRECTORY '{directory}' contains path traversal sequences (..). "
+                f"This is a security risk and not allowed."
+            )
+
+        # Prevent absolute paths for security
+        if os.path.isabs(directory):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_DIRECTORY '{directory}' is an absolute path. "
+                    f"Please use relative paths for security."
+                )
+            else:
+                print(
+                    f"⚠️  Warning: UPLOAD_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
+                )
+
+        # Validate directory name format
+        if (
+            not directory.replace("_", "")
+            .replace("-", "")
+            .replace("/", "")
+            .replace("\\", "")
+            .isalnum()
+        ):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"UPLOAD_DIRECTORY '{directory}' contains invalid characters. "
+                    f"Use only letters, numbers, hyphens, underscores, and path separators."
+                )
+            else:
+                print(
+                    f"⚠️  Warning: UPLOAD_DIRECTORY '{directory}' contains potentially problematic characters."
+                )
+
+        return directory
 
     @property
     def temp_directory(self) -> str:
         # Directory for temporary file chunks during processing
-        return os.getenv("TEMP_DIRECTORY", "temp_chunks")
+        directory = os.getenv("TEMP_DIRECTORY", "temp_chunks").strip()
+
+        if not directory:
+            if self.is_production:
+                raise ConfigurationError(
+                    "TEMP_DIRECTORY cannot be empty. Please specify a valid directory path."
+                )
+            else:
+                print(
+                    "⚠️  Warning: TEMP_DIRECTORY is empty. Using default 'temp_chunks'."
+                )
+                directory = "temp_chunks"
+
+        # Security validation: prevent path traversal
+        if ".." in directory:
+            raise ConfigurationError(
+                f"TEMP_DIRECTORY '{directory}' contains path traversal sequences (..). "
+                f"This is a security risk and not allowed."
+            )
+
+        # Prevent absolute paths for security
+        if os.path.isabs(directory):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"TEMP_DIRECTORY '{directory}' is an absolute path. "
+                    f"Please use relative paths for security."
+                )
+            else:
+                print(
+                    f"⚠️  Warning: TEMP_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
+                )
+
+        # Validate directory name format
+        if (
+            not directory.replace("_", "")
+            .replace("-", "")
+            .replace("/", "")
+            .replace("\\", "")
+            .isalnum()
+        ):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"TEMP_DIRECTORY '{directory}' contains invalid characters. "
+                    f"Use only letters, numbers, hyphens, underscores, and path separators."
+                )
+            else:
+                print(
+                    f"⚠️  Warning: TEMP_DIRECTORY '{directory}' contains potentially problematic characters."
+                )
+
+        return directory
 
     # Logging Configuration
     @property
@@ -397,26 +751,43 @@ class Settings:
         if self.workers < 1:
             errors.append(f"Invalid worker count: {self.workers}. Must be at least 1.")
 
-        # File size validation
-        if self.upload_max_size <= 0:
-            errors.append(
-                f"Invalid upload max size: {self.upload_max_size}. Must be positive."
-            )
+        # File upload configuration validation
+        # Access properties to trigger their enhanced validation
+        try:
+            # Validate all file size limits by accessing them
+            _ = self.upload_max_size
+            _ = self.upload_max_size_pdf
+            _ = self.upload_max_size_audio
+            _ = self.upload_max_size_wav
+            _ = self.upload_max_size_text
 
-        # Directory path validation
-        if not self.upload_directory or self.upload_directory.strip() == "":
-            errors.append("Upload directory cannot be empty.")
-        else:
-            # Check for path traversal attempts
-            if ".." in self.upload_directory or self.upload_directory.startswith("/"):
-                errors.append("Upload directory cannot contain '..' or start with '/'.")
+            # Validate other upload configurations
+            _ = self.upload_allowed_extensions
+            _ = self.upload_validate_content
+            _ = self.upload_directory
+            _ = self.temp_directory
 
-        if not self.temp_directory or self.temp_directory.strip() == "":
-            errors.append("Temp directory cannot be empty.")
-        else:
-            # Check for path traversal attempts
-            if ".." in self.temp_directory or self.temp_directory.startswith("/"):
-                errors.append("Temp directory cannot contain '..' or start with '/'.")
+            # Additional logical validation
+            if self.upload_max_size_pdf > self.upload_max_size:
+                warnings.append(
+                    f"PDF size limit ({self.upload_max_size_pdf // 1024 // 1024}MB) is larger than "
+                    f"general upload limit ({self.upload_max_size // 1024 // 1024}MB)."
+                )
+
+            if self.upload_max_size_text > self.upload_max_size:
+                warnings.append(
+                    f"Text size limit ({self.upload_max_size_text // 1024 // 1024}MB) is larger than "
+                    f"general upload limit ({self.upload_max_size // 1024 // 1024}MB)."
+                )
+
+            if len(self.upload_allowed_extensions) == 0:
+                errors.append("No file extensions are allowed for upload.")
+
+        except ConfigurationError as e:
+            # ConfigurationError from properties should bubble up
+            raise e
+        except Exception as e:
+            errors.append(f"File upload configuration validation failed: {e}")
         # Report errors and warnings
         if warnings:
             print("⚠️  Configuration Warnings:")

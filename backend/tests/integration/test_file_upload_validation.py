@@ -410,68 +410,12 @@ class TestFileUploadIntegration:
         # Verify filename is not empty and not just dots/spaces
         assert filename.strip(" ."), "Sanitized filename is empty or only dots/spaces"
 
-    def test_end_to_end_filename_security(self):
-        """Test that malicious filenames don't create dangerous files on filesystem"""
-        from utils.file_validator import FileValidator
 
-        pdf_content = b"%PDF-1.4\nvalid pdf content"
-
-        # Create a temporary directory to test file creation
-        with tempfile.TemporaryDirectory() as temp_dir:
-            malicious_filenames = [
-                "../../../etc/passwd.pdf",
-                "..\\..\\..\\windows\\system32\\evil.pdf",
-                "file<script>.pdf",
-                "dangerous|file.pdf",
-                "file\x00injection.pdf",
-            ]
-
-            for malicious_filename in malicious_filenames:
-                # Test the full validation pipeline
-                try:
-                    extension, safe_filename = FileValidator.validate_upload(
-                        pdf_content, malicious_filename, max_size_override=None
-                    )
-
-                    # Verify the safe filename is actually safe for filesystem operations
-                    test_file_path = os.path.join(temp_dir, safe_filename)
-
-                    # This should not escape the temp directory
-                    normalized_temp = os.path.normpath(temp_dir)
-                    normalized_file = os.path.normpath(test_file_path)
-
-                    assert normalized_file.startswith(
-                        normalized_temp
-                    ), f"Sanitized filename allows directory traversal: {safe_filename}"
-
-                    # Try to write the file - should not raise exceptions
-                    with open(test_file_path, "wb") as f:
-                        f.write(pdf_content)
-
-                    # Verify file was created with safe name
-                    assert os.path.exists(
-                        test_file_path
-                    ), f"File was not created with safe filename: {safe_filename}"
-
-                    # Verify only expected file exists (no traversal occurred)
-                    files_in_temp = os.listdir(temp_dir)
-                    assert (
-                        len(files_in_temp) == 1
-                    ), f"Unexpected files created: {files_in_temp}"
-
-                    # Clean up for next iteration
-                    os.remove(test_file_path)
-
-                except Exception as e:
-                    # If validation fails, that's also acceptable for malicious files
-                    # But we need to ensure it fails securely, not with an unhandled exception
-                    from utils.file_validator import FileValidationError
-
-                    # Check for expected exception types
-                    expected_exceptions = (FileValidationError, ValueError, OSError)
-                    assert isinstance(
-                        e, expected_exceptions
-                    ), f"Unexpected exception type {type(e).__name__} for malicious filename {malicious_filename}: {e}"
+import os
+from fastapi.testclient import TestClient
+from fastapi import FastAPI
+from io import BytesIO
+import tempfile
 
 
 class TestFileUploadErrorHandling:

@@ -24,6 +24,24 @@ def download_nltk_data():
     This ensures compatibility with containerized environments where the home directory
     may not be writable.
     """
+
+    def get_package_path(package):
+        """
+        Determine the correct NLTK data path for a given package.
+
+        Args:
+            package (str): The NLTK package name
+
+        Returns:
+            str: The path to search for the package
+        """
+        if "punkt" in package:
+            return f"tokenizers/{package}"
+        elif package in ["stopwords", "wordnet", "omw-1.4"]:
+            return f"corpora/{package}"
+        else:
+            return f"taggers/{package}"
+
     try:
         import nltk
 
@@ -66,13 +84,9 @@ def download_nltk_data():
         for package in required_packages:
             try:
                 result = nltk.download(package, quiet=True, download_dir=nltk_data_dir)
-                # Determine the correct path based on package type
-                if "punkt" in package:
-                    nltk.data.find(f"tokenizers/{package}")
-                elif package in ["stopwords", "wordnet", "omw-1.4"]:
-                    nltk.data.find(f"corpora/{package}")
-                else:
-                    nltk.data.find(f"taggers/{package}")
+                # Verify the download by finding the package
+                package_path = get_package_path(package)
+                nltk.data.find(package_path)
                 downloaded.append(package)
                 print(f"✓ Downloaded: {package}")
             except Exception as e:
@@ -91,15 +105,8 @@ def download_nltk_data():
         missing = []
         for package in required_packages:
             try:
-                (
-                    nltk.data.find(f"tokenizers/{package}")
-                    if "punkt" in package
-                    else (
-                        nltk.data.find(f"corpora/{package}")
-                        if package in ["stopwords", "wordnet", "omw-1.4"]
-                        else nltk.data.find(f"taggers/{package}")
-                    )
-                )
+                package_path = get_package_path(package)
+                nltk.data.find(package_path)
                 print(f"✓ Verified: {package}")
             except LookupError:
                 missing.append(package)

@@ -22,7 +22,7 @@ export interface HealthStatus {
 }
 
 class NetworkUtils {
-  private static instance: NetworkUtils;
+  private static instances: Map<string, NetworkUtils> = new Map();
   private healthStatus: HealthStatus = {
     isOnline: true,
     lastChecked: new Date(),
@@ -37,10 +37,22 @@ class NetworkUtils {
   }
 
   public static getInstance(baseUrl: string): NetworkUtils {
-    if (!NetworkUtils.instance) {
-      NetworkUtils.instance = new NetworkUtils(baseUrl);
+    // Check if an instance already exists for this baseUrl
+    if (!NetworkUtils.instances.has(baseUrl)) {
+      NetworkUtils.instances.set(baseUrl, new NetworkUtils(baseUrl));
     }
-    return NetworkUtils.instance;
+    return NetworkUtils.instances.get(baseUrl)!;
+  }
+
+  /**
+   * Clear all instances (useful for testing or cleanup)
+   */
+  public static clearInstances(): void {
+    // Stop health checks for all instances before clearing
+    NetworkUtils.instances.forEach(instance => {
+      instance.stopHealthCheck();
+    });
+    NetworkUtils.instances.clear();
   }
 
   /**

@@ -13,7 +13,7 @@ python-multipart==0.0.6
 
 # Lightweight alternatives (if you don't need full ML features)
 # Use these instead of the heavy ML libraries for development/testing
-requests==2.32.3
+requests==2.32.4
 aiofiles==24.1.0
 
 # Optional: Only install if you need audio processing

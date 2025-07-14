@@ -85,10 +85,13 @@ export const useNetworkStatus = () => {
     });
   }, [performHealthCheck]);
 
+  // Extract stable API base URL to avoid config object dependency
+  const apiBaseUrl = config.getApiBaseUrl();
+
   useEffect(() => {
     // Initialize network utils
     try {
-      networkUtils.current = NetworkUtils.getInstance(config.getApiBaseUrl());
+      networkUtils.current = NetworkUtils.getInstance(apiBaseUrl);
     } catch (error) {
       console.error('Failed to initialize NetworkUtils:', error);
       setConnectionState(prev => ({
@@ -99,9 +102,6 @@ export const useNetworkStatus = () => {
       }));
       return;
     }
-
-    // …rest of the effect…
-  }, [config]);
 
     const checkBackendHealthInternal = async () => {
       const healthStatus = await performHealthCheck();
@@ -150,7 +150,7 @@ export const useNetworkStatus = () => {
       }
       networkUtils.current?.stopHealthCheck();
     };
-  }, [performHealthCheck, scheduleRetryInternal]);
+  }, [apiBaseUrl, performHealthCheck, scheduleRetryInternal]);
 
   const forceHealthCheck = useCallback(async () => {
     await performHealthCheck();

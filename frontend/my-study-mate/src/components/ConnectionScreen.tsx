@@ -14,6 +14,73 @@ export interface ConnectionScreenProps {
 }
 
 /**
+ * Styles for the ConnectionScreen component
+ */
+const styles = {
+  container: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    fontFamily: '"Outfit", sans-serif',
+    background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
+    color: '#fff'
+  },
+  logo: {
+    fontSize: '3rem',
+    marginBottom: '1rem',
+    textAlign: 'center' as const
+  },
+  statusMessage: {
+    textAlign: 'center' as const,
+    marginBottom: '3rem'
+  },
+  gradientText: {
+    fontSize: '1.5rem',
+    marginBottom: '1rem',
+    background: 'linear-gradient(135deg, hsl(185, 100%, 70%), hsl(315, 100%, 70%))',
+    backgroundClip: 'text',
+    color: 'transparent',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  animatedDots: {
+    fontSize: '1.2rem',
+    color: '#888'
+  },
+  statusDetails: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: '16px',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    padding: '2rem',
+    backdropFilter: 'blur(10px)',
+    textAlign: 'center' as const,
+    maxWidth: '400px',
+    marginBottom: '2rem'
+  },
+  retryButton: {
+    background: 'linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))',
+    border: 'none',
+    borderRadius: '12px',
+    padding: '1rem 2rem',
+    color: '#fff',
+    fontSize: '1.1rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    boxShadow: '0 4px 20px rgba(0, 150, 255, 0.3)',
+    fontFamily: 'inherit'
+  },
+  footer: {
+    marginTop: '3rem',
+    color: '#666',
+    fontSize: '0.9rem',
+    textAlign: 'center' as const
+  }
+};
+
+/**
  * Connection screen component that displays connection status and retry options
  * Shown when the app is initializing or when the backend is unreachable
  */
@@ -23,28 +90,14 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
   forceHealthCheck
 }) => {
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      fontFamily: '"Outfit", sans-serif',
-      background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
-      color: '#fff'
-    }}>
+    <div style={styles.container}>
       {/* Logo/Branding */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="label"
-        style={{ 
-          fontSize: '3rem',
-          marginBottom: '1rem',
-          textAlign: 'center'
-        }}
+        style={styles.logo}
       >
         MyStudyMate
       </motion.div>
@@ -54,24 +107,14 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
-        style={{
-          textAlign: 'center',
-          marginBottom: '3rem'
-        }}
+        style={styles.statusMessage}
       >
-        <div style={{
-          fontSize: '1.5rem',
-          marginBottom: '1rem',
-          background: 'linear-gradient(135deg, hsl(185, 100%, 70%), hsl(315, 100%, 70%))',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text'
-        }}>
+        <div style={styles.gradientText}>
           Connecting to StudyMate...
         </div>
         
         {/* Animated dots */}
-        <div style={{ fontSize: '1.2rem', color: '#888' }}>
+        <div style={styles.animatedDots}>
           <motion.span
             animate={{ opacity: [0.3, 1, 0.3] }}
             transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
@@ -99,16 +142,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.4 }}
-        style={{
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          padding: '2rem',
-          backdropFilter: 'blur(10px)',
-          textAlign: 'center',
-          maxWidth: '400px',
-          marginBottom: '2rem'
-        }}
+        style={styles.statusDetails}
       >
         <div style={{ marginBottom: '1rem', fontSize: '1.1rem' }}>
           {!navigator.onLine ? (
@@ -159,18 +193,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={forceHealthCheck}
-        style={{
-          background: 'linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))',
-          border: 'none',
-          borderRadius: '12px',
-          padding: '1rem 2rem',
-          color: '#fff',
-          fontSize: '1.1rem',
-          fontWeight: '600',
-          cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(0, 150, 255, 0.3)',
-          fontFamily: 'inherit'
-        }}
+        style={styles.retryButton}
       >
         🔄 Retry Connection
       </motion.button>
@@ -180,12 +203,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.8 }}
-        style={{
-          marginTop: '3rem',
-          color: '#666',
-          fontSize: '0.9rem',
-          textAlign: 'center'
-        }}
+        style={styles.footer}
       >
         StudyMate automatically retries the connection every few seconds.
       </motion.div>
