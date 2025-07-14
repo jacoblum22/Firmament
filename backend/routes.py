@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime
 from config import settings
 from utils.file_validator import FileValidator, FileValidationError
+from utils.error_messages import ErrorMessages
 
 
 # Lazy import with fallback for testing environments
@@ -270,13 +271,23 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
 
                 except FileNotFoundError as e:
                     if "ffmpeg" in str(e).lower():
-                        return {
-                            "error": "FFmpeg is not installed or not found in PATH. Please install FFmpeg and ensure it's in your system PATH.",
-                            "details": str(e),
-                        }
-                    return {"error": f"File not found: {str(e)}"}
+                        error_info = ErrorMessages.get_user_friendly_error(
+                            "ffmpeg_missing", str(e), {"file_type": ext}
+                        )
+                        set_status(job_id, stage="error", error=error_info["error"])
+                        return error_info
+
+                    error_info = ErrorMessages.get_user_friendly_error(
+                        "file_not_found", str(e), {"file_type": ext}
+                    )
+                    set_status(job_id, stage="error", error=error_info["error"])
+                    return error_info
                 except Exception as e:
-                    return {"error": f"Error processing audio: {str(e)}"}
+                    error_info = ErrorMessages.get_user_friendly_error(
+                        "audio_conversion_failed", str(e), {"file_type": ext}
+                    )
+                    set_status(job_id, stage="error", error=error_info["error"])
+                    return error_info
                 finally:
                     # Clean up converted wav file if it was created
                     if ext == "m4a" and file_location.endswith(".wav"):
@@ -316,12 +327,29 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             )
         except Exception as e:
             print(f"[{job_id[:8]}] [ERROR]: {e}")
-            set_status(job_id, stage="error", error=str(e))
+            error_info = ErrorMessages.get_user_friendly_error(
+                "processing_failed", str(e), {"filename": filename}
+            )
+            ErrorMessages.log_error_for_monitoring(
+                "file_processing_error",
+                str(e),
+                {"job_id": job_id, "filename": filename},
+            )
+            set_status(job_id, stage="error", error=error_info["error"])
 
     # Validate file extension before processing
     ext = filename.split(".")[-1].lower()
     if ext not in ["pdf", "mp3", "wav", "txt", "m4a"]:
-        return {"error": "Unsupported file type."}
+        error_info = ErrorMessages.get_user_friendly_error(
+            "invalid_request",
+            f"Unsupported file type: .{ext}",
+            {"supported_types": ["pdf", "mp3", "wav", "txt", "m4a"]},
+        )
+        return {
+            "error": f"Unsupported file type: .{ext}. Supported formats: PDF, MP3, WAV, TXT, M4A",
+            "details": "Please convert your file to one of the supported formats and try again.",
+            "supported_formats": ["pdf", "mp3", "wav", "txt", "m4a"],
+        }
 
     # Start background task and pass the raw data
     background_tasks.add_task(process_file, file_bytes, filename, safe_filename)
@@ -504,7 +532,17 @@ def generate_headings(data: dict):
             processed_data = json.load(f)
             chunks = processed_data.get("segments", [])
     else:
-        return {"error": f"Chunks not found for filename: {filename}"}
+        error_info = ErrorMessages.get_user_friendly_error(
+            "file_not_found",
+            f"Chunks not found for filename: {filename}",
+            {"filename": filename},
+        )
+        return {
+            "error": "We couldn't find the processed data for your file.",
+            "details": "The file may need to be re-uploaded and processed.",
+            "user_action": "Please upload your file again to generate topics.",
+            "filename": filename,
+        }
 
     # Run BERTopic
     process_with_bertopic = get_bertopic_processor()
@@ -540,13 +578,21 @@ def expand_cluster(data: dict):
     cluster_id = data.get("cluster_id")
 
     if full_filename is None or cluster_id is None:
-        return {"error": "Filename and cluster ID are required."}
+        return {
+            "error": "Missing required information",
+            "details": "Both filename and cluster ID are required to expand content.",
+            "user_action": "Please make sure you've selected a valid topic to expand."
+        }
 
     # Validate and convert cluster_id to int if possible
     try:
         cluster_id = int(cluster_id)
     except (ValueError, TypeError):
-        return {"error": "cluster_id must be an integer."}
+        return {
+            "error": "Invalid cluster selection",
+            "details": "The selected topic couldn't be identified properly.",
+            "user_action": "Please try selecting the topic again."
+        }
 
     # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
     processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
@@ -594,7 +640,9 @@ def debug_bullet_point_endpoint(data: dict):
 
     if not bullet_point or not chunks or not topics:
         return {
-            "error": "Missing required fields: 'bullet_point', 'chunks', or 'topics'."
+            "error": "Missing information for analysis",
+            "details": "We need the bullet point text and topic data to perform the analysis.",
+            "user_action": "Please make sure you've selected a valid bullet point from a generated topic.",
         }
 
     try:
@@ -623,7 +671,14 @@ def debug_bullet_point_endpoint(data: dict):
 
         return result
     except Exception as e:
-        return {"error": f"Failed to debug bullet point: {str(e)}"}
+        error_info = ErrorMessages.get_user_friendly_error(
+            "processing_failed", str(e), {"operation": "bullet point analysis"}
+        )
+        return {
+            "error": "We couldn't analyze this bullet point",
+            "details": "There was an issue processing the content analysis.",
+            "user_action": "Please try again or select a different bullet point.",
+        }
 
 
 @router.post("/expand-bullet-point")

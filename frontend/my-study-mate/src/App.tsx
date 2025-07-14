@@ -7,6 +7,7 @@ import config from './config';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
+import ErrorDisplay from './components/ErrorDisplay';
 import apiService, { 
   TopicResponse, 
   UploadResponse, 
@@ -180,27 +181,56 @@ function App() {
   const validateFile = (file: File): string | null => {
     // Check if file object is valid
     if (!file || !(file instanceof File)) {
-      return 'Invalid file object.';
+      return JSON.stringify({
+        error: 'Invalid file selection',
+        details: 'The file could not be read properly.',
+        user_action: 'Please try selecting the file again.',
+        error_code: 'invalid_file'
+      });
     }
 
     // Check file size
     if (file.size > FILE_VALIDATION.MAX_SIZE_BYTES) {
-      return `File too large. Maximum size: ${FILE_VALIDATION.MAX_SIZE_MB}MB, your file: ${(file.size / (1024 * 1024)).toFixed(1)}MB`;
+      const maxMB = FILE_VALIDATION.MAX_SIZE_MB;
+      const actualMB = (file.size / (1024 * 1024)).toFixed(1);
+      return JSON.stringify({
+        error: `File too large for upload`,
+        details: `Your file is ${actualMB}MB, but the maximum allowed size is ${maxMB}MB.`,
+        user_action: "Try compressing your file or uploading a smaller version.",
+        error_code: "file_too_large"
+      });
     }
 
     // Check if file is empty
     if (file.size === 0) {
-      return 'File is empty. Please select a valid file.';
+      return JSON.stringify({
+        error: "File is empty",
+        details: "The selected file contains no data.",
+        user_action: "Please select a different file that contains content.",
+        error_code: "empty_file"
+      });
     }
 
     // Extract and validate file extension
     const fileExtension = getFileExtension(file.name);
     if (!fileExtension) {
-      return `Unable to determine file type. Please ensure your file has a valid extension. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
+      return JSON.stringify({
+        error: "Unable to determine file type",
+        details: "Your file doesn't have a recognizable extension.",
+        user_action: `Please rename your file to include a valid extension: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`,
+        error_code: "missing_extension",
+        supported_formats: FILE_VALIDATION.ALLOWED_EXTENSIONS
+      });
     }
 
     if (!(FILE_VALIDATION.ALLOWED_EXTENSIONS as readonly string[]).includes(fileExtension)) {
-      return `Unsupported file type: ${fileExtension}. Supported types: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`;
+      return JSON.stringify({
+        error: `Unsupported file type: ${fileExtension}`,
+        details: "This file format isn't supported by our system.",
+        user_action: "Please convert your file to a supported format and try again.",
+        error_code: "unsupported_format",
+        supported_formats: FILE_VALIDATION.ALLOWED_EXTENSIONS
+      });
     }
 
     return null; // No errors
@@ -234,7 +264,13 @@ function App() {
         total_words: data.total_words,
       });
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to process chunks.");
+      const errorMessage = error instanceof Error ? error.message : "We couldn't process your file chunks. Please try again.";
+      setError(JSON.stringify({
+        error: "Processing failed",
+        details: errorMessage,
+        user_action: "Please try uploading your file again.",
+        error_code: "chunk_processing_failed"
+      }));
     }
   };
 
@@ -250,7 +286,13 @@ function App() {
       // Load saved expansions when topics are loaded
       loadSavedExpansions(data);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to generate headings.");
+      const errorMessage = error instanceof Error ? error.message : "We couldn't generate topics for your content.";
+      setError(JSON.stringify({
+        error: "Topic generation failed",
+        details: errorMessage,
+        user_action: "Please ensure your file contains enough text content and try again.",
+        error_code: "topic_generation_failed"
+      }));
     } finally {
       setGeneratingHeadings(false);
     }
@@ -263,7 +305,12 @@ function App() {
     if (droppedFiles.length === 0) return;
 
     if (droppedFiles.length > 1) {
-      setError("Please upload only one file at a time.");
+      setError(JSON.stringify({
+        error: "Multiple files detected",
+        details: "You can only upload one file at a time.",
+        user_action: "Please select just one file and try again.",
+        error_code: "multiple_files"
+      }));
       return;
     }
 
@@ -296,6 +343,17 @@ function App() {
           const parsed = JSON.parse(event.data);
           setStatus(parsed);
 
+          // Handle server errors
+          if (parsed.stage === "error") {
+            const serverError = parsed.error || "An error occurred during processing";
+            setError(JSON.stringify({
+              error: "Processing failed",
+              details: serverError,
+              user_action: "Please try uploading your file again.",
+              error_code: "server_processing_error"
+            }));
+          }
+
           // Once done, set final result into response state
           if (parsed.stage === "done" && parsed.result) {
             setResponse(parsed.result);
@@ -314,10 +372,21 @@ function App() {
         };
         evt.onerror = () => {
           evt.close();
-          setError("Lost connection to server. Please check your network connection and try again.");
+          setError(JSON.stringify({
+            error: "Connection lost",
+            details: "We lost connection to the server while processing your file.",
+            user_action: "Please check your internet connection and try uploading again.",
+            error_code: "connection_lost"
+          }));
         };
       } catch (error) {
-        setError(error instanceof Error ? error.message : "Upload failed. Please try again.");
+        const errorMessage = error instanceof Error ? error.message : "Upload failed";
+        setError(JSON.stringify({
+          error: "Upload failed",
+          details: errorMessage,
+          user_action: "Please check your internet connection and try again.",
+          error_code: "upload_failed"
+        }));
       } finally {
         setLoading(false);
       }
@@ -1138,7 +1207,21 @@ function App() {
               </div>
             </div>
 
-            {error && <p style={{ color: "red" }}>{error}</p>}
+            <ErrorDisplay 
+              error={error} 
+              onDismiss={() => setError(null)}
+              className="mb-4"
+              actionButton={
+                error?.includes("upload") ? {
+                  label: "Try Again",
+                  action: () => {
+                    setError(null);
+                    setFile(null);
+                    setResponse(null);
+                  }
+                } : undefined
+              }
+            />
 
             <AnimatePresence
               onExitComplete={() => {
