@@ -8,6 +8,9 @@ from fastapi import BackgroundTasks
 import asyncio
 from datetime import datetime
 from utils.bullet_point_debugger import debug_bullet_point
+from utils.cleanup_scheduler import get_cleanup_status, manual_cleanup
+from utils.file_manager import FileManager
+from fastapi import HTTPException
 
 router = APIRouter()
 
@@ -162,6 +165,13 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 # Clean up the original file since we're using cached data
                 try:
                     os.remove(file_location)
+                    
+                    # Trigger light cleanup after using cached data
+                    file_manager = FileManager()
+                    cleanup_results = file_manager.cleanup_temp_chunks()
+                    if cleanup_results.get("deleted", 0) > 0:
+                        print(f"Cleaned up {cleanup_results['deleted']} temporary files")
+                        
                 except Exception as e:
                     print(
                         f"Warning: Failed to remove original file {file_location}: {e}"
@@ -189,6 +199,13 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 # Clean up the original file since we're using cached transcription
                 try:
                     os.remove(file_location)
+                    
+                    # Trigger light cleanup after using cached transcription
+                    file_manager = FileManager()
+                    cleanup_results = file_manager.cleanup_temp_chunks()
+                    if cleanup_results.get("deleted", 0) > 0:
+                        print(f"Cleaned up {cleanup_results['deleted']} temporary files")
+                        
                 except Exception as e:
                     print(
                         f"Warning: Failed to remove original file {file_location}: {e}"
@@ -264,14 +281,24 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             with open(output_file_location, "w", encoding="utf-8") as f:
                 f.write(text.strip())
 
-            # Clean up files
+            # Clean up files using the file manager
             try:
+                file_manager = FileManager()
+                
                 # Remove original file
                 os.remove(file_location)
+                
                 # Remove RNNoise file if it was created
                 if rnnoise_file and os.path.exists(rnnoise_file):
                     os.remove(rnnoise_file)
                     print(f"Deleted RNNoise file: {rnnoise_file}")
+                
+                # Trigger light cleanup of temp files after processing
+                if hasattr(file_manager, 'cleanup_temp_chunks'):
+                    cleanup_results = file_manager.cleanup_temp_chunks()
+                    if cleanup_results.get("deleted", 0) > 0:
+                        print(f"Cleaned up {cleanup_results['deleted']} temporary files")
+                        
             except Exception as e:
                 print(f"Warning: Failed to remove file {file_location}: {e}")
 
@@ -635,3 +662,103 @@ def expand_bullet_point_endpoint(data: dict):
         error_msg = f"Failed to expand bullet point: {str(e)}"
         print(f"[ERROR]: {error_msg}")
         return {"error": error_msg}
+
+
+@router.get("/cleanup/status")
+async def get_cleanup_service_status():
+    """Get the current status of the automated cleanup service."""
+    try:
+        status = get_cleanup_status()
+
+        # Add current directory sizes for context
+        file_manager = FileManager()
+        directory_sizes = {
+            "uploads": file_manager.get_directory_size(file_manager.upload_dir),
+            "output": file_manager.get_directory_size(file_manager.output_dir),
+            "processed": file_manager.get_directory_size(file_manager.processed_dir),
+            "temp_chunks": file_manager.get_directory_size(file_manager.temp_chunks_dir),
+            "rnnoise_output": file_manager.get_directory_size(file_manager.rnnoise_output_dir),
+        }
+
+        status["current_directory_sizes_gb"] = directory_sizes
+        status["total_size_gb"] = sum(directory_sizes.values())
+
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cleanup status: {str(e)}")
+
+
+@router.post("/cleanup/manual/{cleanup_type}")
+async def trigger_manual_cleanup(cleanup_type: str):
+    """
+    Trigger manual cleanup of specified type.
+
+    Args:
+        cleanup_type: "light", "medium", or "deep"
+    """
+    if cleanup_type not in ["light", "medium", "deep"]:
+        raise HTTPException(
+            status_code=400,
+            detail="cleanup_type must be one of: light, medium, deep"
+        )
+
+    try:
+        result = await manual_cleanup(cleanup_type)
+        return {
+            "message": f"{cleanup_type.title()} cleanup triggered successfully",
+            "cleanup_type": cleanup_type,
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error triggering cleanup: {str(e)}")
+
+
+@router.get("/cleanup/directories")
+async def get_directory_info():
+    """Get detailed information about all managed directories."""
+    try:
+        file_manager = FileManager()
+
+        directory_info = {}
+        directories = {
+            "uploads": file_manager.upload_dir,
+            "output": file_manager.output_dir,
+            "processed": file_manager.processed_dir,
+            "temp_chunks": file_manager.temp_chunks_dir,
+            "rnnoise_output": file_manager.rnnoise_output_dir,
+        }
+
+        for name, path in directories.items():
+            if path.exists():
+                file_count = len(list(path.glob("*"))) if path.is_dir() else 0
+                size_gb = file_manager.get_directory_size(path)
+                max_size_gb = file_manager.max_directory_sizes_gb.get(name, float('inf'))
+
+                directory_info[name] = {
+                    "path": str(path),
+                    "exists": True,
+                    "file_count": file_count,
+                    "size_gb": round(size_gb, 2),
+                    "max_size_gb": max_size_gb if max_size_gb != float('inf') else None,
+                    "usage_percent": round((size_gb / max_size_gb) * 100, 1) if max_size_gb != float('inf') else None
+                }
+            else:
+                directory_info[name] = {
+                    "path": str(path),
+                    "exists": False,
+                    "file_count": 0,
+                    "size_gb": 0,
+                    "max_size_gb": file_manager.max_directory_sizes_gb.get(name, None),
+                    "usage_percent": 0
+                }
+
+        total_size = sum(info["size_gb"] for info in directory_info.values())
+
+        return {
+            "directories": directory_info,
+            "total_size_gb": round(total_size, 2),
+            "cleanup_thresholds": file_manager.max_age_hours,
+            "size_limits_gb": file_manager.max_directory_sizes_gb
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting directory info: {str(e)}")
