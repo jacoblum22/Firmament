@@ -345,11 +345,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             f"Unsupported file type: .{ext}",
             {"supported_types": ["pdf", "mp3", "wav", "txt", "m4a"]},
         )
-        return {
-            "error": f"Unsupported file type: .{ext}. Supported formats: PDF, MP3, WAV, TXT, M4A",
-            "details": "Please convert your file to one of the supported formats and try again.",
-            "supported_formats": ["pdf", "mp3", "wav", "txt", "m4a"],
-        }
+        return error_info
 
     # Start background task and pass the raw data
     background_tasks.add_task(process_file, file_bytes, filename, safe_filename)
@@ -537,12 +533,7 @@ def generate_headings(data: dict):
             f"Chunks not found for filename: {filename}",
             {"filename": filename},
         )
-        return {
-            "error": "We couldn't find the processed data for your file.",
-            "details": "The file may need to be re-uploaded and processed.",
-            "user_action": "Please upload your file again to generate topics.",
-            "filename": filename,
-        }
+        return error_info
 
     # Run BERTopic
     process_with_bertopic = get_bertopic_processor()
@@ -578,21 +569,21 @@ def expand_cluster(data: dict):
     cluster_id = data.get("cluster_id")
 
     if full_filename is None or cluster_id is None:
-        return {
-            "error": "Missing required information",
-            "details": "Both filename and cluster ID are required to expand content.",
-            "user_action": "Please make sure you've selected a valid topic to expand."
-        }
+        return ErrorMessages.get_user_friendly_error(
+            "invalid_request",
+            "Missing filename or cluster_id",
+            {"operation": "cluster expansion", "required_fields": ["filename", "cluster_id"]}
+        )
 
     # Validate and convert cluster_id to int if possible
     try:
         cluster_id = int(cluster_id)
     except (ValueError, TypeError):
-        return {
-            "error": "Invalid cluster selection",
-            "details": "The selected topic couldn't be identified properly.",
-            "user_action": "Please try selecting the topic again."
-        }
+        return ErrorMessages.get_user_friendly_error(
+            "invalid_request",
+            f"Invalid cluster_id format: {cluster_id}",
+            {"operation": "cluster expansion", "expected_type": "integer", "received_value": str(cluster_id)}
+        )
 
     # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
     processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
@@ -639,11 +630,14 @@ def debug_bullet_point_endpoint(data: dict):
     topics = data.get("topics", {})
 
     if not bullet_point or not chunks or not topics:
-        return {
-            "error": "Missing information for analysis",
-            "details": "We need the bullet point text and topic data to perform the analysis.",
-            "user_action": "Please make sure you've selected a valid bullet point from a generated topic.",
-        }
+        return ErrorMessages.get_user_friendly_error(
+            "invalid_request",
+            "Missing bullet_point, chunks, or topics",
+            {
+                "operation": "bullet point analysis",
+                "required_fields": ["bullet_point", "chunks", "topics"],
+            },
+        )
 
     try:
         debug_bullet_point = get_bullet_point_debugger()
@@ -674,11 +668,7 @@ def debug_bullet_point_endpoint(data: dict):
         error_info = ErrorMessages.get_user_friendly_error(
             "processing_failed", str(e), {"operation": "bullet point analysis"}
         )
-        return {
-            "error": "We couldn't analyze this bullet point",
-            "details": "There was an issue processing the content analysis.",
-            "user_action": "Please try again or select a different bullet point.",
-        }
+        return error_info
 
 
 @router.post("/expand-bullet-point")
