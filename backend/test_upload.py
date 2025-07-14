@@ -2,6 +2,7 @@
 
 import requests
 import os
+import json
 
 
 def test_upload():
@@ -34,7 +35,7 @@ def test_upload():
                 try:
                     error_data = response.json()
                     print(f"Error details: {error_data}")
-                except:
+                except (ValueError, TypeError, json.JSONDecodeError):
                     print(f"Raw error response: {response.text}")
             elif response.status_code == 200:
                 print("\n✅ Upload successful!")

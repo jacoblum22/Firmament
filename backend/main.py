@@ -56,10 +56,10 @@ app = FastAPI(
 @app.middleware("http")
 async def debug_upload_requests(request: Request, call_next):
     if request.url.path == "/upload":
-        print(f"[DEBUG] Upload request to {request.url.path}")
-        print(f"[DEBUG] Method: {request.method}")
-        print(f"[DEBUG] Headers: {dict(request.headers)}")
-        print(f"[DEBUG] Content-Type: {request.headers.get('content-type', 'Not set')}")
+        logger.debug(f"Upload request to {request.url.path}")
+        logger.debug(f"Method: {request.method}")
+        logger.debug(f"Headers: {dict(request.headers)}")
+        logger.debug(f"Content-Type: {request.headers.get('content-type', 'Not set')}")
 
     response = await call_next(request)
     return response
