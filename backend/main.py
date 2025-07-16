@@ -135,6 +135,36 @@ elif settings.is_development:
 app.include_router(router)
 
 
+# Startup and shutdown events for cleanup service
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on application startup"""
+    logger.info("Application startup - initializing services...")
+
+    # Start the optional cleanup service
+    try:
+        from utils.cleanup_service import start_cleanup_service
+
+        start_cleanup_service()
+    except Exception as e:
+        logger.error(f"Failed to start cleanup service: {e}")
+        # Don't fail startup if cleanup service fails
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up services on application shutdown"""
+    logger.info("Application shutdown - cleaning up services...")
+
+    # Stop the cleanup service
+    try:
+        from utils.cleanup_service import stop_cleanup_service
+
+        stop_cleanup_service()
+    except Exception as e:
+        logger.error(f"Error stopping cleanup service: {e}")
+
+
 @app.get("/")
 def read_root():
     return {
