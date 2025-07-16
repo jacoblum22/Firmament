@@ -115,7 +115,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
         print(f"[{job_id[:8]}] Failed to read file: {e}")
         raise HTTPException(
             status_code=400, detail=f"Failed to read uploaded file: {str(e)}"
-        )
+        ) from e
 
     filename = file.filename or "uploaded_file"
 
@@ -128,7 +128,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
         print(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
     except FileValidationError as e:
         print(f"[{job_id[:8]}] File validation failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     def process_file(file_bytes: bytes, filename: str, safe_filename: str):
         try:
@@ -811,7 +811,7 @@ def get_cleanup_status():
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error getting cleanup status: {e}"
-        )
+        ) from e
 
 
 @router.post("/cleanup/run")
@@ -831,4 +831,6 @@ def run_manual_cleanup(dry_run: bool = True):
             "results": results,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error running cleanup: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error running cleanup: {e}"
+        ) from e

@@ -63,10 +63,13 @@ def show_directory_status():
             # Show oldest and newest files
             file_paths = [f for f in files if f.is_file()]
             if file_paths:
+                import time
+
+                current_time = time.time()
                 oldest = min(file_paths, key=lambda f: f.stat().st_mtime)
                 newest = max(file_paths, key=lambda f: f.stat().st_mtime)
-                oldest_age = (Path().stat().st_mtime - oldest.stat().st_mtime) / 86400
-                newest_age = (Path().stat().st_mtime - newest.stat().st_mtime) / 86400
+                oldest_age = (current_time - oldest.stat().st_mtime) / 86400
+                newest_age = (current_time - newest.stat().st_mtime) / 86400
 
                 print(
                     f"{dir_name:15} | {file_count:5} files | {size_mb:8.1f}MB | "
@@ -170,7 +173,7 @@ def main():
         "dry_run": dry_run,
     }
 
-    print(f"\n🧹 StudyMate File Cleanup")
+    print("\n🧹 StudyMate File Cleanup")
     print("=" * 50)
     print(
         f"Mode: {'DRY RUN (no files will be deleted)' if dry_run else 'REAL CLEANUP (files will be deleted)'}"
@@ -193,7 +196,7 @@ def main():
             # Only clean temporary files (safest)
             cleanup = SafeFileCleanup(custom_settings)
             results = cleanup.cleanup_temp_chunks()
-            print(f"\n📊 Temp Cleanup Results:")
+            print("\n📊 Temp Cleanup Results:")
             print(f"   Deleted: {results['deleted']} files")
             print(f"   Skipped: {results['skipped']} files")
             print(f"   Errors: {results['errors']} files")
@@ -204,7 +207,7 @@ def main():
                 dry_run=dry_run, settings=custom_settings
             )
 
-            print(f"\n📊 Full Cleanup Results:")
+            print("\n📊 Full Cleanup Results:")
             print(f"   Total deleted: {results['total_deleted']} files")
             print(f"   Total space freed: {results['total_size_freed_mb']:.1f}MB")
 
@@ -217,7 +220,7 @@ def main():
                         )
 
         if dry_run:
-            print(f"\n💡 To actually delete files, run with --for-real")
+            print("\n💡 To actually delete files, run with --for-real")
 
         print("\n✅ Cleanup completed successfully!")
         return 0

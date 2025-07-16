@@ -3,11 +3,9 @@ Conservative file cleanup utilities for StudyMate v2.
 Focuses on safety and configurable cleanup with multiple safeguards.
 """
 
-import os
 import time
 from pathlib import Path
 from typing import List, Tuple, Optional
-from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -111,7 +109,7 @@ class SafeFileCleanup:
 
     def cleanup_temp_chunks(self) -> dict:
         """Clean up temporary chunk files (most aggressive since these are truly temporary)."""
-        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0}
+        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0.0}
 
         if not self.settings["enable_cleanup"]:
             return results
@@ -141,7 +139,7 @@ class SafeFileCleanup:
                         logger.info(f"DRY RUN: Would delete temp file: {file_path}")
 
                     results["deleted"] += 1
-                    results["size_freed_mb"] += int(file_size_mb)
+                    results["size_freed_mb"] += file_size_mb
 
                 except Exception as e:
                     logger.error(f"Error deleting {file_path}: {e}")
@@ -157,7 +155,7 @@ class SafeFileCleanup:
         self, directory: Path, max_size_mb: int, min_keep: int = 5
     ) -> dict:
         """Remove oldest files if directory exceeds size limit, but keep minimum number of files."""
-        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0}
+        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0.0}
 
         if not self.settings["enable_cleanup"] or not directory.exists():
             return results
@@ -240,7 +238,7 @@ class SafeFileCleanup:
         self, directory: Path, max_age_days: int, pattern: str = "*"
     ) -> dict:
         """Clean up old files in a directory based on age."""
-        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0}
+        results = {"deleted": 0, "skipped": 0, "errors": 0, "size_freed_mb": 0.0}
 
         if not self.settings["enable_cleanup"] or not directory.exists():
             return results
@@ -273,7 +271,7 @@ class SafeFileCleanup:
                         )
 
                     results["deleted"] += 1
-                    results["size_freed_mb"] += int(file_size_mb)
+                    results["size_freed_mb"] += file_size_mb
 
                 except Exception as e:
                     logger.error(f"Error deleting {file_path}: {e}")
@@ -291,7 +289,7 @@ class SafeFileCleanup:
             logger.info("Cleanup disabled by configuration")
             return {
                 "total_deleted": 0,
-                "total_size_freed_mb": 0,
+                "total_size_freed_mb": 0.0,
                 "cleanup_disabled": True,
             }
 

@@ -138,7 +138,7 @@ curl http://localhost:8000/cleanup/status
 
 ### Review Logs
 Cleanup activities are logged at INFO level:
-```
+```log
 2025-07-16 10:00:00 - INFO - Starting conservative file cleanup...
 2025-07-16 10:00:01 - INFO - Deleted temp file: temp_chunks/chunk_123.wav
 2025-07-16 10:00:01 - INFO - Cleanup complete. Deleted 3 files, freed 45.2MB
