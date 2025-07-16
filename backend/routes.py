@@ -794,3 +794,41 @@ def expand_bullet_point_endpoint(data: dict):
         error_msg = f"Failed to expand bullet point: {str(e)}"
         print(f"[ERROR]: {error_msg}")
         return {"error": error_msg}
+
+
+# Optional cleanup management endpoints (disabled by default for security)
+@router.get("/cleanup/status")
+def get_cleanup_status():
+    """Get cleanup service status (requires debug mode)"""
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="Endpoint not available")
+
+    try:
+        from utils.cleanup_service import get_cleanup_service
+
+        service = get_cleanup_service()
+        return service.get_status()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error getting cleanup status: {e}"
+        )
+
+
+@router.post("/cleanup/run")
+def run_manual_cleanup(dry_run: bool = True):
+    """Run manual cleanup (requires debug mode, defaults to dry run)"""
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="Endpoint not available")
+
+    try:
+        from utils.cleanup_service import get_cleanup_service
+
+        service = get_cleanup_service()
+        results = service.run_manual_cleanup(dry_run=dry_run)
+        return {
+            "message": "Cleanup completed" if not dry_run else "Dry run completed",
+            "dry_run": dry_run,
+            "results": results,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error running cleanup: {e}")
