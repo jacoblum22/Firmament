@@ -1,5 +1,6 @@
 import NetworkUtils, { NetworkError } from '../utils/networkUtils';
 import config from '../config';
+import AIService from './aiService';
 
 // Define proper types for API responses
 export interface UploadResponse {
@@ -310,6 +311,50 @@ class ApiService {
         throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to expand bullet point. Please try again.');
+    }
+  }
+
+  /**
+   * Generate topics using AIService
+   */
+  public async generateTopics(text: string): Promise<TopicResponse> {
+    try {
+      const aiTopics = await AIService.generateTopics(text);
+      const topicResponse: TopicResponse = {
+        num_chunks: aiTopics.topics.length,
+        num_topics: aiTopics.topics.length,
+        total_tokens_used: 0, // Placeholder, adjust as needed
+        topics: aiTopics.topics.reduce((acc: Record<string, Topic>, topic: { title: string; bullets: string[] }) => {
+          acc[topic.title] = {
+            heading: topic.title,
+            bullet_points: topic.bullets,
+            chunks: [],
+            examples: [], // Placeholder for examples
+          };
+          return acc;
+        }, {}),
+      };
+      return topicResponse;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to generate topics: ${error.message}`);
+      }
+      throw new Error('Failed to generate topics due to an unknown error.');
+    }
+  }
+
+  /**
+   * Generate bullet points using AIService
+   */
+  public async generateBullets(topicText: string): Promise<string[]> {
+    try {
+      const bullets = await AIService.generateBullets(topicText);
+      return bullets;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to generate bullets: ${error.message}`);
+      }
+      throw new Error('Failed to generate bullets due to an unknown error.');
     }
   }
 

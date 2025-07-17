@@ -22,6 +22,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.file_cleanup import run_conservative_cleanup, SafeFileCleanup
 import logging
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
+TEMP_CHUNKS_DIR = os.path.join(BASE_DIR, "temp_chunks")
+RNNOISE_OUTPUT_DIR = os.path.join(BASE_DIR, "rnnoise_output")
+
+# Update directory list to use project-relative paths
+directories = [
+    UPLOAD_DIR,
+    OUTPUT_DIR,
+    PROCESSED_DIR,
+    TEMP_CHUNKS_DIR,
+    RNNOISE_OUTPUT_DIR,
+]
+
 
 def setup_logging(verbose: bool = False):
     """Set up logging configuration."""
@@ -33,30 +49,24 @@ def setup_logging(verbose: bool = False):
     )
 
 
+# Update directory status function to use project-relative paths
 def show_directory_status():
     """Show current directory sizes and file counts."""
-    directories = ["uploads", "output", "processed", "temp_chunks", "rnnoise_output"]
-
     print("\n📁 Directory Status:")
     print("=" * 60)
 
     total_size = 0
     total_files = 0
 
-    for dir_name in directories:
-        dir_path = Path(dir_name)
-        if dir_path.exists():
-            files = list(dir_path.rglob("*"))
+    for dir_path in directories:
+        dir_name = os.path.basename(dir_path)
+        if Path(dir_path).exists():
+            files = list(Path(dir_path).rglob("*"))
             file_count = len([f for f in files if f.is_file()])
 
-            size_mb = 0
-            for file_path in files:
-                if file_path.is_file():
-                    try:
-                        size_mb += file_path.stat().st_size / (1024 * 1024)
-                    except Exception:
-                        pass
-
+            size_mb = sum(
+                f.stat().st_size / (1024 * 1024) for f in files if f.is_file()
+            )
             total_size += size_mb
             total_files += file_count
 
