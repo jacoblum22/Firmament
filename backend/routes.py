@@ -10,6 +10,13 @@ from datetime import datetime
 from config import settings
 from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
+from utils.content_cache import get_content_cache
+from typing import Dict, Any
+
+
+# Fallback function for testing environments where utils may not be available
+def fallback_debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
+    return {"error": "bullet_point_debugger not available"}
 
 
 # Lazy import with fallback for testing environments
@@ -19,13 +26,10 @@ def get_bullet_point_debugger():
 
         return debug_bullet_point
     except ImportError:
-        from typing import Dict, Any
-
-        # Fallback function for testing environments where utils may not be available
-        def debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
-            return {"error": "bullet_point_debugger not available"}
-
-        return debug_bullet_point
+        return fallback_debug_bullet_point
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return fallback_debug_bullet_point
 
 
 router = APIRouter()
@@ -134,6 +138,9 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
         try:
             ext = filename.split(".")[-1].lower()
 
+            # Initialize content cache
+            cache = get_content_cache()
+
             # Use safe filename for file operations
             file_location = os.path.join(UPLOAD_DIR, safe_filename)
 
@@ -143,14 +150,79 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
 
             set_status(job_id, stage="preprocessing")
 
-            # Define paths
+            # Check for cached processed data first (most complete cache)
+            cached_processed = cache.get_processed_cache(file_bytes)
+            if cached_processed:
+                print(
+                    f"[{job_id[:8]}] Found cached processed data (content hash: {cached_processed['cache_info']['content_hash'][:8]}...)"
+                )
+
+                segments = cached_processed.get("segments", [])
+                clusters = cached_processed.get("clusters", [])
+                meta = cached_processed.get("meta", {})
+
+                print(
+                    f"[{job_id[:8]}] Loaded from content cache - Segments: {len(segments)}, Clusters: {len(clusters)}"
+                )
+
+                # Sort segments by position to reconstruct full transcript
+                full_text = "\n\n".join(
+                    seg["text"] for seg in sorted(segments, key=lambda x: x["position"])
+                )
+
+                # Convert cluster structure to match TopicResponse in frontend
+                topics = {
+                    str(cluster["cluster_id"]): {
+                        "concepts": cluster.get("concepts", []),
+                        "heading": cluster.get("heading", ""),
+                        "summary": cluster.get("summary", ""),
+                        "keywords": cluster.get("keywords", []),
+                        "examples": cluster.get("examples", []),
+                        "segment_positions": cluster.get("segment_positions", []),
+                        "stats": cluster.get("stats", {}),
+                        "bullet_points": cluster.get("bullet_points", []),
+                        "references": cluster.get("references", []),
+                        "code_snippet": cluster.get("code_snippet", ""),
+                        "video_timestamp": cluster.get("video_timestamp", ""),
+                        "note_summary": cluster.get("note_summary", ""),
+                        "quiz_questions": cluster.get("quiz_questions", []),
+                    }
+                    for cluster in clusters
+                }
+
+                set_status(job_id, stage="done")
+                JOB_STATUS[job_id] = {
+                    "stage": "done",
+                    "filetype": ext,
+                    "text": full_text,
+                    "message": "File processed successfully from cache.",
+                    "topics": topics,
+                    "cache_info": cached_processed["cache_info"],
+                }
+                return
+
+            # Check for cached transcription (partial cache)
+            cached_transcription = cache.get_transcription_cache(file_bytes)
+            if cached_transcription:
+                text = cached_transcription["text"]
+                print(
+                    f"[{job_id[:8]}] Found cached transcription (content hash: {cached_transcription['cache_info']['content_hash'][:8]}...)"
+                )
+                print(
+                    f"[{job_id[:8]}] Using cached transcription, will process into topics..."
+                )
+            else:
+                # No cache found, need to transcribe/extract text
+                print(f"[{job_id[:8]}] No cache found, processing file...")
+
+            # Define paths for legacy compatibility
             base_name = (file.filename or "uploaded_file").rsplit(".", 1)[0]
             output_filename = f"{base_name}_transcription.txt"
             output_file_location = os.path.join(OUTPUT_DIR, output_filename)
             processed_path = os.path.join("processed", f"{base_name}_processed.json")
 
-            # If fully processed JSON exists, reconstruct transcript and load headings
-            if os.path.exists(processed_path):
+            # Check for legacy filename-based cache if no content cache exists
+            if not cached_transcription and os.path.exists(processed_path):
                 with open(processed_path, "r", encoding="utf-8") as f:
                     processed_data = json.load(f)
 
@@ -158,7 +230,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 clusters = processed_data.get("clusters", [])
                 meta = processed_data.get("meta", {})
 
-                print(f"[{job_id[:8]}] Loaded cached JSON: {processed_path}")
+                print(f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}")
                 print(
                     f"[{job_id[:8]}] Segments: {len(segments)}, Clusters: {len(clusters)}"
                 )
@@ -255,69 +327,96 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 )
                 return
 
-            set_status(job_id, stage="transcribing")
+            # Process transcription (use cache if available)
             text = ""
-            rnnoise_file = None  # Track RNNoise file path if created
+            rnnoise_file = None
 
-            # Extract text for PDF files
-            if ext == "pdf":
-                import fitz  # PyMuPDF
+            if cached_transcription:
+                # Use cached transcription
+                text = cached_transcription["text"]
+                print(
+                    f"[{job_id[:8]}] Using cached transcription text ({len(text)} characters)"
+                )
+            else:
+                # No transcription cache, need to process the file
+                set_status(job_id, stage="transcribing")
 
-                with fitz.open(file_location) as doc:
-                    for page in doc:
-                        text += page.get_text()  # type: ignore
+                # Extract text for PDF files
+                if ext == "pdf":
+                    import fitz  # PyMuPDF
 
-            # Extract text for TXT files
-            elif ext == "txt":
-                with open(file_location, "r", encoding="utf-8") as f:
-                    text = f.read()
+                    with fitz.open(file_location) as doc:
+                        for page in doc:
+                            text += page.get_text()  # type: ignore
 
-            # Extract text for audio files
-            elif ext in ["mp3", "wav", "m4a"]:
-                try:
-                    from utils.transcribe_audio import transcribe_audio_in_chunks
+                # Extract text for TXT files
+                elif ext == "txt":
+                    with open(file_location, "r", encoding="utf-8") as f:
+                        text = f.read()
 
-                    # Convert m4a to wav if necessary
-                    if ext == "m4a":
-                        print("Converting m4a to wav...")
-                        file_location = convert_m4a_to_wav(file_location)
-                    text, rnnoise_file = transcribe_audio_in_chunks(
-                        file_location,
-                        progress_callback=lambda current, total: set_status(
-                            job_id, stage="transcribing", current=current, total=total
-                        ),
-                    )
+                # Extract text for audio files
+                elif ext in ["mp3", "wav", "m4a"]:
+                    try:
+                        from utils.transcribe_audio import transcribe_audio_in_chunks
 
-                except FileNotFoundError as e:
-                    if "ffmpeg" in str(e).lower():
+                        # Convert m4a to wav if necessary
+                        if ext == "m4a":
+                            print("Converting m4a to wav...")
+                            file_location = convert_m4a_to_wav(file_location)
+                        text, rnnoise_file = transcribe_audio_in_chunks(
+                            file_location,
+                            progress_callback=lambda current, total: set_status(
+                                job_id,
+                                stage="transcribing",
+                                current=current,
+                                total=total,
+                            ),
+                        )
+
+                    except FileNotFoundError as e:
+                        if "ffmpeg" in str(e).lower():
+                            error_info = ErrorMessages.get_user_friendly_error(
+                                "ffmpeg_missing", str(e), {"file_type": ext}
+                            )
+                            set_status(job_id, stage="error", error=error_info["error"])
+                            return error_info
+
                         error_info = ErrorMessages.get_user_friendly_error(
-                            "ffmpeg_missing", str(e), {"file_type": ext}
+                            "file_not_found", str(e), {"file_type": ext}
                         )
                         set_status(job_id, stage="error", error=error_info["error"])
                         return error_info
+                    except Exception as e:
+                        error_info = ErrorMessages.get_user_friendly_error(
+                            "audio_conversion_failed", str(e), {"file_type": ext}
+                        )
+                        set_status(job_id, stage="error", error=error_info["error"])
+                        return error_info
+                    finally:
+                        # Clean up converted wav file if it was created
+                        if ext == "m4a" and file_location.endswith(".wav"):
+                            try:
+                                os.remove(file_location)
+                            except Exception as e:
+                                print(
+                                    f"Warning: Failed to remove converted file {file_location}: {e}"
+                                )
 
-                    error_info = ErrorMessages.get_user_friendly_error(
-                        "file_not_found", str(e), {"file_type": ext}
-                    )
-                    set_status(job_id, stage="error", error=error_info["error"])
-                    return error_info
-                except Exception as e:
-                    error_info = ErrorMessages.get_user_friendly_error(
-                        "audio_conversion_failed", str(e), {"file_type": ext}
-                    )
-                    set_status(job_id, stage="error", error=error_info["error"])
-                    return error_info
-                finally:
-                    # Clean up converted wav file if it was created
-                    if ext == "m4a" and file_location.endswith(".wav"):
-                        try:
-                            os.remove(file_location)
-                        except Exception as e:
-                            print(
-                                f"Warning: Failed to remove converted file {file_location}: {e}"
-                            )
+                # Save new transcription to content cache
+                if text.strip():
+                    try:
+                        content_hash = cache.save_transcription_cache(
+                            file_bytes, text.strip(), filename, ext
+                        )
+                        print(
+                            f"[{job_id[:8]}] Saved transcription to content cache (hash: {content_hash[:8]}...)"
+                        )
+                    except Exception as cache_error:
+                        print(
+                            f"[{job_id[:8]}] Warning: Failed to save transcription cache: {cache_error}"
+                        )
 
-            # Save the transcribed/extracted text to a file in the 'output' folder
+            # Save the transcribed/extracted text to a file in the 'output' folder (for legacy compatibility)
             set_status(job_id, stage="saving_output")
             with open(output_file_location, "w", encoding="utf-8") as f:
                 f.write(text.strip())
@@ -833,4 +932,40 @@ def run_manual_cleanup(dry_run: bool = True):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error running cleanup: {e}"
+        ) from e
+
+
+@router.get("/cache/stats")
+def get_cache_stats():
+    """Get cache statistics and information"""
+    try:
+        cache = get_content_cache()
+        stats = cache.get_cache_stats()
+        return {"success": True, "stats": stats}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get cache stats: {str(e)}"
+        ) from e
+
+
+@router.post("/cache/cleanup")
+def cleanup_cache(data: dict = {}):
+    """Clean up old cache entries"""
+    try:
+        cache = get_content_cache()
+        max_age_days = 30
+
+        if data and "max_age_days" in data:
+            max_age_days = int(data["max_age_days"])
+
+        cleanup_stats = cache.cleanup_old_entries(max_age_days)
+
+        return {
+            "success": True,
+            "message": f"Cache cleanup completed",
+            "stats": cleanup_stats,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Cache cleanup failed: {str(e)}"
         ) from e

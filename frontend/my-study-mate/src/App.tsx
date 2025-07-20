@@ -362,6 +362,21 @@ function App() {
               setTopics(topicsData);
               // Load saved expansions when topics are loaded from upload
               loadSavedExpansions(topicsData);
+              
+              // If topics are already loaded (from processed files), simulate processed chunks state
+              // so the "Generate Topics with AI" button becomes available
+              if (parsed.result.segments && Array.isArray(parsed.result.segments)) {
+                const totalWords = parsed.result.segments.reduce((sum: number, segment: { text: string }) => {
+                  return sum + (segment.text ? segment.text.split(' ').length : 0);
+                }, 0);
+                
+                setProcessedChunks({
+                  num_chunks: parsed.result.segments.length,
+                  total_words: totalWords,
+                });
+                
+                console.log(`🔄 Processed file loaded: Set processedChunks with ${parsed.result.segments.length} chunks and ${totalWords} total words`);
+              }
             }
           }
 
