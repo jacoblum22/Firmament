@@ -12,6 +12,15 @@ from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
 from utils.content_cache import get_content_cache
 from typing import Dict, Any, Optional
+import logging
+
+# Configure logger
+logger = logging.getLogger("backend")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 from utils.secure_temp_files import SecureTempFile, get_memory_storage
 
 
@@ -893,7 +902,7 @@ def generate_headings(data: dict):
                     )
                 else:
                     print(
-                        f"Warning: File content not found in memory storage, may have been cleaned up"
+                        "Warning: File content not found in memory storage, may have been cleaned up"
                     )
 
             elif (
@@ -1281,7 +1290,9 @@ def get_cache_stats():
 
 
 @router.post("/cache/cleanup")
-def cleanup_cache(data: dict = {}, authenticated: bool = Depends(verify_api_key)):
+def cleanup_cache(
+    data: Optional[dict] = None, authenticated: bool = Depends(verify_api_key)
+):
     """
     Clean up old cache entries
 
@@ -1298,20 +1309,21 @@ def cleanup_cache(data: dict = {}, authenticated: bool = Depends(verify_api_key)
     Raises:
         HTTPException: For authentication or validation failures
     """
+    data = data or {}
     try:
         cache = get_content_cache()
 
         # Get and validate max_age_days
         max_age_days = 30  # Conservative default
 
-        if data and "max_age_days" in data:
+        if "max_age_days" in data:
             try:
                 max_age_days = int(data["max_age_days"])
                 max_age_days = validate_max_age_days(max_age_days)
             except ValueError:
                 raise HTTPException(
                     status_code=400, detail="max_age_days must be a valid integer."
-                )
+                ) from None
 
         cleanup_stats = cache.cleanup_old_entries(max_age_days)
 
@@ -1390,7 +1402,7 @@ def get_temp_storage_stats():
 
 @router.post("/temp-storage/cleanup")
 def cleanup_temp_storage(
-    data: dict = {}, authenticated: bool = Depends(verify_api_key)
+    data: Optional[dict] = None, authenticated: bool = Depends(verify_api_key)
 ):
     """
     Clean up orphaned temporary storage (both memory and files)
@@ -1402,6 +1414,7 @@ def cleanup_temp_storage(
         data: Dictionary containing cleanup options
         authenticated: Authentication dependency (automatically injected)
     """
+    data = data or {}
     try:
         cleanup_memory = data.get("cleanup_memory", True)
         cleanup_files = data.get("cleanup_files", True)

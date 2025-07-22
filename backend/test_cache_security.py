@@ -6,8 +6,6 @@ This script tests the authentication and validation for the cache cleanup endpoi
 """
 
 import requests
-import json
-import os
 from config import settings
 
 # Test configuration
@@ -121,7 +119,7 @@ def test_query_param_auth():
 
 def main():
     """Run all tests"""
-    print(f"🧪 Testing Cache Cleanup Security")
+    print("🧪 Testing Cache Cleanup Security")
     print(f"Environment: {settings.environment}")
     print(f"Debug mode: {settings.debug}")
     print(f"API Key set: {'Yes' if settings.api_key else 'No'}")

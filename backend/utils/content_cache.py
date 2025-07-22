@@ -57,13 +57,15 @@ class ContentCache:
             "entries": {},
         }
 
-    def _save_index(self):
+    def _save_index(self) -> bool:
         """Save cache index to disk."""
         try:
             with open(self.index_file, "w", encoding="utf-8") as f:
                 json.dump(self.index, f, indent=2)
+            return True
         except IOError as e:
             logger.error(f"Failed to save cache index: {e}")
+            return False
 
     def calculate_content_hash(self, file_content: bytes) -> str:
         """Calculate SHA256 hash of file content."""

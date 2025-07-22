@@ -99,7 +99,7 @@ class TestContentCache(unittest.TestCase):
 
         # Mock the index to simulate an old entry
         old_date = (datetime.now() - timedelta(days=31)).isoformat()
-        content_hash = self.cache._calculate_content_hash(file_content)
+        content_hash = self.cache.calculate_content_hash(file_content)
         self.cache.index["entries"][content_hash]["cached_at"] = old_date
         self.cache._save_index()
 

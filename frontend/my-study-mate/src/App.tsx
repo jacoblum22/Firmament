@@ -367,7 +367,10 @@ function App() {
               // so the "Generate Topics with AI" button becomes available
               if (parsed.result.segments && Array.isArray(parsed.result.segments)) {
                 const totalWords = parsed.result.segments.reduce((sum: number, segment: { text: string }) => {
-                  return sum + (segment.text ? segment.text.split(' ').length : 0);
+                  if (segment && segment.text && typeof segment.text === 'string') {
+                    return sum + segment.text.split(/\s+/).filter(word => word.length > 0).length;
+                  }
+                  return sum;
                 }, 0);
                 
                 setProcessedChunks({
