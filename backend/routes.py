@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header, Query
 from starlette.responses import StreamingResponse
 import os
 from pydub import AudioSegment
@@ -6,10 +6,99 @@ import json
 from uuid import uuid4
 from fastapi import BackgroundTasks
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import settings
 from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
+from utils.content_cache import get_content_cache
+from typing import Dict, Any, Optional
+import logging
+
+# Configure logger
+logger = logging.getLogger("backend")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+from utils.secure_temp_files import SecureTempFile, get_memory_storage
+
+
+# Fallback function for testing environments where utils may not be available
+def fallback_debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
+    return {"error": "bullet_point_debugger not available"}
+
+
+# Authentication dependency for sensitive operations
+def verify_api_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    api_key: Optional[str] = Query(None, description="API key for authentication"),
+) -> bool:
+    """
+    Verify API key from header or query parameter.
+    In development: authentication is optional (returns True if no key provided)
+    In production: authentication is required
+    """
+    provided_key = x_api_key or api_key
+    expected_key = settings.api_key
+
+    # In development, allow requests without API key for easier testing
+    if settings.is_development:
+        if not provided_key:
+            return True  # Allow unauthenticated access in dev
+        # If key is provided in dev, it must be correct
+        if provided_key != expected_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key provided. Remove the key to proceed without authentication in development.",
+            )
+        return True
+
+    # In production, always require authentication
+    if not expected_key:
+        raise HTTPException(
+            status_code=500,
+            detail="API key not configured on server. Contact administrator.",
+        )
+
+    if not provided_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Provide via X-API-Key header or api_key query parameter.",
+        )
+
+    if provided_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key provided.")
+
+    return True
+
+
+def validate_max_age_days(max_age_days: int) -> int:
+    """
+    Validate max_age_days parameter for cache cleanup operations.
+
+    Args:
+        max_age_days: Number of days for maximum age
+
+    Returns:
+        int: Validated max_age_days value
+
+    Raises:
+        HTTPException: If validation fails
+    """
+    if max_age_days < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="max_age_days must be at least 1 day to prevent accidental deletion of recent cache entries.",
+        )
+
+    if max_age_days > 365:
+        raise HTTPException(
+            status_code=400,
+            detail="max_age_days cannot exceed 365 days (1 year). Please use a smaller value.",
+        )
+
+    return max_age_days
 
 
 # Lazy import with fallback for testing environments
@@ -19,19 +108,21 @@ def get_bullet_point_debugger():
 
         return debug_bullet_point
     except ImportError:
-        from typing import Dict, Any
-
-        # Fallback function for testing environments where utils may not be available
-        def debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
-            return {"error": "bullet_point_debugger not available"}
-
-        return debug_bullet_point
+        return fallback_debug_bullet_point
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return fallback_debug_bullet_point
 
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads"
-OUTPUT_DIR = "output"  # Folder to save the extracted/transcribed text files
+# Get the absolute path to the backend directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+OUTPUT_DIR = os.path.join(
+    BASE_DIR, "output"
+)  # Folder to save the extracted/transcribed text files
+PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
 
 JOB_STATUS: dict[str, dict] = {}  # {job_id: {stage:…, current:…, total:…}}
 
@@ -122,9 +213,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     try:
         # Comprehensive file validation
         print(f"[{job_id[:8]}] Starting file validation...")
-        extension, safe_filename = FileValidator.validate_upload(
-            file_bytes, filename, settings.upload_max_size
-        )
+        extension, safe_filename = FileValidator.validate_upload(file_bytes, filename)
         print(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
     except FileValidationError as e:
         print(f"[{job_id[:8]}] File validation failed: {e}")
@@ -133,6 +222,9 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
     def process_file(file_bytes: bytes, filename: str, safe_filename: str):
         try:
             ext = filename.split(".")[-1].lower()
+
+            # Initialize content cache
+            cache = get_content_cache()
 
             # Use safe filename for file operations
             file_location = os.path.join(UPLOAD_DIR, safe_filename)
@@ -143,14 +235,96 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
 
             set_status(job_id, stage="preprocessing")
 
-            # Define paths
+            # Check for cached processed data first (most complete cache)
+            cached_processed = cache.get_processed_cache(file_bytes)
+            if cached_processed:
+                print(
+                    f"[{job_id[:8]}] Found cached processed data (content hash: {cached_processed['cache_info']['content_hash'][:8]}...)"
+                )
+
+                segments = cached_processed.get("segments", [])
+                clusters = cached_processed.get("clusters", [])
+                meta = cached_processed.get("meta", {})
+
+                print(
+                    f"[{job_id[:8]}] Loaded from content cache - Segments: {len(segments)}, Clusters: {len(clusters)}"
+                )
+
+                # Sort segments by position to reconstruct full transcript
+                full_text = "\n\n".join(
+                    seg["text"] for seg in sorted(segments, key=lambda x: x["position"])
+                )
+
+                # Convert cluster structure to match TopicResponse in frontend
+                topics = {
+                    str(cluster["cluster_id"]): {
+                        "concepts": cluster.get("concepts", []),
+                        "heading": cluster.get("heading", ""),
+                        "summary": cluster.get("summary", ""),
+                        "keywords": cluster.get("keywords", []),
+                        "examples": cluster.get("examples", []),
+                        "segment_positions": cluster.get("segment_positions", []),
+                        "stats": cluster.get("stats", {}),
+                        "bullet_points": cluster.get("bullet_points", []),
+                        "references": cluster.get("references", []),
+                        "code_snippet": cluster.get("code_snippet", ""),
+                        "video_timestamp": cluster.get("video_timestamp", ""),
+                        "note_summary": cluster.get("note_summary", ""),
+                        "quiz_questions": cluster.get("quiz_questions", []),
+                    }
+                    for cluster in clusters
+                }
+
+                # Use the same structure as legacy cached data for frontend compatibility
+                set_status(
+                    job_id,
+                    stage="done",
+                    result={
+                        "filename": file.filename,
+                        "filetype": ext,
+                        "text": full_text.strip(),
+                        "message": "File processed successfully from cache.",
+                        "segments": segments,  # Include segments for frontend chunk access
+                        "topics": topics,
+                        "cache_info": cached_processed["cache_info"],
+                    },
+                )
+
+                # Clean up the original file since we're using cached data
+                try:
+                    os.remove(file_location)
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to remove original file {file_location}: {e}"
+                    )
+
+                print(
+                    f"[{job_id[:8]}] Completed processing using cached processed data"
+                )
+                return
+
+            # Check for cached transcription (partial cache)
+            cached_transcription = cache.get_transcription_cache(file_bytes)
+            if cached_transcription:
+                text = cached_transcription["text"]
+                print(
+                    f"[{job_id[:8]}] Found cached transcription (content hash: {cached_transcription['cache_info']['content_hash'][:8]}...)"
+                )
+                print(
+                    f"[{job_id[:8]}] Using cached transcription, will process into topics..."
+                )
+            else:
+                # No cache found, need to transcribe/extract text
+                print(f"[{job_id[:8]}] No cache found, processing file...")
+
+            # Define paths for legacy compatibility
             base_name = (file.filename or "uploaded_file").rsplit(".", 1)[0]
             output_filename = f"{base_name}_transcription.txt"
             output_file_location = os.path.join(OUTPUT_DIR, output_filename)
             processed_path = os.path.join("processed", f"{base_name}_processed.json")
 
-            # If fully processed JSON exists, reconstruct transcript and load headings
-            if os.path.exists(processed_path):
+            # Check for legacy filename-based cache if no content cache exists
+            if not cached_transcription and os.path.exists(processed_path):
                 with open(processed_path, "r", encoding="utf-8") as f:
                     processed_data = json.load(f)
 
@@ -158,7 +332,7 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 clusters = processed_data.get("clusters", [])
                 meta = processed_data.get("meta", {})
 
-                print(f"[{job_id[:8]}] Loaded cached JSON: {processed_path}")
+                print(f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}")
                 print(
                     f"[{job_id[:8]}] Segments: {len(segments)}, Clusters: {len(clusters)}"
                 )
@@ -255,72 +429,185 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 )
                 return
 
-            set_status(job_id, stage="transcribing")
+            # Process transcription (use cache if available)
             text = ""
-            rnnoise_file = None  # Track RNNoise file path if created
+            rnnoise_file = None
 
-            # Extract text for PDF files
-            if ext == "pdf":
-                import fitz  # PyMuPDF
+            if cached_transcription:
+                # Use cached transcription
+                text = cached_transcription["text"]
+                print(
+                    f"[{job_id[:8]}] Using cached transcription text ({len(text)} characters)"
+                )
+            else:
+                # No transcription cache, need to process the file
+                set_status(job_id, stage="transcribing")
 
-                with fitz.open(file_location) as doc:
-                    for page in doc:
-                        text += page.get_text()  # type: ignore
+                # Extract text for PDF files
+                if ext == "pdf":
+                    import fitz  # PyMuPDF
 
-            # Extract text for TXT files
-            elif ext == "txt":
-                with open(file_location, "r", encoding="utf-8") as f:
-                    text = f.read()
+                    with fitz.open(file_location) as doc:
+                        for page in doc:
+                            text += page.get_text()  # type: ignore
 
-            # Extract text for audio files
-            elif ext in ["mp3", "wav", "m4a"]:
-                try:
-                    from utils.transcribe_audio import transcribe_audio_in_chunks
+                # Extract text for TXT files
+                elif ext == "txt":
+                    with open(file_location, "r", encoding="utf-8") as f:
+                        text = f.read()
 
-                    # Convert m4a to wav if necessary
-                    if ext == "m4a":
-                        print("Converting m4a to wav...")
-                        file_location = convert_m4a_to_wav(file_location)
-                    text, rnnoise_file = transcribe_audio_in_chunks(
-                        file_location,
-                        progress_callback=lambda current, total: set_status(
-                            job_id, stage="transcribing", current=current, total=total
-                        ),
-                    )
+                # Extract text for audio files
+                elif ext in ["mp3", "wav", "m4a"]:
+                    try:
+                        from utils.transcribe_audio import transcribe_audio_in_chunks
 
-                except FileNotFoundError as e:
-                    if "ffmpeg" in str(e).lower():
+                        # Convert m4a to wav if necessary
+                        if ext == "m4a":
+                            print("Converting m4a to wav...")
+                            file_location = convert_m4a_to_wav(file_location)
+                        text, rnnoise_file = transcribe_audio_in_chunks(
+                            file_location,
+                            progress_callback=lambda current, total: set_status(
+                                job_id,
+                                stage="transcribing",
+                                current=current,
+                                total=total,
+                            ),
+                        )
+
+                    except FileNotFoundError as e:
+                        if "ffmpeg" in str(e).lower():
+                            error_info = ErrorMessages.get_user_friendly_error(
+                                "ffmpeg_missing", str(e), {"file_type": ext}
+                            )
+                            set_status(job_id, stage="error", error=error_info["error"])
+                            return error_info
+
                         error_info = ErrorMessages.get_user_friendly_error(
-                            "ffmpeg_missing", str(e), {"file_type": ext}
+                            "file_not_found", str(e), {"file_type": ext}
                         )
                         set_status(job_id, stage="error", error=error_info["error"])
                         return error_info
+                    except Exception as e:
+                        error_info = ErrorMessages.get_user_friendly_error(
+                            "audio_conversion_failed", str(e), {"file_type": ext}
+                        )
+                        set_status(job_id, stage="error", error=error_info["error"])
+                        return error_info
+                    finally:
+                        # Clean up converted wav file if it was created
+                        if ext == "m4a" and file_location.endswith(".wav"):
+                            try:
+                                os.remove(file_location)
+                            except Exception as e:
+                                print(
+                                    f"Warning: Failed to remove converted file {file_location}: {e}"
+                                )
 
-                    error_info = ErrorMessages.get_user_friendly_error(
-                        "file_not_found", str(e), {"file_type": ext}
-                    )
-                    set_status(job_id, stage="error", error=error_info["error"])
-                    return error_info
-                except Exception as e:
-                    error_info = ErrorMessages.get_user_friendly_error(
-                        "audio_conversion_failed", str(e), {"file_type": ext}
-                    )
-                    set_status(job_id, stage="error", error=error_info["error"])
-                    return error_info
-                finally:
-                    # Clean up converted wav file if it was created
-                    if ext == "m4a" and file_location.endswith(".wav"):
-                        try:
-                            os.remove(file_location)
-                        except Exception as e:
-                            print(
-                                f"Warning: Failed to remove converted file {file_location}: {e}"
-                            )
+                # Save new transcription to content cache
+                if text.strip():
+                    try:
+                        content_hash = cache.save_transcription_cache(
+                            file_bytes, text.strip(), filename, ext
+                        )
+                        print(
+                            f"[{job_id[:8]}] Saved transcription to content cache (hash: {content_hash[:8]}...)"
+                        )
+                    except Exception as cache_error:
+                        print(
+                            f"[{job_id[:8]}] Warning: Failed to save transcription cache: {cache_error}"
+                        )
 
-            # Save the transcribed/extracted text to a file in the 'output' folder
+            # Save the transcribed/extracted text to a file in the 'output' folder (for legacy compatibility)
             set_status(job_id, stage="saving_output")
             with open(output_file_location, "w", encoding="utf-8") as f:
                 f.write(text.strip())
+
+            # Save original file content and metadata for potential topic generation
+            content_hash = cache.calculate_content_hash(file_bytes)
+
+            # Try to store in memory first for better security (avoid disk I/O)
+            memory_storage = get_memory_storage()
+            temp_storage_type = "memory"
+            temp_file_path = None
+            temp_manager = None
+
+            # Check if file is small enough for in-memory storage
+            if memory_storage.store(
+                f"{job_id}_{content_hash}",
+                file_bytes,
+                {
+                    "original_filename": filename,
+                    "file_extension": ext,
+                    "created_at": datetime.now().isoformat(),
+                    "job_id": job_id,
+                },
+            ):
+                print(
+                    f"[{job_id[:8]}] Stored content securely in memory (hash: {content_hash[:8]}...)"
+                )
+            else:
+                # Fallback to secure temporary file for large files
+                try:
+                    temp_manager = SecureTempFile(
+                        prefix=f"studymate_{base_name}_",
+                        suffix=".bin",
+                        secure_delete=True,
+                        permissions=0o600,  # Owner read/write only
+                    )
+                    temp_file_path = temp_manager.create_temp_file(
+                        file_bytes, f"{job_id}_{content_hash}"
+                    )
+                    temp_storage_type = "secure_temp"
+                    print(
+                        f"[{job_id[:8]}] Stored content in secure temp file with restricted permissions (hash: {content_hash[:8]}...)"
+                    )
+                except Exception as temp_error:
+                    print(
+                        f"[{job_id[:8]}] Warning: Failed to create secure temp file, falling back to memory cleanup: {temp_error}"
+                    )
+                    # Force cleanup and fail gracefully
+                    if temp_manager:
+                        temp_manager.cleanup_all()
+                    set_status(
+                        job_id,
+                        stage="error",
+                        error="Failed to securely store temporary file",
+                    )
+                    return
+
+            # Save metadata (avoid storing raw file path in metadata for security)
+            metadata_file = os.path.join(OUTPUT_DIR, f"{base_name}_metadata.json")
+            metadata = {
+                "content_hash": content_hash,
+                "original_filename": filename,
+                "file_extension": ext,
+                "created_at": datetime.now().isoformat(),
+                "file_size": len(file_bytes),
+                "temp_storage_type": temp_storage_type,
+                "job_id": job_id,
+                # Only store temp file path if using secure temp file (not memory)
+                **(
+                    {"temp_content_file": temp_file_path}
+                    if temp_storage_type == "secure_temp"
+                    else {}
+                ),
+            }
+            try:
+                with open(metadata_file, "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, indent=2)
+                print(
+                    f"[{job_id[:8]}] Saved metadata for potential topic generation (storage: {temp_storage_type})"
+                )
+            except Exception as e:
+                print(f"[{job_id[:8]}] Warning: Failed to save metadata: {e}")
+                # Clean up temp storage if metadata save failed
+                if temp_storage_type == "memory":
+                    memory_storage.remove(f"{job_id}_{content_hash}")
+                elif temp_manager and temp_file_path:
+                    temp_manager.cleanup_file(
+                        temp_file_path, f"{job_id}_{content_hash}"
+                    )
 
             # Clean up files
             try:
@@ -346,6 +633,30 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             )
         except Exception as e:
             print(f"[{job_id[:8]}] [ERROR]: {e}")
+
+            # Clean up any temporary storage on error
+            try:
+                # Try to clean up based on job_id and content hash if available
+                if "content_hash" in locals():
+                    memory_storage = get_memory_storage()
+                    memory_storage.remove(f"{job_id}_{content_hash}")
+
+                    # Clean up secure temp file if it was created
+                    if (
+                        "temp_manager" in locals()
+                        and temp_manager
+                        and "temp_file_path" in locals()
+                        and temp_file_path
+                    ):
+                        temp_manager.cleanup_file(
+                            temp_file_path, f"{job_id}_{content_hash}"
+                        )
+                        print(f"[{job_id[:8]}] Cleaned up temporary storage on error")
+            except Exception as cleanup_error:
+                print(
+                    f"[{job_id[:8]}] Warning: Failed to cleanup temporary storage on error: {cleanup_error}"
+                )
+
             error_info = ErrorMessages.get_user_friendly_error(
                 "processing_failed", str(e), {"filename": filename}
             )
@@ -482,8 +793,8 @@ def process_chunks(data: dict):
     )
 
     # Step 2: Save the chunks to disk
-    os.makedirs("processed", exist_ok=True)
-    processed_path = os.path.join("processed", f"{filename}_chunks.json")
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
+    processed_path = os.path.join(PROCESSED_DIR, f"{filename}_chunks.json")
     with open(processed_path, "w", encoding="utf-8") as f:
         json.dump(
             {
@@ -558,10 +869,124 @@ def generate_headings(data: dict):
     process_with_bertopic = get_bertopic_processor()
     result = process_with_bertopic(chunks, filename)
 
-    # Save full result
+    # Save full result to legacy format
     processed_path = os.path.join("processed", f"{filename}_processed.json")
     with open(processed_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
+
+    # Save processed data to content cache if we have the original file content
+    metadata_file = os.path.join(OUTPUT_DIR, f"{filename}_metadata.json")
+    if os.path.exists(metadata_file):
+        try:
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+
+            temp_content_file = metadata.get("temp_content_file")
+            content_hash = metadata.get("content_hash")
+            original_filename = metadata.get("original_filename", full_filename)
+            temp_storage_type = metadata.get(
+                "temp_storage_type", "legacy"
+            )  # Default to legacy for backwards compatibility
+            job_id = metadata.get("job_id")
+
+            file_bytes = None
+
+            # Handle different storage types securely
+            if temp_storage_type == "memory" and content_hash and job_id:
+                # Try to retrieve from memory storage
+                memory_storage = get_memory_storage()
+                file_bytes = memory_storage.retrieve(f"{job_id}_{content_hash}")
+                if file_bytes:
+                    print(
+                        f"Retrieved file content from secure memory storage (hash: {content_hash[:8]}...)"
+                    )
+                else:
+                    print(
+                        "Warning: File content not found in memory storage, may have been cleaned up"
+                    )
+
+            elif (
+                temp_storage_type == "secure_temp"
+                and temp_content_file
+                and os.path.exists(temp_content_file)
+            ):
+                # Read from secure temp file
+                try:
+                    with open(temp_content_file, "rb") as f:
+                        file_bytes = f.read()
+                    logger.info(
+                        f"Retrieved file content from secure temp file (hash: {content_hash[:8] if content_hash else 'unknown'}...)"
+                    )
+                except Exception as read_error:
+                    logger.warning(
+                        f"Failed to read secure temp file {temp_content_file}: {read_error}"
+                    )
+
+            elif (
+                temp_content_file and os.path.exists(temp_content_file) and content_hash
+            ):
+                # Legacy support for old temp files
+                try:
+                    with open(temp_content_file, "rb") as f:
+                        file_bytes = f.read()
+                    print(
+                        f"Retrieved file content from legacy temp file (hash: {content_hash[:8]}...)"
+                    )
+                except Exception as read_error:
+                    print(
+                        f"Warning: Failed to read legacy temp file {temp_content_file}: {read_error}"
+                    )
+
+            if file_bytes and content_hash:
+                # Save processed data to content cache
+                cache = get_content_cache()
+                try:
+                    saved_hash = cache.save_processed_cache(
+                        file_bytes, result, original_filename
+                    )
+                    print(
+                        f"Saved processed data to content cache (hash: {saved_hash[:8]}...)"
+                    )
+                except Exception as cache_error:
+                    print(
+                        f"Warning: Failed to save processed data to cache: {cache_error}"
+                    )
+
+                # Clean up temporary storage after successful caching
+                try:
+                    if temp_storage_type == "memory" and job_id:
+                        memory_storage = get_memory_storage()
+                        if memory_storage.remove(f"{job_id}_{content_hash}"):
+                            print(f"Cleaned up memory storage for job {job_id}")
+                    elif temp_content_file and os.path.exists(temp_content_file):
+                        # For both secure_temp and legacy files, use secure deletion
+                        temp_manager = SecureTempFile(secure_delete=True)
+                        if temp_manager.cleanup_file(temp_content_file):
+                            print(
+                                f"Securely cleaned up temporary content file: {temp_content_file}"
+                            )
+                        else:
+                            # Fallback to regular deletion if secure deletion fails
+                            os.remove(temp_content_file)
+                            print(
+                                f"Cleaned up temporary content file (fallback): {temp_content_file}"
+                            )
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to clean up temp storage: {cleanup_error}")
+
+                # Update metadata to remove temp file reference and add caching info
+                metadata.pop("temp_content_file", None)
+                metadata.pop("temp_storage_type", None)
+                metadata.pop("job_id", None)  # Remove job_id after cleanup
+                metadata["cached_at"] = datetime.now().isoformat()
+                metadata["cleanup_completed"] = True
+                with open(metadata_file, "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, indent=2)
+
+        except Exception as e:
+            print(
+                f"Warning: Failed to process content cache during topic generation: {e}"
+            )
 
     return {
         "message": "Topics generated successfully.",
@@ -815,8 +1240,19 @@ def get_cleanup_status():
 
 
 @router.post("/cleanup/run")
-def run_manual_cleanup(dry_run: bool = True):
-    """Run manual cleanup (requires debug mode, defaults to dry run)"""
+def run_manual_cleanup(
+    dry_run: bool = True, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Run manual cleanup (requires debug mode, defaults to dry run)
+
+    Requires API key authentication in production.
+    In development, authentication is optional but recommended.
+
+    Args:
+        dry_run: Whether to perform a dry run (default: True for safety)
+        authenticated: Authentication dependency (automatically injected)
+    """
     if not settings.debug:
         raise HTTPException(status_code=404, detail="Endpoint not available")
 
@@ -828,9 +1264,283 @@ def run_manual_cleanup(dry_run: bool = True):
         return {
             "message": "Cleanup completed" if not dry_run else "Dry run completed",
             "dry_run": dry_run,
+            "environment": settings.environment,
             "results": results,
         }
+    except HTTPException:
+        # Re-raise HTTP exceptions (authentication errors)
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error running cleanup: {e}"
+        ) from e
+
+
+@router.get("/cache/stats")
+def get_cache_stats():
+    """Get cache statistics and information"""
+    try:
+        cache = get_content_cache()
+        stats = cache.get_cache_stats()
+        return {"success": True, "stats": stats}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get cache stats: {str(e)}"
+        ) from e
+
+
+@router.post("/cache/cleanup")
+def cleanup_cache(
+    data: Optional[dict] = None, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Clean up old cache entries
+
+    Requires API key authentication in production.
+    In development, authentication is optional but recommended.
+
+    Args:
+        data: Dictionary containing optional max_age_days parameter
+        authenticated: Authentication dependency (automatically injected)
+
+    Returns:
+        dict: Cleanup results and statistics
+
+    Raises:
+        HTTPException: For authentication or validation failures
+    """
+    data = data or {}
+    try:
+        cache = get_content_cache()
+
+        # Get and validate max_age_days
+        max_age_days = 30  # Conservative default
+
+        if "max_age_days" in data:
+            try:
+                max_age_days = int(data["max_age_days"])
+                max_age_days = validate_max_age_days(max_age_days)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="max_age_days must be a valid integer."
+                ) from None
+
+        cleanup_stats = cache.cleanup_old_entries(max_age_days)
+
+        return {
+            "success": True,
+            "message": f"Cache cleanup completed for entries older than {max_age_days} days",
+            "max_age_days": max_age_days,
+            "stats": cleanup_stats,
+            "environment": settings.environment,
+        }
+    except HTTPException:
+        # Re-raise HTTP exceptions (authentication, validation errors)
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Cache cleanup failed: {str(e)}"
+        ) from e
+
+
+@router.get("/temp-storage/stats")
+def get_temp_storage_stats():
+    """Get statistics about temporary storage usage"""
+    try:
+        memory_storage = get_memory_storage()
+        memory_stats = memory_storage.get_size_info()
+
+        # Count metadata files that might reference temp storage
+        metadata_files = []
+        pending_cleanup = []
+
+        if os.path.exists(OUTPUT_DIR):
+            for filename in os.listdir(OUTPUT_DIR):
+                if filename.endswith("_metadata.json"):
+                    metadata_path = os.path.join(OUTPUT_DIR, filename)
+                    try:
+                        with open(metadata_path, "r", encoding="utf-8") as f:
+                            metadata = json.load(f)
+
+                        metadata_files.append(
+                            {
+                                "filename": filename,
+                                "storage_type": metadata.get(
+                                    "temp_storage_type", "legacy"
+                                ),
+                                "created_at": metadata.get("created_at"),
+                                "cleanup_completed": metadata.get(
+                                    "cleanup_completed", False
+                                ),
+                                "has_temp_file": "temp_content_file" in metadata,
+                            }
+                        )
+
+                        # Check if cleanup is needed
+                        if (
+                            not metadata.get("cleanup_completed", False)
+                            and "temp_content_file" in metadata
+                        ):
+                            pending_cleanup.append(filename)
+
+                    except Exception as e:
+                        print(f"Warning: Failed to read metadata file {filename}: {e}")
+
+        return {
+            "memory_storage": memory_stats,
+            "metadata_files_count": len(metadata_files),
+            "pending_cleanup_count": len(pending_cleanup),
+            "metadata_files": metadata_files,
+            "pending_cleanup": pending_cleanup,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get temp storage stats: {str(e)}"
+        ) from e
+
+
+@router.post("/temp-storage/cleanup")
+def cleanup_temp_storage(
+    data: Optional[dict] = None, authenticated: bool = Depends(verify_api_key)
+):
+    """
+    Clean up orphaned temporary storage (both memory and files)
+
+    Requires API key authentication in production.
+    In development, authentication is optional but recommended.
+
+    Args:
+        data: Dictionary containing cleanup options
+        authenticated: Authentication dependency (automatically injected)
+    """
+    data = data or {}
+    try:
+        cleanup_memory = data.get("cleanup_memory", True)
+        cleanup_files = data.get("cleanup_files", True)
+        max_age_hours = data.get("max_age_hours", 24)  # Default: cleanup after 24 hours
+        dry_run = data.get("dry_run", False)
+
+        # Validate max_age_hours
+        if max_age_hours < 1:
+            raise HTTPException(
+                status_code=400, detail="max_age_hours must be at least 1 hour."
+            )
+
+        if max_age_hours > 8760:  # 1 year in hours
+            raise HTTPException(
+                status_code=400,
+                detail="max_age_hours cannot exceed 8760 hours (1 year).",
+            )
+
+        results = {
+            "dry_run": dry_run,
+            "memory_cleanup": {},
+            "file_cleanup": {},
+            "metadata_cleanup": [],
+        }
+
+        # Clean up memory storage
+        if cleanup_memory:
+            memory_storage = get_memory_storage()
+            memory_items_before = memory_storage.get_size_info()["items_count"]
+
+            if not dry_run:
+                memory_storage.clear()  # Clear all memory storage for now
+                memory_items_after = 0
+            else:
+                memory_items_after = memory_items_before
+
+            results["memory_cleanup"] = {
+                "items_before": memory_items_before,
+                "items_after": memory_items_after,
+                "items_cleaned": memory_items_before - memory_items_after,
+            }
+
+        # Clean up orphaned temp files and update metadata
+        if cleanup_files and os.path.exists(OUTPUT_DIR):
+            files_cleaned = 0
+            metadata_updated = 0
+
+            cutoff_time = datetime.now() - timedelta(hours=max_age_hours)
+
+            for filename in os.listdir(OUTPUT_DIR):
+                if filename.endswith("_metadata.json"):
+                    metadata_path = os.path.join(OUTPUT_DIR, filename)
+                    try:
+                        with open(metadata_path, "r", encoding="utf-8") as f:
+                            metadata = json.load(f)
+
+                        # Check if metadata is old enough and has pending cleanup
+                        created_at = metadata.get("created_at")
+                        if created_at:
+                            created_time = datetime.fromisoformat(
+                                created_at.replace("Z", "+00:00").replace("+00:00", "")
+                            )
+
+                            if created_time < cutoff_time and not metadata.get(
+                                "cleanup_completed", False
+                            ):
+                                temp_file = metadata.get("temp_content_file")
+
+                                if temp_file and os.path.exists(temp_file):
+                                    if not dry_run:
+                                        # Use secure deletion
+                                        temp_manager = SecureTempFile(
+                                            secure_delete=True
+                                        )
+                                        temp_manager.cleanup_file(temp_file)
+                                        files_cleaned += 1
+
+                                    results["metadata_cleanup"].append(
+                                        {
+                                            "metadata_file": filename,
+                                            "temp_file": temp_file,
+                                            "created_at": created_at,
+                                            "action": (
+                                                "cleaned"
+                                                if not dry_run
+                                                else "would_clean"
+                                            ),
+                                        }
+                                    )
+
+                                # Update metadata
+                                if not dry_run:
+                                    metadata.pop("temp_content_file", None)
+                                    metadata.pop("temp_storage_type", None)
+                                    metadata.pop("job_id", None)
+                                    metadata["cleanup_completed"] = True
+                                    metadata["cleanup_at"] = datetime.now().isoformat()
+
+                                    with open(
+                                        metadata_path, "w", encoding="utf-8"
+                                    ) as f:
+                                        json.dump(metadata, f, indent=2)
+                                    metadata_updated += 1
+
+                    except Exception as e:
+                        print(
+                            f"Warning: Failed to process metadata file {filename}: {e}"
+                        )
+
+            results["file_cleanup"] = {
+                "files_cleaned": files_cleaned,
+                "metadata_updated": metadata_updated,
+            }
+
+        return {
+            "success": True,
+            "message": f"Temp storage cleanup {'completed' if not dry_run else 'simulated'}",
+            "max_age_hours": max_age_hours,
+            "environment": settings.environment,
+            "results": results,
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (authentication, validation errors)
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Temp storage cleanup failed: {str(e)}"
         ) from e
