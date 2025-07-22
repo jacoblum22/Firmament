@@ -65,14 +65,9 @@ class ContentCache:
         except IOError as e:
             logger.error(f"Failed to save cache index: {e}")
 
-    def _calculate_content_hash(self, file_content: bytes) -> str:
+    def calculate_content_hash(self, file_content: bytes) -> str:
         """Calculate SHA256 hash of file content."""
         return hashlib.sha256(file_content).hexdigest()
-
-    def calculate_content_hash(self, file_content: bytes) -> str:
-        """Public method to calculate SHA256 hash of file content."""
-        return self._calculate_content_hash(file_content)
-
     def _get_cache_paths(self, content_hash: str, cache_type: str) -> Tuple[Path, Path]:
         """Get cache file and metadata paths for a given hash and type."""
         if cache_type == "transcription":
