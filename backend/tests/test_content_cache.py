@@ -43,10 +43,8 @@ class TestContentCache(unittest.TestCase):
         cached_data = self.cache.get_transcription_cache(file_content)
 
         self.assertIsNotNone(cached_data, "Cached data is None.")
-        self.assertIsNotNone(cached_data, "Cached data is None.")
         if cached_data is not None:
             self.assertEqual(cached_data["text"], text)
-        self.assertIsNotNone(cached_data, "Cached data is None.")
         if cached_data is not None:
             self.assertEqual(cached_data["cache_info"]["content_hash"], content_hash)
 
