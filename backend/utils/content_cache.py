@@ -68,6 +68,7 @@ class ContentCache:
     def calculate_content_hash(self, file_content: bytes) -> str:
         """Calculate SHA256 hash of file content."""
         return hashlib.sha256(file_content).hexdigest()
+
     def _get_cache_paths(self, content_hash: str, cache_type: str) -> Tuple[Path, Path]:
         """Get cache file and metadata paths for a given hash and type."""
         if cache_type == "transcription":
@@ -88,7 +89,7 @@ class ContentCache:
 
     def has_transcription_cache(self, file_content: bytes) -> bool:
         """Check if transcription cache exists for the given file content."""
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, _ = self._get_cache_paths(content_hash, "transcription")
         return cache_file.exists()
 
@@ -99,7 +100,7 @@ class ContentCache:
         Returns:
             Dict containing 'text', 'metadata', and 'cache_info' if found, None otherwise.
         """
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, meta_file = self._get_cache_paths(content_hash, "transcription")
 
         if not cache_file.exists():
@@ -155,7 +156,7 @@ class ContentCache:
         Returns:
             Content hash of the cached file.
         """
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, meta_file = self._get_cache_paths(content_hash, "transcription")
 
         try:
@@ -203,7 +204,7 @@ class ContentCache:
 
     def has_processed_cache(self, file_content: bytes) -> bool:
         """Check if processed data cache exists for the given file content."""
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, _ = self._get_cache_paths(content_hash, "processed")
         return cache_file.exists()
 
@@ -214,7 +215,7 @@ class ContentCache:
         Returns:
             Dict containing processed data if found, None otherwise.
         """
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, meta_file = self._get_cache_paths(content_hash, "processed")
 
         if not cache_file.exists():
@@ -267,7 +268,7 @@ class ContentCache:
         Returns:
             Content hash of the cached file.
         """
-        content_hash = self._calculate_content_hash(file_content)
+        content_hash = self.calculate_content_hash(file_content)
         cache_file, meta_file = self._get_cache_paths(content_hash, "processed")
 
         try:
