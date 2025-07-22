@@ -1,9 +1,6 @@
 import unittest
-from unittest.mock import patch, mock_open, MagicMock
-from pathlib import Path
 from utils.content_cache import ContentCache
 import os
-import json
 from datetime import datetime, timedelta
 
 

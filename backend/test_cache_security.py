@@ -5,17 +5,20 @@ Test script for cache cleanup endpoint security.
 This script tests the authentication and validation for the cache cleanup endpoint.
 """
 
-import requests
+import pytest
+from fastapi.testclient import TestClient
 from config import settings
 
-# Test configuration
-BASE_URL = f"http://{settings.host}:{settings.port}"
-CACHE_CLEANUP_URL = f"{BASE_URL}/cache/cleanup"
+# Import the FastAPI app
+from main import app
+
+# Create test client
+client = TestClient(app)
 
 
 def test_cache_cleanup_no_auth():
     """Test cache cleanup without authentication"""
-    response = requests.post(CACHE_CLEANUP_URL, json={}, timeout=10)
+    response = client.post("/cache/cleanup", json={})
 
     if settings.is_development:
         # Should succeed in development
@@ -30,7 +33,7 @@ def test_cache_cleanup_with_valid_auth():
     print("Testing cache cleanup with valid authentication...")
 
     headers = {"X-API-Key": settings.api_key}
-    response = requests.post(CACHE_CLEANUP_URL, json={}, headers=headers)
+    response = client.post("/cache/cleanup", json={}, headers=headers)
     print(f"Status Code: {response.status_code}")
 
     if response.status_code == 200:
@@ -49,7 +52,7 @@ def test_cache_cleanup_with_invalid_auth():
     print("Testing cache cleanup with invalid authentication...")
 
     headers = {"X-API-Key": "invalid-key-12345"}
-    response = requests.post(CACHE_CLEANUP_URL, json={}, headers=headers)
+    response = client.post("/cache/cleanup", json={}, headers=headers)
     print(f"Status Code: {response.status_code}")
 
     if response.status_code == 401:
@@ -69,9 +72,7 @@ def test_cache_cleanup_validation():
     headers = {"X-API-Key": settings.api_key}
 
     # Test invalid max_age_days (too small)
-    response = requests.post(
-        CACHE_CLEANUP_URL, json={"max_age_days": 0}, headers=headers
-    )
+    response = client.post("/cache/cleanup", json={"max_age_days": 0}, headers=headers)
     print(f"max_age_days=0 -> Status: {response.status_code}")
     if response.status_code == 400:
         print("✅ Correctly rejected max_age_days=0")
@@ -79,8 +80,8 @@ def test_cache_cleanup_validation():
         print(f"❌ Should reject max_age_days=0 with 400, got {response.status_code}")
 
     # Test invalid max_age_days (too large)
-    response = requests.post(
-        CACHE_CLEANUP_URL, json={"max_age_days": 500}, headers=headers
+    response = client.post(
+        "/cache/cleanup", json={"max_age_days": 500}, headers=headers
     )
     print(f"max_age_days=500 -> Status: {response.status_code}")
     if response.status_code == 400:
@@ -89,9 +90,7 @@ def test_cache_cleanup_validation():
         print(f"❌ Should reject max_age_days=500 with 400, got {response.status_code}")
 
     # Test valid max_age_days
-    response = requests.post(
-        CACHE_CLEANUP_URL, json={"max_age_days": 7}, headers=headers
-    )
+    response = client.post("/cache/cleanup", json={"max_age_days": 7}, headers=headers)
     print(f"max_age_days=7 -> Status: {response.status_code}")
     if response.status_code == 200:
         print("✅ Correctly accepted max_age_days=7")
@@ -105,8 +104,8 @@ def test_query_param_auth():
     """Test authentication via query parameter"""
     print("Testing authentication via query parameter...")
 
-    url = f"{CACHE_CLEANUP_URL}?api_key={settings.api_key}"
-    response = requests.post(url, json={})
+    url = f"/cache/cleanup?api_key={settings.api_key}"
+    response = client.post(url, json={})
     print(f"Status Code: {response.status_code}")
 
     if response.status_code == 200:
@@ -123,7 +122,7 @@ def main():
     print(f"Environment: {settings.environment}")
     print(f"Debug mode: {settings.debug}")
     print(f"API Key set: {'Yes' if settings.api_key else 'No'}")
-    print(f"Base URL: {BASE_URL}")
+    print(f"Using TestClient for testing")
     print("=" * 50)
 
     try:
@@ -135,8 +134,6 @@ def main():
 
         print("🎉 All tests completed!")
 
-    except requests.exceptions.ConnectionError:
-        print("❌ Connection error: Make sure the server is running")
     except Exception as e:
         print(f"❌ Test error: {e}")
 
