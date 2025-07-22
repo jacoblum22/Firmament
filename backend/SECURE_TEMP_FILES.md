@@ -145,13 +145,18 @@ with secure_temp_file(file_bytes, prefix="upload_", suffix=".bin") as temp_path:
 
 ## New Management Endpoints
 
-### Temporary Storage Statistics
+#### Temporary Storage Statistics
 ```
 GET /temp-storage/stats
 ```
 Returns information about memory usage and pending cleanup tasks.
 
-### Manual Cleanup
+**Security Restrictions:**
+- Requires authentication.
+- Restricted to users with the admin role or valid service tokens.
+- Includes CSRF protection to prevent unauthorized access.
+
+#### Manual Cleanup
 ```
 POST /temp-storage/cleanup
 {
@@ -162,6 +167,11 @@ POST /temp-storage/cleanup
 }
 ```
 Cleans up orphaned temporary storage (memory and files).
+
+**Security Restrictions:**
+- Requires authentication.
+- Restricted to users with the admin role or valid service tokens.
+- Includes CSRF protection to prevent unauthorized actions.
 
 ## Security Benefits
 

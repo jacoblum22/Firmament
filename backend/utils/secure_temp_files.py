@@ -7,6 +7,7 @@ restrictive permissions, and optional encryption for sensitive data.
 
 import os
 import tempfile
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Generator, Dict, Any
@@ -84,14 +85,15 @@ class SecureTempFile:
                 return temp_path
 
             except Exception as e:
-                # Clean up file descriptor if writing failed
-                try:
-                    os.close(fd)
-                except:
-                    pass
                 # Remove the temp file if it was created
-                if os.path.exists(temp_path):
-                    self._secure_delete_file(temp_path)
+                try:
+                    if os.path.exists(temp_path):
+                        self._secure_delete_file(temp_path)
+                except Exception as cleanup_error:
+                    logger.warning(f"Cleanup failed for {temp_path}: {cleanup_error}")
+                    # Preserve the original exception
+                    raise e from cleanup_error
+
                 raise e
 
         except Exception as e:
@@ -107,13 +109,8 @@ class SecureTempFile:
         """
         try:
             if os.name == "nt":  # Windows
-                # On Windows, use basic chmod first
-                os.chmod(file_path, self.permissions)
-
-                # For Windows, we primarily rely on the fact that files in temp directory
-                # are not accessible to other users by default. Adding ACL can be problematic.
-                # The basic chmod should be sufficient for most security purposes.
-
+                # On Windows, use icacls to set proper ACL for owner-only access
+                self._set_windows_acl(file_path)
             else:
                 # Unix/Linux - use standard chmod which works reliably
                 os.chmod(file_path, self.permissions)
@@ -121,6 +118,54 @@ class SecureTempFile:
         except Exception as e:
             logger.warning(f"Failed to set secure permissions on {file_path}: {e}")
             # Don't fail the entire operation if permission setting fails
+
+    def _set_windows_acl(self, file_path: str) -> None:
+        """
+        Set Windows ACL to restrict access to current user only.
+
+        Args:
+            file_path: Path to the file to secure
+        """
+        try:
+            # Get current user
+            import getpass
+
+            current_user = getpass.getuser()
+
+            # Remove all inherited permissions and set owner-only access
+            # /inheritance:r removes inheritance
+            # /grant gives specific permissions (F = Full control to current user)
+            # /deny Everyone:F would deny access to everyone else, but we'll use a more targeted approach
+
+            subprocess.run(
+                [
+                    "icacls",
+                    file_path,
+                    "/inheritance:r",  # Remove inheritance
+                    "/grant:r",
+                    f"{current_user}:(F)",  # Grant full control to current user only
+                    "/remove",
+                    "Everyone",  # Remove Everyone group
+                    "/remove",
+                    "Users",  # Remove Users group
+                    "/remove",
+                    "Authenticated Users",  # Remove Authenticated Users group
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            logger.debug(f"Set Windows ACL for {file_path} to owner-only access")
+
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to set Windows ACL on {file_path}: {e.stderr}")
+            # Fallback to basic chmod
+            os.chmod(file_path, self.permissions)
+        except Exception as e:
+            logger.warning(f"Error setting Windows ACL on {file_path}: {e}")
+            # Fallback to basic chmod
+            os.chmod(file_path, self.permissions)
 
     def cleanup_file(self, file_path: str, identifier: Optional[str] = None) -> bool:
         """

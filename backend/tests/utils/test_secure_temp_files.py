@@ -3,6 +3,8 @@ Test cases for secure temporary file handling improvements.
 """
 
 import os
+import subprocess
+import getpass
 import pytest
 
 from utils.secure_temp_files import (
@@ -15,6 +17,43 @@ from utils.secure_temp_files import (
 
 class TestSecureTempFile:
     """Test secure temporary file functionality."""
+
+    def _verify_windows_acl_security(self, file_path: str) -> None:
+        """
+        Verify that Windows ACL restricts access to current user only.
+
+        Args:
+            file_path: Path to the file to check
+        """
+        try:
+            # Get ACL information using icacls
+            result = subprocess.run(
+                ["icacls", file_path], capture_output=True, text=True, check=True
+            )
+
+            acl_output = result.stdout
+            current_user = getpass.getuser()
+
+            # Check that only the current user has permissions
+            lines = acl_output.strip().split("\n")
+            permission_line = lines[0] if lines else ""
+
+            # Should contain current user with permissions, and no other users
+            assert (
+                current_user in permission_line
+            ), f"Current user {current_user} not found in ACL: {permission_line}"
+
+            # Should not contain common insecure groups
+            insecure_patterns = ["Everyone:", "Users:", "Authenticated Users:"]
+            for pattern in insecure_patterns:
+                assert (
+                    pattern not in acl_output
+                ), f"Insecure permission found: {pattern} in ACL output: {acl_output}"
+
+        except subprocess.CalledProcessError as e:
+            pytest.fail(f"Failed to check Windows ACL: {e.stderr}")
+        except Exception as e:
+            pytest.fail(f"Error checking Windows ACL: {e}")
 
     def test_create_secure_temp_file(self):
         """Test creating a secure temporary file with restricted permissions."""
@@ -34,16 +73,13 @@ class TestSecureTempFile:
             permissions = oct(file_stat.st_mode)[-3:]  # Get last 3 digits
 
             if os.name == "nt":  # Windows
-                # Windows chmod behavior is different, accept either 600 or 666
-                # The important thing is that the file was created and our ACL settings were applied
-                assert permissions in [
-                    "600",
-                    "666",
-                ], f"Expected '600' or '666' on Windows, got '{permissions}'"
+                # On Windows, verify ACL security instead of Unix permissions
+                self._verify_windows_acl_security(temp_path)
             else:  # Unix/Linux
+                # On Unix, check traditional permissions
                 assert (
                     permissions == "600"
-                ), f"Expected '600' on Unix, got '{permissions}'"
+                ), f"Expected '600' (owner read/write only) on Unix, got '{permissions}'"
 
         finally:
             # Cleanup

@@ -17,25 +17,14 @@ CACHE_CLEANUP_URL = f"{BASE_URL}/cache/cleanup"
 
 def test_cache_cleanup_no_auth():
     """Test cache cleanup without authentication"""
-    print("Testing cache cleanup without authentication...")
-
-    response = requests.post(CACHE_CLEANUP_URL, json={})
-    print(f"Status Code: {response.status_code}")
+    response = requests.post(CACHE_CLEANUP_URL, json={}, timeout=10)
 
     if settings.is_development:
         # Should succeed in development
-        if response.status_code == 200:
-            print("✅ Development: Allowed without authentication (as expected)")
-        else:
-            print(f"❌ Development: Expected 200, got {response.status_code}")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
     else:
         # Should fail in production
-        if response.status_code == 401:
-            print("✅ Production: Correctly rejected without authentication")
-        else:
-            print(f"❌ Production: Expected 401, got {response.status_code}")
-
-    print(f"Response: {response.text[:200]}...\n")
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
 
 
 def test_cache_cleanup_with_valid_auth():
