@@ -41,7 +41,7 @@ class SecureTempFile:
         self.suffix = suffix
         self.secure_delete = secure_delete
         self.permissions = permissions
-        self.temp_files: Dict[str, str] = {}  # Track created temp files
+        self.temp_files: Dict[str, str] = {}  # Maps identifier (str) -> temp file path (str)
 
     def create_temp_file(self, content: bytes, identifier: Optional[str] = None) -> str:
         """
