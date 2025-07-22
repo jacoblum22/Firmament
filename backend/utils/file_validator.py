@@ -36,7 +36,7 @@ class FileValidator:
 
     # Maximum file sizes per type (in bytes)
     MAX_FILE_SIZES = {
-        "pdf": 100 * 1024 * 1024,  # 100MB for PDFs (increased for development)
+        "pdf": 50 * 1024 * 1024,  # 50MB for PDFs
         "mp3": 200 * 1024 * 1024,  # 200MB for MP3
         "wav": 500 * 1024 * 1024,  # 500MB for WAV (uncompressed)
         "txt": 10 * 1024 * 1024,  # 10MB for text files
