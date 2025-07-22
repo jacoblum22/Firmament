@@ -12,8 +12,7 @@ from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
 from utils.content_cache import get_content_cache
 from typing import Dict, Any, Optional
--from utils.secure_temp_files import SecureTempFile, get_memory_storage, secure_temp_file
-+from utils.secure_temp_files import SecureTempFile, get_memory_storage
+from utils.secure_temp_files import SecureTempFile, get_memory_storage
 
 
 # Fallback function for testing environments where utils may not be available
