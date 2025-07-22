@@ -905,12 +905,12 @@ def generate_headings(data: dict):
                 try:
                     with open(temp_content_file, "rb") as f:
                         file_bytes = f.read()
-                    print(
+                    logger.info(
                         f"Retrieved file content from secure temp file (hash: {content_hash[:8] if content_hash else 'unknown'}...)"
                     )
                 except Exception as read_error:
-                    print(
-                        f"Warning: Failed to read secure temp file {temp_content_file}: {read_error}"
+                    logger.warning(
+                        f"Failed to read secure temp file {temp_content_file}: {read_error}"
                     )
 
             elif (
