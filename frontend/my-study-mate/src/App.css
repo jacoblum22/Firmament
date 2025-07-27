@@ -7,6 +7,9 @@
     #05001d,
     #001040
   );
+  --glass-size: clamp(2rem, 4vw, 5rem);
+  --glass-hover-time: 400ms;
+  --glass-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 body {
@@ -496,3 +499,18 @@ canvas {
     height: 14px; /* Slightly smaller height on mobile */
   }
 }
+
+/* ========== GLASSMORPHIC BUTTON ========== */
+
+@property --angle-1 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -75deg;
+}
+
+@property --angle-2 {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -45deg;
+}
+

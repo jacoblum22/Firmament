@@ -1,0 +1,23 @@
+# Development Dependencies
+# These are additional packages needed for development, testing, and debugging
+
+# Testing
+pytest==8.4.1
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+httpx==0.28.1  # For testing FastAPI endpoints
+
+# Code Quality
+black==24.12.0
+flake8==7.1.1
+mypy==1.14.0
+pre-commit==4.1.0
+
+# Development Tools
+watchdog==6.0.0  # For file watching during development
+ipython==8.32.0  # Enhanced Python shell
+jupyter==1.1.1   # For notebooks and exploration
+
+# API Documentation
+mkdocs==1.6.1
+mkdocs-material==9.5.55

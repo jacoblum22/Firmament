@@ -1,0 +1,28 @@
+# Production Dependencies
+# Core runtime dependencies for production deployment
+
+# Core Framework
+fastapi==0.115.14
+uvicorn==0.35.0
+pydantic==2.11.7
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
+
+# Security & Performance
+gunicorn==23.0.0  # Production WSGI server
+psycopg2-binary==2.9.10  # PostgreSQL adapter
+redis==5.2.1  # Redis client for caching
+celery==5.4.0  # Task queue for background jobs
+
+# Monitoring & Logging
+prometheus-client==0.21.1  # Metrics collection
+structlog==24.5.0  # Structured logging
+sentry-sdk==2.21.0  # Error tracking
+
+# HTTP & Networking
+httpx==0.28.1  # HTTP client
+certifi==2024.12.14  # SSL certificates
+
+# Data Processing (if needed)
+pandas==2.2.3
+numpy==2.2.1

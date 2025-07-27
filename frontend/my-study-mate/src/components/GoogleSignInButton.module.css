@@ -1,0 +1,147 @@
+/**
+ * Google Sign-In Button CSS Module
+ * 
+ * Optimized with accessibility support and performance considerations.
+ * Timing values synchronized with ANIMATION_CONFIG in the React component.
+ */
+
+/* Register the typed custom property so it becomes animatable */
+@property --glow-opacity {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
+/* Base button styles */
+.button {
+  --glow-opacity: 0;
+  transition: --glow-opacity 0.4s ease-in;
+}
+/* Color cycle animation keyframes with smooth transitions */
+@keyframes colorCyclePulse {
+  0% {
+    box-shadow: 
+      0 0 15px -5px hsla(185, 100%, 50%, calc(0.8 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(185, 100%, 50%, calc(0.6 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(185, 100%, 50%, calc(0.4 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(185, 100%, 50%, calc(0.3 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(185, 100%, 50%, calc(0.2 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  16.7% {
+    box-shadow: 
+      0 0 15px -5px hsla(250, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(250, 100%, 60%, calc(0 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(250, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(250, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(250, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  33.3% {
+    box-shadow: 
+      0 0 15px -5px hsla(315, 100%, 50%, calc(0.8 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(315, 100%, 50%, calc(0.6 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(315, 100%, 50%, calc(0.4 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(315, 100%, 50%, calc(0.3 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(315, 100%, 50%, calc(0.2 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  50% {
+    box-shadow: 
+      0 0 15px -5px hsla(350, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(350, 100%, 60%, calc(0 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(350, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(350, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(350, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  66.7% {
+    box-shadow: 
+      0 0 15px -5px hsla(35, 100%, 50%, calc(0.8 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(35, 100%, 50%, calc(0.6 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(35, 100%, 50%, calc(0.4 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(35, 100%, 50%, calc(0.3 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(35, 100%, 50%, calc(0.2 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  83.3% {
+    box-shadow: 
+      0 0 15px -5px hsla(210, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(210, 100%, 60%, calc(0 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(210, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(210, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(210, 100%, 60%, calc(0 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+  
+  100% {
+    box-shadow: 
+      0 0 15px -5px hsla(185, 100%, 50%, calc(0.8 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(185, 100%, 50%, calc(0.6 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(185, 100%, 50%, calc(0.4 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(185, 100%, 50%, calc(0.3 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(185, 100%, 50%, calc(0.2 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+  }
+}
+
+/* Animation states */
+.hovering {
+  --glow-opacity: 1;
+  animation: colorCyclePulse 4.5s ease-in-out infinite;
+  animation-delay: -0.75s; /* Start at 16.7% keyframe (first zero-opacity point) */
+  transition: --glow-opacity 0.6s ease-out;
+}
+
+.finishing {
+  --glow-opacity: 1;
+  animation: colorCyclePulse 4.5s ease-in-out infinite;
+  animation-delay: -0.75s;
+  transition: --glow-opacity 0.6s ease-out;
+}
+
+/* Accessibility: Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    /* Disable complex animations for users who prefer reduced motion */
+    --glow-opacity: 0;
+  }
+  
+  .hovering,
+  .finishing {
+    /* Provide a simple, static glow effect instead of animated cycling */
+    animation: none;
+    box-shadow: 
+      0 0 15px -5px hsla(185, 100%, 50%, calc(0.6 * var(--glow-opacity, 0))),
+      0 0 20px -5px hsla(185, 100%, 50%, calc(0.4 * var(--glow-opacity, 0))), 
+      0 0 25px -5px hsla(185, 100%, 50%, calc(0.3 * var(--glow-opacity, 0))),
+      0 0 30px -5px hsla(185, 100%, 50%, calc(0.2 * var(--glow-opacity, 0))),
+      0 0 35px -5px hsla(185, 100%, 50%, calc(0.1 * var(--glow-opacity, 0))),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px;
+    transition: none;
+  }
+  
+  .hovering {
+    --glow-opacity: 1;
+  }
+  
+  .finishing {
+    --glow-opacity: 0;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .hovering,
+  .finishing {
+    /* Use simpler shadows for high contrast mode */
+    box-shadow: 
+      0 0 5px hsla(185, 100%, 50%, var(--glow-opacity, 0)),
+      rgba(0, 0, 0, 0.1) 0px 4px 8px !important;
+  }
+}

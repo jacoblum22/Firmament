@@ -1,0 +1,18 @@
+{
+  "issues": [
+    "Placeholder values in .env.production: ['localhost']",
+    "Placeholder values in .env.production: ['127.0.0.1']"
+  ],
+  "recommendations": [
+    "Replace 'localhost' in .env.production with actual production hostname (e.g., 'yourdomain.com' or production server IP)",
+    "Replace '127.0.0.1' in .env.production with actual production hostname or configure via environment variables",
+    "Use secrets manager (AWS Secrets Manager, Azure Key Vault, or similar) to store production hostnames securely",
+    "Verify CORS_ORIGINS are set to production frontend URLs, not localhost",
+    "Consider using environment-specific configuration files with proper validation"
+  ],
+  "summary": {
+    "total_issues": 2,
+    "total_recommendations": 5,
+    "status": "FAIL"
+  }
+}

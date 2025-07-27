@@ -1,0 +1,19 @@
+{
+  "name": "studymate-backend",
+  "version": "1.0.0",
+  "description": "StudyMate-v2 FastAPI Backend",
+  "main": "main.py",
+  "scripts": {
+    "start": "python main.py",
+    "dev": "python main.py",
+    "test": "python -m pytest",
+    "test:integration": "python test_integration_auth.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jacoblum22/StudyMate-v2.git"
+  },
+  "keywords": ["studymate", "fastapi", "python", "ai", "education"],
+  "author": "Jacob Lum",
+  "license": "MIT"
+}

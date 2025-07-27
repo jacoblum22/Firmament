@@ -1,0 +1,37 @@
+# Fast startup requirements - core dependencies only
+# Install these first for fastest startup time
+
+# Core Framework (required)
+fastapi==0.115.14
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
+
+# Basic security and CORS (required)
+python-multipart==0.0.6
+
+# Lightweight alternatives (if you don't need full ML features)
+# Use these instead of the heavy ML libraries for development/testing
+requests==2.32.4
+aiofiles==24.1.0
+
+# Optional: Only install if you need audio processing
+# pydub==0.25.1
+# whisper==1.1.10
+# faster-whisper==1.1.0
+
+# Optional: Only install if you need ML/NLP features  
+# torch==2.5.1
+# bertopic==0.16.4
+# scikit-learn==1.6.0
+# nltk==3.9.1
+# sentence-transformers==3.3.1
+
+# Optional: Only install if you need Redis
+# redis==5.2.1
+
+# Optional: Production monitoring
+# prometheus-client==0.21.1
+# structlog==24.5.0
+# sentry-sdk==2.21.0
