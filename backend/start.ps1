@@ -4,7 +4,7 @@
 param(
     [ValidateSet("development", "production")]
     [string]$Environment = "development",
-    [string]$Host = $null,
+    [string]$ApplicationHostname = $null,
     [int]$Port = $null,
     [switch]$Reload,
     [int]$Workers = $null
@@ -19,8 +19,8 @@ $env:ENVIRONMENT = $Environment
 # Build arguments
 $args = @("start.py", "--env", $Environment)
 
-if ($Host) {
-    $args += "--host", $Host
+if ($ApplicationHostname) {
+    $args += "--host", $ApplicationHostname
 }
 
 if ($Port) {
@@ -35,8 +35,8 @@ if ($Workers) {
     $args += "--workers", $Workers
 }
 
-# Check if virtual environment exists
-if (Test-Path "venv\Scripts\Activate.ps1") {
+# Ensure virtual environment is activated
+if (-not (Test-Path env:VIRTUAL_ENV)) {
     Write-Host "📦 Activating virtual environment..." -ForegroundColor Yellow
     & "venv\Scripts\Activate.ps1"
 }

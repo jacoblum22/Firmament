@@ -1,5 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.responses import StreamingResponse
+from pydantic import BaseModel
 import os
 from pydub import AudioSegment
 import json
@@ -11,6 +13,8 @@ from config import settings
 from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
 from utils.content_cache import get_content_cache
+from utils.auth import get_auth_manager, require_authentication, optional_authentication
+from utils.s3_storage import get_storage_manager
 from typing import Dict, Any, Optional
 import logging
 
@@ -22,11 +26,6 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 from utils.secure_temp_files import SecureTempFile, get_memory_storage
-
-
-# Fallback function for testing environments where utils may not be available
-def fallback_debug_bullet_point(*args, **kwargs) -> Dict[str, Any]:
-    return {"error": "bullet_point_debugger not available"}
 
 
 # Authentication dependency for sensitive operations
@@ -101,20 +100,109 @@ def validate_max_age_days(max_age_days: int) -> int:
     return max_age_days
 
 
-# Lazy import with fallback for testing environments
-def get_bullet_point_debugger():
-    try:
-        from utils.bullet_point_debugger import debug_bullet_point
-
-        return debug_bullet_point
-    except ImportError:
-        return fallback_debug_bullet_point
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return fallback_debug_bullet_point
-
-
 router = APIRouter()
+
+
+# Pydantic models for authentication
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+
+class AuthResponse(BaseModel):
+    success: bool
+    session_token: str
+    user_info: Dict[str, Any]
+
+
+class UserInfo(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    picture: str
+
+
+# Security scheme for JWT tokens
+security = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Optional[Dict[str, Any]]:
+    """Get current user from JWT token"""
+    if not credentials:
+        return None
+
+    auth_manager = get_auth_manager()
+    return auth_manager.verify_session_token(credentials.credentials)
+
+
+def get_current_user_required(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Dict[str, Any]:
+    """Get current user from JWT token (required)"""
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    auth_manager = get_auth_manager()
+    user_info = auth_manager.verify_session_token(credentials.credentials)
+
+    if not user_info:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user_info
+
+
+# Authentication endpoints
+@router.post("/auth/google", response_model=AuthResponse)
+async def authenticate_with_google(request: GoogleAuthRequest):
+    """
+    Authenticate user with Google OAuth token
+    """
+    auth_manager = get_auth_manager()
+
+    # Verify Google token
+    user_info = auth_manager.verify_google_token(request.token)
+    if not user_info:
+        raise HTTPException(
+            status_code=400, detail="Invalid Google authentication token"
+        )
+
+    # Create session token
+    session_token = auth_manager.create_session_token(user_info)
+
+    return AuthResponse(success=True, session_token=session_token, user_info=user_info)
+
+
+@router.get("/auth/me", response_model=UserInfo)
+async def get_current_user_info(
+    current_user: Dict[str, Any] = Depends(get_current_user_required),
+):
+    """
+    Get current authenticated user information
+    """
+    return UserInfo(
+        user_id=current_user["user_id"],
+        email=current_user["email"],
+        name=current_user["name"],
+        picture=current_user.get("picture", ""),
+    )
+
+
+@router.post("/auth/logout")
+async def logout():
+    """
+    Logout user (client should discard the token)
+    """
+    return {"success": True, "message": "Logged out successfully"}
+
 
 # Get the absolute path to the backend directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -186,9 +274,26 @@ async def progress_stream(job_id: str):
 
 
 @router.post("/upload")
-async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def upload_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user),
+):
     job_id = str(uuid4())
     set_status(job_id, stage="uploading")
+
+    # For backwards compatibility, support uploads without authentication in development
+    user_id = None
+    if current_user:
+        user_id = current_user["user_id"]
+        print(f"[{job_id[:8]}] Authenticated upload for user: {current_user['email']}")
+    elif settings.is_production:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required for file uploads in production",
+        )
+    else:
+        print(f"[{job_id[:8]}] Anonymous upload (development mode)")
 
     # Debug logging to help diagnose 422 errors
     print(f"[{job_id[:8]}] Upload request received:")
@@ -226,12 +331,51 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
             # Initialize content cache
             cache = get_content_cache()
 
-            # Use safe filename for file operations
-            file_location = os.path.join(UPLOAD_DIR, safe_filename)
+            # Get storage and auth managers
+            storage_manager = get_storage_manager()
+            auth_manager = get_auth_manager()
 
-            # Save the original file to the 'uploads' folder
-            with open(file_location, "wb") as f:
-                f.write(file_bytes)
+            # Generate content hash for hybrid sharing
+            content_hash = auth_manager.get_user_content_hash(
+                user_id or "anonymous", file_bytes
+            )
+
+            # Determine storage paths
+            if user_id:
+                # User-specific storage for authenticated users
+                user_storage_path = auth_manager.get_user_storage_path(
+                    user_id, content_hash, "uploads"
+                )
+                cache_storage_path = auth_manager.get_user_storage_path(
+                    user_id, content_hash, "cache"
+                )
+                # Use shared cache for processed data that can be safely shared
+                shared_cache_path = auth_manager.get_shared_cache_path(content_hash)
+            else:
+                # Anonymous storage for development
+                user_storage_path = f"uploads/anonymous/{content_hash}/"
+                cache_storage_path = f"cache/anonymous/{content_hash}/"
+                shared_cache_path = f"cache/shared/{content_hash}/"
+
+            # Use safe filename for file operations
+            file_key = user_storage_path + safe_filename
+
+            # Save the original file to user-specific storage
+            success = storage_manager.upload_file(
+                file_bytes, file_key, file.content_type
+            )
+            if not success:
+                raise Exception("Failed to save uploaded file")
+
+            # For processing, we might need a local temp file for some operations
+            # Create a temporary local file for compatibility with existing processing code
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=f".{ext}"
+            ) as temp_file:
+                temp_file.write(file_bytes)
+                file_location = temp_file.name
 
             set_status(job_id, stage="preprocessing")
 
@@ -666,6 +810,16 @@ async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File
                 {"job_id": job_id, "filename": filename},
             )
             set_status(job_id, stage="error", error=error_info["error"])
+        finally:
+            # Clean up temporary file
+            try:
+                if "file_location" in locals() and os.path.exists(file_location):
+                    os.remove(file_location)
+                    print(f"[{job_id[:8]}] Cleaned up temporary file: {file_location}")
+            except Exception as cleanup_error:
+                print(
+                    f"[{job_id[:8]}] Warning: Failed to cleanup temporary file: {cleanup_error}"
+                )
 
     # Validate file extension before processing
     ext = filename.split(".")[-1].lower()
@@ -1054,65 +1208,6 @@ def expand_cluster(data: dict):
     # Pass only the filename (not the full path) to expand_cluster
     result = expand_cluster_util(processed_filename, cluster_id)
     return result
-
-
-@router.post("/debug-bullet-point")
-def debug_bullet_point_endpoint(data: dict):
-    """
-    Debug a bullet point by finding its most similar chunk and comparing it to other topics.
-
-    Args:
-        data (dict): A dictionary containing 'bullet_point' (str), 'chunks' (list of str), and 'topics' (dict).
-
-    Returns:
-        dict: Debugging result including the most similar chunk, similarity to the current topic, and topic similarities.
-    """
-    from typing import Dict, Any
-
-    bullet_point = data.get("bullet_point")
-    chunks = data.get("chunks", [])
-    topics = data.get("topics", {})
-
-    if not bullet_point or not chunks or not topics:
-        return ErrorMessages.get_user_friendly_error(
-            "invalid_request",
-            "Missing bullet_point, chunks, or topics",
-            {
-                "operation": "bullet point analysis",
-                "required_fields": ["bullet_point", "chunks", "topics"],
-            },
-        )
-
-    try:
-        debug_bullet_point = get_bullet_point_debugger()
-        result: Dict[str, Any] = debug_bullet_point(bullet_point, chunks, topics)
-
-        # Convert numpy types to native Python types
-        result["similarity_to_current_topic"] = float(
-            result["similarity_to_current_topic"]
-        )
-
-        # Convert top_similar_chunks similarities to float
-        if "top_similar_chunks" in result:
-            result["top_similar_chunks"] = [
-                {"chunk": chunk["chunk"], "similarity": float(chunk["similarity"])}
-                for chunk in result["top_similar_chunks"]
-            ]
-
-        topic_similarities = result.get("topic_similarities")
-        if isinstance(topic_similarities, dict):
-            result["topic_similarities"] = {
-                key: float(value) for key, value in topic_similarities.items()
-            }
-        else:
-            result["topic_similarities"] = {}
-
-        return result
-    except Exception as e:
-        error_info = ErrorMessages.get_user_friendly_error(
-            "processing_failed", str(e), {"operation": "bullet point analysis"}
-        )
-        return error_info
 
 
 @router.post("/expand-bullet-point")

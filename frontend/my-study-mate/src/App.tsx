@@ -6,7 +6,10 @@ import ReactMarkdown from 'react-markdown';
 import config from './config';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
+import { AuthHeader } from './components/AuthHeader';
+import { GoogleSignInButton } from './components/GoogleSignInButton';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { useAuth } from './contexts/AuthContext';
 import ErrorDisplay from './components/ErrorDisplay';
 import apiService, { 
   TopicResponse, 
@@ -64,10 +67,12 @@ const buttonStyle: React.CSSProperties = {
 };
 
 function App() {
+  const { isAuthenticated, isLoading } = useAuth();
   const [, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<UploadResponse | null>(null);
   const [topics, setTopics] = useState<TopicResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [, setJobId] = useState<string | null>(null);
   type JobStatus =
     | { stage: "uploading" | "preprocessing" | "saving_output" }
@@ -89,7 +94,6 @@ function App() {
     num_chunks: number;
     total_words: number;
   } | null>(null);
-  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [expandedBullets, setExpandedBullets] = useState<NestedExpansions>({});
 
   // Network status for connection handling
@@ -587,85 +591,6 @@ function App() {
     }
   };
 
-  const handleDebugBulletPoint = async (bulletPoint: string, topicId: string) => {
-    console.log("🔍 Debug bullet point clicked:", { bulletPoint, topicId });
-    
-    if (!topics || !topics.topics[topicId]) {
-      console.error("❌ No topics or topic not found:", { topics: !!topics, topicExists: !!topics?.topics[topicId] });
-      return;
-    }
-
-    const topic = topics.topics[topicId];
-    
-    // Try to get all chunks, fallback to examples if not available
-    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Debug") || topic.examples || [];
-    
-    // Convert topics to the structure expected by the backend
-    const allTopics = Object.keys(topics.topics).reduce((acc, id) => {
-      const topicData = topics.topics[id];
-      const chunks = memoizedGetAllTopicChunks(topicData, topics?.segments, id, "Debug-All") || topicData.examples || [];
-      acc[id] = {
-        examples: chunks, // Use all chunks, not just examples
-        heading: topicData.heading
-      };
-      return acc;
-    }, {} as { [key: string]: { examples: string[], heading: string } });
-
-    console.log("📊 Request data:", { 
-      bullet_point: bulletPoint,
-      chunks_count: topicChunks?.length || 0,
-      topics_count: Object.keys(allTopics).length 
-    });
-
-    try {
-      const res = await fetch(config.getApiUrl("debug-bullet-point"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bullet_point: bulletPoint,
-          chunks: topicChunks,
-          topics: allTopics,
-        }),
-      });
-
-      if (!res.ok) {
-        console.error("❌ HTTP error:", res.status, res.statusText);
-        const errorText = await res.text();
-        console.error("Error response:", errorText);
-        return;
-      }
-
-      const data = await res.json();
-      console.log("📥 Backend response:", data);
-
-      if (data.error) {
-        console.error("Error debugging bullet point:", data.error);
-      } else {
-        console.log("✅ Debugging result received:", data);
-        // Display the result below the bullet point
-        setTopics((prevTopics) => {
-          if (!prevTopics) {
-            console.error("❌ No prevTopics in setState");
-            return prevTopics;
-          }
-
-          const updatedTopics = { ...prevTopics.topics };
-          updatedTopics[topicId] = {
-            ...updatedTopics[topicId],
-            debugResult: data, // Add debug result to the topic
-          };
-
-          console.log("🔄 Updated topic with debug result:", updatedTopics[topicId]);
-          return { ...prevTopics, topics: updatedTopics };
-        });
-      }
-    } catch (error) {
-      console.error("Failed to debug bullet point:", error);
-    }
-  };
-
   const handleExpandBulletPoint = async (bulletPoint: string, topicId: string) => {
     console.log("🔧 Expand bullet point clicked:", { bulletPoint, topicId });
     
@@ -881,86 +806,6 @@ function App() {
     setExpandedBullets(newExpandedBullets);
   };
 
-  const renderDebugResult = (topicId: string) => {
-    const debugResult = topics?.topics[topicId]?.debugResult;
-    console.log("🎨 Rendering debug result for topic:", topicId, debugResult);
-    
-    if (!debugResult) {
-      console.log("❌ No debug result to render for topic:", topicId);
-      return null;
-    }
-
-    console.log("✅ Rendering debug result:", debugResult);
-    return (
-      <div style={{ 
-        marginTop: "1rem", 
-        padding: "1rem", 
-        border: "1px solid #ccc",
-        borderRadius: "8px",
-        background: "rgba(255, 255, 255, 0.02)"
-      }}>
-        <h4 style={{ margin: "0 0 1rem 0", color: "#fff" }}>Debugging Result:</h4>
-        <p><strong>Bullet Point:</strong> {debugResult.bullet_point}</p>
-        
-        <div style={{ marginBottom: "1rem" }}>
-          <strong>Top 5 Most Similar Chunks:</strong>
-          <div style={{ marginTop: "0.5rem" }}>
-            {debugResult.top_similar_chunks && debugResult.top_similar_chunks.map((item, idx) => (
-              <div key={idx} style={{ 
-                marginBottom: "0.8rem", 
-                padding: "0.8rem", 
-                background: idx === 0 ? "rgba(185, 255, 128, 0.1)" : "rgba(255, 255, 255, 0.05)",
-                borderRadius: "6px",
-                border: idx === 0 ? "1px solid rgba(185, 255, 128, 0.3)" : "1px solid rgba(255, 255, 255, 0.1)"
-              }}>
-                <div style={{ 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center",
-                  marginBottom: "0.5rem"
-                }}>
-                  <strong style={{ color: idx === 0 ? "hsl(185, 100%, 70%)" : "#ccc" }}>
-                    #{idx + 1} {idx === 0 ? "(Most Similar)" : ""}
-                  </strong>
-                  <span style={{ 
-                    color: idx === 0 ? "hsl(185, 100%, 70%)" : "#999",
-                    fontWeight: "bold"
-                  }}>
-                    {item.similarity.toFixed(3)}
-                  </span>
-                </div>
-                <p style={{ 
-                  margin: 0, 
-                  color: "#ddd", 
-                  fontSize: "0.9rem",
-                  lineHeight: "1.4"
-                }}>
-                  {item.chunk}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p><strong>Similarity to Current Topic:</strong> {debugResult.similarity_to_current_topic.toFixed(3)}</p>
-        
-        <div>
-          <h5 style={{ margin: "1rem 0 0.5rem 0" }}>Topic Similarities:</h5>
-          <ul style={{ margin: 0, paddingLeft: "1.5rem" }}>
-            {debugResult.topic_similarities &&
-              Object.entries(debugResult.topic_similarities)
-                .sort(([,a], [,b]) => b - a) // Sort by similarity descending
-                .map(([title, similarity]) => (
-                  <li key={title} style={{ marginBottom: "0.3rem" }}>
-                    {title}: <strong>{similarity.toFixed(3)}</strong>
-                  </li>
-                ))}
-          </ul>
-        </div>
-      </div>
-    );
-  };
-
   const renderSubBullets = (
     subBullets: string[], 
     parentBulletKey: string, 
@@ -993,11 +838,7 @@ function App() {
               onClick={(e) => {
                 e.stopPropagation(); // Prevent parent click
                 if (depth < 2) {
-                  if (isDeveloperMode) {
-                    handleDebugBulletPoint(subBullet, topicId);
-                  } else {
-                    handleExpandSubBulletPoint(subBullet, topicId, parentBulletKey, depth);
-                  }
+                  handleExpandSubBulletPoint(subBullet, topicId, parentBulletKey, depth);
                 }
               }}
             >
@@ -1042,11 +883,7 @@ function App() {
               key={bulletKey} 
               style={{ marginBottom: "0.5rem", cursor: "pointer" }}
               onClick={() => {
-                if (isDeveloperMode) {
-                  handleDebugBulletPoint(point, topicId);
-                } else {
-                  handleExpandBulletPoint(point, topicId);
-                }
+                handleExpandBulletPoint(point, topicId);
               }}
             >
               <div>
@@ -1088,9 +925,117 @@ function App() {
           isBackendReachable={isBackendReachable}
           forceHealthCheck={forceHealthCheck}
         />
-      ) : (
+      ) : !isAuthenticated ? (
+        // Show sign-in screen when not authenticated
         <>
           <ConnectionStatus />
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            minHeight: '100vh',
+            padding: '2rem',
+            fontFamily: '"Outfit", sans-serif',
+            textAlign: 'center'
+          }}>
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              <div 
+                className="label"
+                style={{ 
+                  fontSize: '4.5rem',
+                  marginBottom: '1rem',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  letterSpacing: '-0.02em'
+                }}
+              >
+                MyStudyMate
+              </div>
+              <div
+                className="glow-text"
+                data-text="Smarter Studying Starts Here."
+                style={{ 
+                  fontSize: '2rem',
+                  marginBottom: '3rem',
+                  color: 'rgba(255, 255, 255, 0.9)',
+                  fontWeight: '500',
+                  letterSpacing: '-0.01em'
+                }}
+              >
+                Smarter Studying Starts Here.
+              </div>
+              <p style={{ 
+                fontSize: '1.2rem',
+                color: '#ffffff',
+                marginBottom: '3rem',
+                maxWidth: '600px',
+                lineHeight: '1.7',
+                fontWeight: '400'
+              }}>
+                Upload your study materials and let AI help you create comprehensive study guides, 
+                summarize topics, and expand on key concepts.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{ width: 'fit-content' }}>
+                  <GoogleSignInButton 
+                    size="large"
+                    disabled={isLoading}
+                    onSuccess={() => {
+                      console.log('Sign-in successful');
+                      setSuccessMessage('Successfully signed in! Welcome to StudyMate.');
+                      setError(null); // Clear any previous errors
+                      // Clear success message after 5 seconds
+                      setTimeout(() => setSuccessMessage(null), 5000);
+                    }}
+                    onError={(error) => {
+                      console.error('Sign-in error:', error);
+                      setSuccessMessage(null); // Clear any success messages
+                      setError(JSON.stringify({
+                        title: "Sign-in Failed",
+                        details: error.message || "Failed to sign in with Google. Please try again.",
+                        action: "Please check your internet connection and try again."
+                      }));
+                    }}
+                  />
+                </div>
+              </div>
+              
+              {/* Success Message Display */}
+              {successMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  style={{
+                    marginTop: "1.5rem",
+                    padding: "1rem 1.5rem",
+                    backgroundColor: "rgba(34, 197, 94, 0.1)",
+                    border: "1px solid rgba(34, 197, 94, 0.3)",
+                    borderRadius: "12px",
+                    color: "rgb(34, 197, 94)",
+                    textAlign: "center",
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: "0.95rem",
+                    fontWeight: "500",
+                    backdropFilter: "blur(8px)"
+                  }}
+                >
+                  ✅ {successMessage}
+                </motion.div>
+              )}
+            </motion.div>
+          </div>
+        </>
+      ) : (
+        // Show main app when authenticated
+        <>
+          <ConnectionStatus />
+          <AuthHeader />
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
             <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
               MyStudyMate
@@ -1766,50 +1711,11 @@ function App() {
                           {renderBulletPoints(topic.bullet_points, topicId)}
                         </div>
                       )}
-
-                      {/* Debugging result section */}
-                      {renderDebugResult(topicId)}
                     </div>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Developer Mode Toggle */}
-            <div style={{ 
-              position: "fixed", 
-              top: "1rem", 
-              right: "1rem", 
-              zIndex: 1000,
-              background: "rgba(0, 0, 0, 0.8)",
-              padding: "0.5rem 1rem",
-              borderRadius: "8px",
-              border: "1px solid rgba(255, 255, 255, 0.2)"
-            }}>
-              <label style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "0.5rem", 
-                color: "#fff",
-                fontSize: "0.9rem",
-                cursor: "pointer"
-              }}>
-                <input
-                  type="checkbox"
-                  checked={isDeveloperMode}
-                  onChange={(e) => setIsDeveloperMode(e.target.checked)}
-                  style={{ margin: 0 }}
-                />
-                Developer Mode
-              </label>
-              <div style={{ 
-                fontSize: "0.75rem", 
-                color: "#999", 
-                marginTop: "0.2rem" 
-              }}>
-                {isDeveloperMode ? "🔧 Click bullets to debug" : "📖 Click bullets to expand"}
-              </div>
-            </div>
           </div>
         </>
       )}

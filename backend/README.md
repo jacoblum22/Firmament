@@ -108,7 +108,6 @@ SECURE_HEADERS=true
 - `POST /process-chunks` - Process text chunks
 - `POST /generate-headings` - Generate topic headings
 - `POST /expand-cluster` - Expand topic clusters
-- `POST /debug-bullet-point` - Debug bullet points
 - `POST /expand-bullet-point` - Expand bullet points
 - `GET /progress/{job_id}` - Job progress (SSE)
 

@@ -10,6 +10,7 @@ import os
 import secrets
 import string
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -35,6 +36,9 @@ def create_production_env() -> Dict[str, str]:
     secrets_generated["POSTGRES_PASSWORD"] = generate_secure_password(32)
     secrets_generated["REDIS_PASSWORD"] = generate_secure_password(32)
     secrets_generated["API_KEY"] = generate_api_key(64)
+    secrets_generated["JWT_SECRET"] = generate_secure_password(
+        64
+    )  # Separate JWT secret
 
     return secrets_generated
 
@@ -63,6 +67,7 @@ def update_env_file(secrets: Dict[str, str]) -> None:
         "CHANGE_ME_SECURE_DB_PASSWORD_FOR_PRODUCTION": secrets["POSTGRES_PASSWORD"],
         "CHANGE_ME_SECURE_REDIS_PASSWORD_FOR_PRODUCTION": secrets["REDIS_PASSWORD"],
         "CHANGE_ME_SECURE_API_KEY_FOR_PRODUCTION": secrets["API_KEY"],
+        "CHANGE_ME_SECURE_JWT_SECRET_FOR_PRODUCTION": secrets["JWT_SECRET"],
         "CHANGE_ME_DB_PASSWORD": secrets["POSTGRES_PASSWORD"],
     }
 
@@ -79,7 +84,7 @@ def create_env_secrets_file(secrets: Dict[str, str]) -> None:
 
     content = f"""# Generated Secure Secrets for StudyMate Production
 # KEEP THIS FILE SECURE - DO NOT COMMIT TO VERSION CONTROL
-# Generated on: {os.getcwd()}
+# Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
 
 # Database Password
 POSTGRES_PASSWORD={secrets['POSTGRES_PASSWORD']}
@@ -89,6 +94,9 @@ REDIS_PASSWORD={secrets['REDIS_PASSWORD']}
 
 # API Key
 API_KEY={secrets['API_KEY']}
+
+# JWT Secret (for token signing/verification)
+JWT_SECRET={secrets['JWT_SECRET']}
 
 # Instructions:
 # 1. These values have been automatically applied to .env.production

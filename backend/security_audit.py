@@ -24,7 +24,7 @@ class SecurityAuditor:
             self.issues.append("docker-compose.yml not found")
             return
 
-        content = docker_compose_path.read_text()
+        content = docker_compose_path.read_text(encoding="utf-8")
 
         # Check for hardcoded secrets (improved pattern)
         hardcoded_patterns = [
@@ -69,7 +69,7 @@ class SecurityAuditor:
                 self.issues.append(f"{env_file} not found")
                 continue
 
-            content = env_path.read_text()
+            content = env_path.read_text(encoding="utf-8")
 
             # Check for placeholder values in production
             if env_file == ".env.production":
@@ -81,6 +81,11 @@ class SecurityAuditor:
                     r"CHANGE_ME_.*",
                     r"localhost(?!:)",  # localhost but not localhost:port
                     r"127\.0\.0\.1",
+                    r"your_.*_key_here",
+                    r"your_.*_api_key",
+                    r"placeholder",
+                    r"example\.com",
+                    r"test_.*_key",
                 ]
 
                 for pattern in placeholder_patterns:
@@ -107,7 +112,7 @@ class SecurityAuditor:
             self.issues.append("Dockerfile not found")
             return
 
-        content = dockerfile_path.read_text()
+        content = dockerfile_path.read_text(encoding="utf-8")
 
         # Check for root user
         if "USER root" in content:
@@ -134,7 +139,7 @@ class SecurityAuditor:
             self.issues.append("config.py not found")
             return
 
-        content = config_path.read_text()
+        content = config_path.read_text(encoding="utf-8")
 
         # Check for hardcoded secrets
         hardcoded_patterns = [

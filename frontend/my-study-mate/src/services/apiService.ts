@@ -2,6 +2,25 @@ import NetworkUtils, { NetworkError } from '../utils/networkUtils';
 import config from '../config';
 import AIService from './aiService';
 
+// Auth-related interfaces
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string;
+  };
+}
+
+export interface UserInfo {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
 // Define proper types for API responses
 export interface UploadResponse {
   job_id: string;
@@ -70,7 +89,6 @@ export interface Topic {
       };
     };
   };
-  debugResult?: BulletPointDebugResponse;
 }
 
 export interface ExpandClusterResponse {
@@ -87,17 +105,6 @@ export interface BulletPointData {
   layer?: number;
   other_bullets?: string[];
   parent_bullet?: string;
-}
-
-export interface BulletPointDebugResponse {
-  bullet_point: string;
-  top_similar_chunks: Array<{
-    chunk: string;
-    similarity: number;
-  }>;
-  most_similar_chunk: string;
-  similarity_to_current_topic: number;
-  topic_similarities: Record<string, number>;
 }
 
 export interface BulletPointExpandResponse {
@@ -120,12 +127,6 @@ export interface ProgressData {
 export interface ExpandClusterRequest {
   filename: string;
   cluster_id: string | number;
-}
-
-export interface DebugBulletPointRequest {
-  bullet_point: string;
-  chunks: string[];
-  topics: Record<string, Topic>;
 }
 
 class ApiService {
@@ -183,6 +184,81 @@ class ApiService {
   }
 
   /**
+   * Add authorization header to request options
+   */
+  private addAuthHeader(options: RequestInit = {}): RequestInit {
+    const token = localStorage.getItem('studymate_token');
+    if (token) {
+      return {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${token}`,
+        },
+      };
+    }
+    return options;
+  }
+
+  /**
+   * Authentication: Sign in with Google
+   */
+  public async signInWithGoogle(googleToken: string): Promise<AuthResponse> {
+    try {
+      const response = await this.enhancedFetch('auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ token: googleToken }),
+      });
+
+      return this.handleResponse<AuthResponse>(response);
+    } catch (error) {
+      if (error instanceof Error) {
+        const networkError = error as NetworkError;
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
+      }
+      throw new Error('Google sign-in failed. Please try again.');
+    }
+  }
+
+  /**
+   * Authentication: Get current user info
+   */
+  public async getCurrentUser(): Promise<UserInfo> {
+    try {
+      const response = await this.enhancedFetch('auth/me', this.addAuthHeader({
+        method: 'GET',
+      }));
+
+      return this.handleResponse<UserInfo>(response);
+    } catch (error) {
+      if (error instanceof Error) {
+        const networkError = error as NetworkError;
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
+      }
+      throw new Error('Failed to get user info. Please try again.');
+    }
+  }
+
+  /**
+   * Authentication: Sign out
+   */
+  public async signOut(): Promise<{ message: string }> {
+    try {
+      const response = await this.enhancedFetch('auth/logout', this.addAuthHeader({
+        method: 'POST',
+      }));
+
+      return this.handleResponse<{ message: string }>(response);
+    } catch (error) {
+      if (error instanceof Error) {
+        const networkError = error as NetworkError;
+        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
+      }
+      throw new Error('Sign out failed. Please try again.');
+    }
+  }
+
+  /**
    * Upload file
    */
   public async uploadFile(file: File): Promise<UploadResponse> {
@@ -192,10 +268,19 @@ class ApiService {
     try {
       // Use direct fetch for file uploads to avoid Content-Type issues
       const url = config.getApiUrl('upload');
+      
+      // Add authorization header for authenticated uploads
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('studymate_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await this.networkUtils.fetchWithRetry(url, {
         method: 'POST',
         body: formData,
-        // Don't set any headers - let the browser handle multipart/form-data
+        headers,
+        // Don't set Content-Type - let the browser handle multipart/form-data
       }, {
         maxRetries: 2, // Fewer retries for uploads
         baseDelay: 2000 // Longer delay between retries
@@ -271,26 +356,6 @@ class ApiService {
         throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
       }
       throw new Error('Failed to expand cluster. Please try again.');
-    }
-  }
-
-  /**
-   * Debug bullet point
-   */
-  public async debugBulletPoint(data: DebugBulletPointRequest): Promise<BulletPointDebugResponse> {
-    try {
-      const response = await this.enhancedFetch('debug-bullet-point', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-
-      return this.handleResponse<BulletPointDebugResponse>(response);
-    } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to debug bullet point. Please try again.');
     }
   }
 

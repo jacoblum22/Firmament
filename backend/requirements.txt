@@ -7,3 +7,14 @@ pydantic==2.11.7
 pydantic-settings==2.10.1
 # Redis for distributed rate limiting and caching
 redis==5.2.1
+# AWS S3 integration for cloud storage
+boto3==1.35.91
+botocore==1.35.91
+# Google OAuth for user authentication
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+# JWT for session management
+PyJWT==2.9.0
+# Additional utilities
+python-multipart==0.0.12

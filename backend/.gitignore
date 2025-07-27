@@ -3,6 +3,10 @@
 .env.local
 .env.development
 .env.production
+.env.secrets
+.env.production.backup
+.env.*.backup
+.env.*.secrets
 .env.*.local
 
 # Python

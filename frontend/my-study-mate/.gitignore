@@ -16,6 +16,10 @@ dist-ssr
 .env.local
 .env.development
 .env.production
+.env.secrets
+.env.production.backup
+.env.*.backup
+.env.*.secrets
 .env.development.local
 .env.production.local
 

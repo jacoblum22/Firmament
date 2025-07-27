@@ -125,6 +125,52 @@ class Settings:
         return os.getenv("API_KEY", "")
 
     @property
+    def jwt_secret(self) -> str:
+        """Get JWT secret key for token signing and verification"""
+        jwt_secret = os.getenv("JWT_SECRET", "").strip()
+
+        if not jwt_secret:
+            if self.is_production:
+                raise ConfigurationError(
+                    "JWT_SECRET is required in production. "
+                    "Please set the JWT_SECRET environment variable to a secure random string."
+                )
+            else:
+                # Development fallback with warning
+                print("⚠️  Warning: JWT_SECRET is not set. Using development default.")
+                return "dev-jwt-secret-change-in-production"
+
+        # Check for placeholder values that should be replaced
+        placeholder_patterns = [
+            "CHANGE_ME",
+            "change_me",
+            "changeme",
+            "placeholder",
+            "PLACEHOLDER",
+            "your_secret_here",
+            "YOUR_SECRET_HERE",
+        ]
+
+        if any(pattern in jwt_secret for pattern in placeholder_patterns):
+            if self.is_production:
+                raise ConfigurationError(
+                    f"JWT_SECRET contains placeholder text and must be replaced in production. "
+                    f"Current value contains: {[p for p in placeholder_patterns if p in jwt_secret]}"
+                )
+            else:
+                print(
+                    "⚠️  Warning: JWT_SECRET contains placeholder text. Should be replaced for security."
+                )
+
+        # Validate JWT secret strength
+        if len(jwt_secret) < 32:
+            raise ConfigurationError(
+                f"JWT_SECRET must be at least 32 characters long. Current length: {len(jwt_secret)}"
+            )
+
+        return jwt_secret
+
+    @property
     def secure_headers(self) -> bool:
         # Enable secure headers in production by default
         default_secure = "true" if self.is_production else "false"
@@ -638,6 +684,121 @@ class Settings:
     @property
     def openai_max_tokens(self) -> int:
         return int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
+
+    # AWS S3 Configuration
+    @property
+    def use_s3_storage(self) -> bool:
+        """Whether to use S3 for file storage instead of local files"""
+        # Default to True in production, False in development
+        default_s3 = "true" if self.is_production else "false"
+        return os.getenv("USE_S3_STORAGE", default_s3).lower() == "true"
+
+    @property
+    def aws_access_key_id(self) -> str:
+        aws_key = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+
+        if self.use_s3_storage and not aws_key:
+            if self.is_production:
+                raise ConfigurationError(
+                    "AWS_ACCESS_KEY_ID is required when USE_S3_STORAGE is enabled. "
+                    "Please set the AWS_ACCESS_KEY_ID environment variable."
+                )
+            else:
+                print(
+                    "⚠️  Warning: AWS_ACCESS_KEY_ID is not set. S3 storage will not work."
+                )
+
+        return aws_key
+
+    @property
+    def aws_secret_access_key(self) -> str:
+        aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+
+        if self.use_s3_storage and not aws_secret:
+            if self.is_production:
+                raise ConfigurationError(
+                    "AWS_SECRET_ACCESS_KEY is required when USE_S3_STORAGE is enabled. "
+                    "Please set the AWS_SECRET_ACCESS_KEY environment variable."
+                )
+            else:
+                print(
+                    "⚠️  Warning: AWS_SECRET_ACCESS_KEY is not set. S3 storage will not work."
+                )
+
+        return aws_secret
+
+    @property
+    def aws_region(self) -> str:
+        """AWS region for S3 bucket"""
+        return os.getenv("AWS_REGION", "us-east-1")
+
+    @property
+    def s3_bucket_name(self) -> str:
+        """S3 bucket name for file storage"""
+        bucket_name = os.getenv("S3_BUCKET_NAME", "").strip()
+
+        if self.use_s3_storage and not bucket_name:
+            if self.is_production:
+                raise ConfigurationError(
+                    "S3_BUCKET_NAME is required when USE_S3_STORAGE is enabled. "
+                    "Please set the S3_BUCKET_NAME environment variable."
+                )
+            else:
+                print(
+                    "⚠️  Warning: S3_BUCKET_NAME is not set. S3 storage will not work."
+                )
+
+        return bucket_name
+
+    @property
+    def s3_uploads_prefix(self) -> str:
+        """S3 prefix for uploaded files"""
+        return os.getenv("S3_UPLOADS_PREFIX", "uploads/")
+
+    @property
+    def s3_cache_prefix(self) -> str:
+        """S3 prefix for cached/processed files"""
+        return os.getenv("S3_CACHE_PREFIX", "cache/")
+
+    @property
+    def s3_temp_prefix(self) -> str:
+        """S3 prefix for temporary files"""
+        return os.getenv("S3_TEMP_PREFIX", "temp/")
+
+    # Google OAuth Configuration
+    @property
+    def google_client_id(self) -> str:
+        """Google OAuth client ID"""
+        client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+
+        if self.is_production and not client_id:
+            raise ConfigurationError(
+                "GOOGLE_CLIENT_ID is required in production environment. "
+                "Please set the GOOGLE_CLIENT_ID environment variable."
+            )
+        elif self.is_development and not client_id:
+            print(
+                "⚠️  Warning: GOOGLE_CLIENT_ID is not set. Google OAuth will not work."
+            )
+
+        return client_id
+
+    @property
+    def google_client_secret(self) -> str:
+        """Google OAuth client secret"""
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+
+        if self.is_production and not client_secret:
+            raise ConfigurationError(
+                "GOOGLE_CLIENT_SECRET is required in production environment. "
+                "Please set the GOOGLE_CLIENT_SECRET environment variable."
+            )
+        elif self.is_development and not client_secret:
+            print(
+                "⚠️  Warning: GOOGLE_CLIENT_SECRET is not set. Google OAuth will not work."
+            )
+
+        return client_secret
 
     # Audio Processing Configuration
     @property
