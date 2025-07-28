@@ -1036,6 +1036,7 @@ function App() {
         <>
           <ConnectionStatus />
           <AuthHeader />
+          
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
             <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
               MyStudyMate
