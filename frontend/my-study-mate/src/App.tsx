@@ -4,6 +4,7 @@ import VanillaTilt from "vanilla-tilt";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 import config from './config';
+import { BRAND } from './constants';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
 import { AuthHeader } from './components/AuthHeader';
@@ -934,10 +935,11 @@ function App() {
             flexDirection: 'column', 
             alignItems: 'center', 
             justifyContent: 'center', 
-            minHeight: '100vh',
+            minHeight: '70vh',
             padding: '2rem',
             fontFamily: '"Outfit", sans-serif',
-            textAlign: 'center'
+            textAlign: 'center',
+            marginTop: '-3rem'
           }}>
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -946,22 +948,22 @@ function App() {
             >
               <div 
                 className="label"
-                style={{ 
+                style={{
                   fontSize: '4.5rem',
-                  marginBottom: '1rem',
+                  marginBottom: '-1rem',
                   color: '#ffffff',
                   fontWeight: '700',
                   letterSpacing: '-0.02em'
                 }}
               >
-                MyStudyMate
+                {BRAND.NAME}
               </div>
               <div
                 className="glow-text"
                 data-text="Smarter Studying Starts Here."
                 style={{ 
-                  fontSize: '2rem',
-                  marginBottom: '3rem',
+                  fontSize: '2.5rem',
+                  marginBottom: '2rem',
                   color: 'rgba(255, 255, 255, 0.9)',
                   fontWeight: '500',
                   letterSpacing: '-0.01em'
@@ -987,7 +989,7 @@ function App() {
                     disabled={isLoading}
                     onSuccess={() => {
                       console.log('Sign-in successful');
-                      setSuccessMessage('Successfully signed in! Welcome to StudyMate.');
+                      setSuccessMessage(`Successfully signed in! Welcome to ${BRAND.NAME}.`);
                       setError(null); // Clear any previous errors
                       // Clear success message after 5 seconds
                       setTimeout(() => setSuccessMessage(null), 5000);
@@ -1036,14 +1038,15 @@ function App() {
         <>
           <ConnectionStatus />
           <AuthHeader />
+          
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
-            <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
-              MyStudyMate
+            <div className="label fade-in" style={{ animationDelay: "0.2s", fontSize: "2rem", marginBottom: "0rem" }}>
+              {BRAND.NAME}
             </div>
             <div
               className="glow-text fade-in"
               data-text="Smarter Studying Starts Here."
-              style={{ animationDelay: "0.4s" }}
+              style={{ animationDelay: "0.4s", marginBottom: "-1rem" }}
             >
               Smarter Studying Starts Here.
             </div>

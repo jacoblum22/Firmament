@@ -8,12 +8,18 @@ It supports both local development (with fallback to local storage) and producti
 import os
 import logging
 import threading
+import asyncio
 from pathlib import Path
-from typing import Optional, BinaryIO, Union, Any
+from typing import Optional, Any
 from io import BytesIO
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from config import Settings
+
+# Reduce boto3 logging verbosity for better performance
+logging.getLogger("boto3").setLevel(logging.WARNING)
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -21,32 +27,92 @@ logger = logging.getLogger(__name__)
 class S3StorageManager:
     """Manages file storage operations with AWS S3 and local fallback"""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, background_init: bool = False):
         self.settings = settings
         self.s3_client = None
         self.use_s3 = settings.use_s3_storage
+        self._s3_initialized = False
+        self._init_lock = threading.Lock()
 
-        if self.use_s3:
-            try:
-                self.s3_client = boto3.client(
-                    "s3",
-                    aws_access_key_id=settings.aws_access_key_id,
-                    aws_secret_access_key=settings.aws_secret_access_key,
-                    region_name=settings.aws_region,
-                )
-                # Test the connection
-                self.s3_client.head_bucket(Bucket=settings.s3_bucket_name)
-                logger.info(
-                    f"✓ S3 storage initialized successfully (bucket: {settings.s3_bucket_name})"
-                )
-            except (ClientError, NoCredentialsError) as e:
-                logger.warning(
-                    f"⚠️  S3 initialization failed: {e}. Falling back to local storage."
-                )
-                self.use_s3 = False
-                self.s3_client = None
-        else:
+        if not background_init and self.use_s3:
+            # Immediate initialization (legacy behavior)
+            self._initialize_s3_sync()
+        elif not self.use_s3:
             logger.info("📁 Using local file storage")
+
+    def _initialize_s3_sync(self):
+        """Synchronous S3 initialization"""
+        try:
+            self.s3_client = boto3.client(
+                "s3",
+                aws_access_key_id=self.settings.aws_access_key_id,
+                aws_secret_access_key=self.settings.aws_secret_access_key,
+                region_name=self.settings.aws_region,
+            )
+            # Test the connection
+            self.s3_client.head_bucket(Bucket=self.settings.s3_bucket_name)
+            self._s3_initialized = True
+            logger.info(
+                f"✓ S3 storage initialized successfully (bucket: {self.settings.s3_bucket_name})"
+            )
+        except (ClientError, NoCredentialsError) as e:
+            logger.warning(
+                f"⚠️  S3 initialization failed: {e}. Falling back to local storage."
+            )
+            self.use_s3 = False
+            self.s3_client = None
+            self._s3_initialized = False
+
+    async def initialize_s3_background(self):
+        """Background S3 initialization with connection warming"""
+        if not self.use_s3:
+            return
+
+        def _background_init():
+            with self._init_lock:
+                if self._s3_initialized:
+                    return
+
+                logger.info("🔄 Initializing S3 connection in background...")
+                try:
+                    # Create S3 client
+                    self.s3_client = boto3.client(
+                        "s3",
+                        aws_access_key_id=self.settings.aws_access_key_id,
+                        aws_secret_access_key=self.settings.aws_secret_access_key,
+                        region_name=self.settings.aws_region,
+                    )
+
+                    # Warm the connection with a lightweight operation
+                    self.s3_client.head_bucket(Bucket=self.settings.s3_bucket_name)
+
+                    # Additional connection warming - list objects (limit 1 for efficiency)
+                    self.s3_client.list_objects_v2(
+                        Bucket=self.settings.s3_bucket_name, MaxKeys=1
+                    )
+
+                    self._s3_initialized = True
+                    logger.info(
+                        f"✓ S3 background initialization completed (bucket: {self.settings.s3_bucket_name})"
+                    )
+                except (ClientError, NoCredentialsError) as e:
+                    logger.warning(
+                        f"⚠️  S3 background initialization failed: {e}. Falling back to local storage."
+                    )
+                    self.use_s3 = False
+                    self.s3_client = None
+                    self._s3_initialized = False
+
+        # Run in thread pool to avoid blocking (Python 3.10+ compatible)
+        await asyncio.to_thread(_background_init)
+
+    def _ensure_s3_ready(self):
+        """Ensure S3 is ready for operations (fallback for immediate use)"""
+        if self.use_s3 and not self._s3_initialized:
+            with self._init_lock:
+                if not self._s3_initialized:
+                    logger.info("⚡ S3 not ready, initializing synchronously...")
+                    self._initialize_s3_sync()
 
     def _validate_key(self, key: str) -> None:
         """Validate key for security and format"""
@@ -150,6 +216,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             # Convert file_data to bytes for consistent handling
             if isinstance(file_data, bytes):
                 data_bytes = file_data
@@ -210,6 +280,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Download from S3
                 response = self.s3_client.get_object(
@@ -246,6 +320,11 @@ class S3StorageManager:
         try:
             # Validate the key first
             self._validate_key(key)
+
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Check S3
                 self.s3_client.head_object(Bucket=self.settings.s3_bucket_name, Key=key)
@@ -279,6 +358,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Delete from S3
                 self.s3_client.delete_object(
@@ -309,6 +392,10 @@ class S3StorageManager:
             list[str]: List of file keys
         """
         try:
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # List from S3 with pagination support
                 files = []
@@ -362,6 +449,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 url = self.s3_client.generate_presigned_url(
                     "get_object",
@@ -392,13 +483,22 @@ def get_storage_manager(settings: Optional[Settings] = None) -> S3StorageManager
             if _storage_manager is None:
                 if settings is None:
                     settings = Settings()
-                _storage_manager = S3StorageManager(settings)
+                _storage_manager = S3StorageManager(settings, background_init=True)
     return _storage_manager
 
 
-def init_storage_manager(settings: Settings) -> S3StorageManager:
+def init_storage_manager(
+    settings: Settings, background_init: bool = True
+) -> S3StorageManager:
     """Initialize the global storage manager with specific settings (thread-safe)"""
     global _storage_manager
     with _lock:
-        _storage_manager = S3StorageManager(settings)
+        _storage_manager = S3StorageManager(settings, background_init=background_init)
     return _storage_manager
+
+
+async def init_storage_background():
+    """Initialize S3 storage in background"""
+    storage_manager = get_storage_manager()
+    if storage_manager.use_s3:
+        await storage_manager.initialize_s3_background()

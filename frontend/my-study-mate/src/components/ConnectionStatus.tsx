@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { BRAND } from '../constants';
 
 interface ConnectionStatusProps {
   className?: string;
@@ -34,10 +35,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className = 
 
     if (!isBackendReachable) {
       return {
-        message: 'StudyMate is temporarily unavailable',
+        message: `${BRAND.NAME} is temporarily unavailable`,
         description: retryAttempt > 0 
           ? `Trying to reconnect... (attempt ${retryAttempt})`
-          : 'StudyMate services are currently unavailable. Please try again in a moment.',
+          : `${BRAND.NAME} services are currently unavailable. Please try again in a moment.`,
         type: 'backend-down' as const,
         showRetry: true
       };
@@ -45,7 +46,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className = 
 
     return {
       message: 'Connection is slow',
-      description: 'StudyMate may respond slowly due to connection issues.',
+      description: `${BRAND.NAME} may respond slowly due to connection issues.`,
       type: 'degraded' as const,
       showRetry: true
     };
@@ -123,7 +124,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className = 
                 <button
                   onClick={forceHealthCheck}
                   className="text-xs bg-white bg-opacity-20 hover:bg-opacity-30 px-2 py-1 rounded transition-colors duration-200"
-                  aria-label="Retry connection to StudyMate"
+                  aria-label={`Retry connection to ${BRAND.NAME}`}
                   type="button"
                 >
                   Try Again

@@ -6,15 +6,25 @@
 //    life expires. No wrapping.
 
 // ===== Tunables ==============================================================
-const POP_NORMAL = 80;
+const POP_NORMAL = 120; // Increased from 80 for richer particle field
 
 const ACCENT_BASE = 0.05; // 5% base chance for accent particles
+
+const MAX_ILLUMINATION_DISTANCE = 80; // pixels
 
 const TRAIL_MAX = 30;
 const TRAIL_FADE_FACTOR = 0.94;
 const BASE_LIFE = 180;
 const LIFE_VARIANCE = 120;
 const FADE_FRAMES = 45;
+
+// Particle size constants
+const GLOBAL_MIN_SIZE = 0.5; // Smallest background particle size
+const GLOBAL_MAX_SIZE = 6; // Largest accent particle size
+
+// Perspective/movement scaling constants  
+const MIN_PERSPECTIVE_SCALE = 0.2; // Minimum perspective scaling factor
+const PERSPECTIVE_SCALE_RANGE = 0.6; // Additional range (0.2 + 0.6 = 0.8 max)
 
 // Flow field
 const RESOLUTION = 20; // px per cell
@@ -86,6 +96,7 @@ class QuantumNexus {
   private width: number;
   private height: number;
   private particles: QuantumParticle[] = [];
+  private accentParticles: QuantumParticle[] = [];
   private flowField: number[] = [];
   private time = 0;
   private impulse = 0;
@@ -96,6 +107,7 @@ class QuantumNexus {
     this.height = h;
     this.initFlowField();
     this.spawn(POP_NORMAL);
+    
     this.animate();
   }
 
@@ -160,10 +172,20 @@ class QuantumNexus {
       if (Math.abs(this.impulse) < 0.001) this.impulse = 0;
     }
 
-    // update & draw
+    // Pre-filter accent particles once per frame for performance
+    this.accentParticles = this.particles.filter(p => p.isAccentParticle);
+
+    // update & draw with illumination effects
     this.particles = this.particles.filter((p) => {
       const alive = p.update(this.flowField);
-      if (alive) p.draw(this.ctx);
+      if (alive) {
+        // Calculate illumination for non-accent particles using pre-filtered accents
+        // Early exit: skip illumination calculation if no accent particles exist
+        if (!p.isAccentParticle && this.accentParticles.length > 0) {
+          p.calculateIllumination(this.accentParticles);
+        }
+        p.draw(this.ctx);
+      }
       return alive;
     });
     
@@ -188,7 +210,7 @@ class QuantumParticle {
   private size: number;
   private hue: number;
   private baseAlpha: number;
-  private maxSize: number = 2;
+  private maxSize: number = 6; // Reduced from 8 for more balanced foreground particles
   private minSize: number;
   private sizeNorm: number;
   private isAccent: boolean;
@@ -197,6 +219,10 @@ class QuantumParticle {
   private trail: { x: number; y: number; alpha: number }[] = [];
   private static accentHues = [185, 315, 35];
   private speedFactor: number;
+  
+  // Illumination properties
+  private illuminationAlpha = 0;
+  private illuminationHue = 0;
 
   constructor(w: number, h: number) {
     this.maxX = w;
@@ -209,9 +235,27 @@ class QuantumParticle {
     // ── Accent roll (fixed 5% chance) ──
     this.isAccent = Math.random() < ACCENT_BASE;
 
-    this.minSize = this.isAccent ? 2.5 : 1;
-    this.size = Math.pow(Math.random(), 0.5) * this.maxSize + this.minSize;
-    this.sizeNorm = (this.size - this.minSize) / this.maxSize;
+    // Create three depth tiers for better depth perception
+    if (this.isAccent) {
+      // Foreground particles: large, prominent
+      this.minSize = 3;
+      this.size = Math.pow(Math.random(), 0.3) * (this.maxSize - this.minSize) + this.minSize; // 3-6px
+    } else {
+      // Background and mid-ground particles
+      const isBackground = Math.random() < 0.3; // 30% chance for background particles
+      if (isBackground) {
+        // Background particles: tiny, distant
+        this.minSize = 0.5;
+        this.size = Math.pow(Math.random(), 0.8) * 0.5 + this.minSize; // 0.5-1px
+      } else {
+        // Mid-ground particles: normal depth
+        this.minSize = 1.5;
+        this.size = Math.pow(Math.random(), 0.5) * 2.5 + this.minSize; // 1.5-4px
+      }
+    }
+    
+    // Global normalization: 0.5px (smallest background) to 6px (largest accent)
+    this.sizeNorm = (this.size - GLOBAL_MIN_SIZE) / (GLOBAL_MAX_SIZE - GLOBAL_MIN_SIZE);
 
     if (this.isAccent) {
       this.hue =
@@ -228,27 +272,117 @@ class QuantumParticle {
       (0.8 + this.sizeNorm * 0.2) * (this.isAccent ? 2 : 1);
 
     const easedNorm = Math.pow(this.sizeNorm, 2.5);
-    this.baseAlpha =
-      (this.isAccent ? 0.5 : 0.05) + easedNorm * (this.isAccent ? 1 : 0.3);
+    // Adjust alpha based on particle tier for better depth perception
+    if (this.isAccent) {
+      // Foreground: bright and prominent
+      this.baseAlpha = 0.5 + easedNorm * 1;
+    } else if (this.size < 1.2) {
+      // Background: subtle but more visible than before
+      this.baseAlpha = 0.03 + easedNorm * 0.15; // Reverted to original range
+    } else {
+      // Mid-ground: moderate visibility, more prominent
+      this.baseAlpha = 0.08 + easedNorm * 0.4; // Reverted to original range
+    }
   }
 
+  // Public getters for nexus access
+  get isAccentParticle(): boolean { return this.isAccent; }
+  get position(): { x: number; y: number } { return { x: this.x, y: this.y }; }
+  get particleHue(): number { return this.hue; }
+  get particleSize(): number { return this.size; }
+
   applyImpulse(dVy: number) {
-    this.scrollVy += dVy * this.sizeNorm;
+    // Apply different scroll sensitivity based on particle type
+    let scrollMultiplier = 1;
+    if (!this.isAccent) {
+      // Non-accent particles get more scroll push for better interaction
+      scrollMultiplier = 1.5; // 50% more sensitive to scroll
+    }
+    
+    this.scrollVy += dVy * this.sizeNorm * scrollMultiplier;
     if (this.scrollVy > MAX_SCROLL_VY) this.scrollVy = MAX_SCROLL_VY;
     if (this.scrollVy < -MAX_SCROLL_VY) this.scrollVy = -MAX_SCROLL_VY;
+  }
+
+  // Calculate illumination effects from nearby accent particles
+  calculateIllumination(accentParticles: QuantumParticle[]) {
+    // Early exit: no accent particles to calculate illumination from
+    if (accentParticles.length === 0) {
+      this.illuminationAlpha = 0;
+      this.illuminationHue = this.hue;
+      return;
+    }
+    
+    this.illuminationAlpha = 0;
+    this.illuminationHue = this.hue; // Default to original hue
+    
+    const maxIlluminationDistance = MAX_ILLUMINATION_DISTANCE; // pixels
+    const maxDistanceSquared = maxIlluminationDistance * maxIlluminationDistance; // 6400
+    let totalIllumination = 0;
+    let weightedHue = 0;
+    let totalWeight = 0;
+    
+    for (const accent of accentParticles) {
+      const dx = accent.position.x - this.x;
+      const dy = accent.position.y - this.y;
+      const distanceSquared = dx * dx + dy * dy;
+      
+      // Early exit using distance-squared comparison (avoids Math.sqrt)
+      if (distanceSquared < maxDistanceSquared) {
+        // Only calculate actual distance when we need it for falloff calculation
+        const distance = Math.sqrt(distanceSquared);
+        
+        // Falloff: closer = stronger illumination
+        const falloff = 1 - (distance / maxIlluminationDistance);
+        const illuminationStrength = falloff * falloff; // Quadratic falloff
+        
+        // Factor in the accent particle's size (larger = more illumination)
+        const sizeFactor = accent.particleSize / GLOBAL_MAX_SIZE; // Normalize by max accent size
+        
+        // Factor in the receiving particle's size (larger particles catch more light)
+        const receiverSizeFactor = 0.5 + (this.sizeNorm * 0.5); // Range: 0.5x to 1.0x light reception
+        
+        const finalIllumination = illuminationStrength * sizeFactor * receiverSizeFactor * 0.7;
+        
+        totalIllumination += finalIllumination;
+        
+        // Blend colors based on illumination strength
+        const weight = finalIllumination;
+        weightedHue += accent.particleHue * weight;
+        totalWeight += weight;
+        
+        // Early exit: if we've reached maximum illumination, no need to check more accents
+        const receiverBonus = 0.5 + (this.sizeNorm * 0.5);
+        if (totalIllumination >= 0.8 * receiverBonus) {
+          break;
+        }
+      }
+    }
+    
+    // Apply receiver size factor to overall illumination caps too
+    const receiverBonus = 0.5 + (this.sizeNorm * 0.5);
+    this.illuminationAlpha = Math.min(totalIllumination, 0.8 * receiverBonus); // Closer particles can get brighter
+    
+    if (totalWeight > 0) {
+      // Closer particles also get more color blending
+      const blendFactor = Math.min(totalIllumination * 2, 0.8 * receiverBonus);
+      this.illuminationHue = this.hue * (1 - blendFactor) + (weightedHue / totalWeight) * blendFactor;
+    }
   }
 
   update(field: number[]): boolean {
     this.life++;
     this.scrollVy *= DAMP_FACTOR * this.sizeNorm;
 
-    // flow influence
+    // flow influence with perspective-based movement speed
     const cols = Math.floor(this.maxX / RESOLUTION);
     const fx = Math.floor(this.x / RESOLUTION);
     const fy = Math.floor(this.y / RESOLUTION);
     const idx = (fy * cols + fx) * 2;
     if (field[idx] !== undefined) {
-      const fScale = INTENSITY_BASE * this.speedFactor;
+      // Perspective effect: larger particles (closer) move faster through flow field
+      const perspectiveScale = MIN_PERSPECTIVE_SCALE + (this.sizeNorm * PERSPECTIVE_SCALE_RANGE); // 0.2x to 0.8x speed
+      const fScale = INTENSITY_BASE * this.speedFactor * perspectiveScale;
       this.vx += field[idx] * fScale;
       this.vy += field[idx + 1] * fScale;
     }
@@ -261,9 +395,10 @@ class QuantumParticle {
     this.vx = fastCos(ang) * spd;
     this.vy = fastSin(ang) * spd;
 
-    // move
-    this.x += this.vx;
-    this.y += this.vy + this.scrollVy;
+    // move with perspective-based speed
+    const perspectiveMovement = MIN_PERSPECTIVE_SCALE + (this.sizeNorm * PERSPECTIVE_SCALE_RANGE); // Reduced from 0.3 + 0.7 for slower non-accent movement
+    this.x += this.vx * perspectiveMovement;
+    this.y += (this.vy * perspectiveMovement) + this.scrollVy;
 
     // early fade if off‑screen
     if (this.life <= this.maxLife) {
@@ -271,11 +406,13 @@ class QuantumParticle {
         this.life = this.maxLife;
     }
 
-    // trail
-    this.trail.unshift({ x: this.x, y: this.y, alpha: 1 });
-    this.trail.forEach((t) => (t.alpha *= TRAIL_FADE_FACTOR));
-    const trailCap = this.isAccent ? TRAIL_MAX * 1.5 : TRAIL_MAX;
-    if (this.trail.length > trailCap) this.trail.pop();
+    // trail (only for accent particles)
+    if (this.isAccent) {
+      this.trail.unshift({ x: this.x, y: this.y, alpha: 1 });
+      this.trail.forEach((t) => (t.alpha *= TRAIL_FADE_FACTOR));
+      const trailCap = TRAIL_MAX * 1.5;
+      if (this.trail.length > trailCap) this.trail.pop();
+    }
 
     return this.life < this.maxLife + FADE_FRAMES;
   }
@@ -283,46 +420,58 @@ class QuantumParticle {
   draw(ctx: OffscreenCanvasRenderingContext2D) {
     const phaseAlpha = this.alpha();
     if (phaseAlpha <= 0) return;
-    const twinkleBase = this.isAccent ? 1 : 0.8;
-    const twinkleAmp = this.isAccent ? 0.3 : 0.2;
-    const twinkle =
-      twinkleBase + twinkleAmp * fastSin(this.life * 0.1 + this.hue);
-    const effAlpha = phaseAlpha * twinkle;
+    
+    let effAlpha: number;
+    
+    if (this.isAccent) {
+      // Accent particles keep their twinkling
+      const twinkleBase = 1;
+      const twinkleAmp = 0.3;
+      const twinkle = twinkleBase + twinkleAmp * fastSin(this.life * 0.1 + this.hue);
+      effAlpha = phaseAlpha * twinkle;
+    } else {
+      // Non-accent particles have steady brightness (no twinkling)
+      effAlpha = phaseAlpha;
+    }
 
-    const glowScale = this.isAccent ? 6 : 4;
-    const glowR = this.size * glowScale;
+    // Only accent particles get glow effects
+    if (this.isAccent) {
+      const glowScale = 6;
+      const glowR = this.size * glowScale;
 
-    // glow & twinkle
-    const grad = ctx.createRadialGradient(
-      this.x,
-      this.y,
-      0,
-      this.x,
-      this.y,
-      glowR
-    );
-    grad.addColorStop(0, `hsla(${this.hue},100%,70%,${effAlpha * 0.3})`);
-    grad.addColorStop(1, `hsla(${this.hue},100%,70%,0)`);
-    ctx.beginPath();
-    ctx.fillStyle = grad;
-    ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
-    ctx.fill();
+      // glow & twinkle (reduced intensity for accent particles)
+      const grad = ctx.createRadialGradient(
+        this.x,
+        this.y,
+        0,
+        this.x,
+        this.y,
+        glowR
+      );
+      grad.addColorStop(0, `hsla(${this.hue},100%,70%,${effAlpha * 0.15})`); // Reduced from 0.3
+      grad.addColorStop(1, `hsla(${this.hue},100%,70%,0)`);
+      ctx.beginPath();
+      ctx.fillStyle = grad;
+      ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    // Optimized trail rendering with gradient fading - batch similar alpha segments
-    if (this.trail.length > 1) {
-      ctx.lineWidth = this.size * (this.isAccent ? 1 : 0.6);
+    // Only accent particles get trail rendering (COMMENTED OUT FOR TESTING)
+    /*
+    if (this.isAccent && this.trail.length > 1) {
+      ctx.lineWidth = this.size;
       
       let currentAlpha = -1;
       let batchStart = -1;
       
-      // Use finer quantization for accent particles (more visible gradient steps)
-      const quantizationSteps = this.isAccent ? 20 : 10; // 0.05 vs 0.1 increments
+      // Use finer quantization for accent particles
+      const quantizationSteps = 20; // 0.05 increments
       
       for (let i = 0; i < this.trail.length - 1; i++) {
         const segA = Math.min(this.trail[i].alpha, this.trail[i + 1].alpha) * phaseAlpha;
         if (segA < 0.02) break; // Early exit for very faint segments
         
-        // Quantize alpha to reduce stroke operations (finer for accent particles)
+        // Quantize alpha to reduce stroke operations
         const quantizedAlpha = Math.round(segA * quantizationSteps) / quantizationSteps;
         
         if (quantizedAlpha !== currentAlpha) {
@@ -348,10 +497,21 @@ class QuantumParticle {
         ctx.stroke();
       }
     }
+    */
 
-    // core
+    // core particle (all particles get this)
     ctx.beginPath();
-    ctx.fillStyle = `hsla(${this.hue},100%,70%,${effAlpha})`;
+    if (this.isAccent) {
+      // Accent particles use their original color and alpha
+      ctx.fillStyle = `hsla(${this.hue},100%,70%,${effAlpha})`;
+    } else {
+      // Non-accent particles use illumination effects, but fade them with particle death
+      const illuminationFade = phaseAlpha / this.baseAlpha; // Ratio of current to max alpha
+      const fadedIlluminationAlpha = this.illuminationAlpha * illuminationFade;
+      const finalAlpha = effAlpha + fadedIlluminationAlpha;
+      const saturation = fadedIlluminationAlpha > 0.02 ? 100 : 60; // More saturated when illuminated
+      ctx.fillStyle = `hsla(${this.illuminationHue},${saturation}%,70%,${finalAlpha})`;
+    }
     ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
     ctx.fill();
   }

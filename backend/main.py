@@ -9,6 +9,7 @@ from config import settings
 from middleware import SecurityHeadersMiddleware, RateLimitMiddleware
 import logging
 import json
+import asyncio
 from pathlib import Path
 
 # Apply startup optimizations early
@@ -134,6 +135,41 @@ elif settings.is_development:
 
 app.include_router(router)
 
+# Global background task storage
+background_tasks = []
+
+
+def create_background_task(coro, task_name: str = "background_task"):
+    """
+    Create a background task with proper exception handling
+
+    Args:
+        coro: The coroutine to run as a background task
+        task_name: A descriptive name for the task (for logging)
+
+    Returns:
+        The created asyncio.Task
+    """
+    task = asyncio.create_task(coro)
+    background_tasks.append(task)
+
+    def handle_task_exception(task):
+        """Handle exceptions from background tasks"""
+        try:
+            task.result()  # This will raise any exception that occurred
+            logger.info(f"✅ Background task '{task_name}' completed successfully")
+        except asyncio.CancelledError:
+            logger.info(f"🔄 Background task '{task_name}' was cancelled")
+        except Exception as e:
+            logger.error(f"❌ Background task '{task_name}' failed: {e}")
+        finally:
+            # Remove completed/failed task from active tasks
+            if task in background_tasks:
+                background_tasks.remove(task)
+
+    task.add_done_callback(handle_task_exception)
+    return task
+
 
 # Startup and shutdown events for cleanup service
 @app.on_event("startup")
@@ -150,11 +186,44 @@ async def startup_event():
         logger.error(f"Failed to start cleanup service: {e}")
         # Don't fail startup if cleanup service fails
 
+    # Initialize S3 storage in background for better upload performance
+    try:
+        from utils.s3_storage import init_storage_background
+
+        # Start S3 initialization in background - don't await to avoid blocking startup
+        # Use helper function for proper exception handling
+        create_background_task(init_storage_background(), task_name="S3_initialization")
+        logger.info("🚀 S3 background initialization started")
+    except Exception as e:
+        logger.error(f"Failed to start S3 background initialization: {e}")
+        # Don't fail startup if S3 background init fails
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up services on application shutdown"""
     logger.info("Application shutdown - cleaning up services...")
+
+    # Cancel any remaining background tasks
+    if background_tasks:
+        logger.info(f"Cancelling {len(background_tasks)} background tasks...")
+        for task in background_tasks:
+            if not task.done():
+                task.cancel()
+
+        # Wait for tasks to be cancelled (with timeout)
+        if background_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*background_tasks, return_exceptions=True),
+                    timeout=5.0,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Some background tasks did not shut down gracefully")
+            except Exception as e:
+                logger.error(f"Error during background task cleanup: {e}")
+
+        background_tasks.clear()
 
     # Stop the cleanup service
     try:
@@ -174,6 +243,29 @@ def read_root():
         "debug": settings.debug,
         "cors_origins": settings.allowed_origins if settings.debug else "configured",
         "docs_url": "/docs" if settings.debug else "disabled",
+    }
+
+
+@app.get("/health/background-tasks")
+def get_background_task_status():
+    """Get status of background tasks (for monitoring/debugging)"""
+    task_info = []
+    for i, task in enumerate(background_tasks):
+        task_info.append(
+            {
+                "task_id": i,
+                "done": task.done(),
+                "cancelled": task.cancelled(),
+                "exception": (
+                    str(task.exception()) if task.done() and task.exception() else None
+                ),
+            }
+        )
+
+    return {
+        "active_tasks": len(background_tasks),
+        "tasks": task_info,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
