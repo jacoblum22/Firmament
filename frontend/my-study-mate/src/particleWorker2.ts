@@ -10,11 +10,21 @@ const POP_NORMAL = 120; // Increased from 80 for richer particle field
 
 const ACCENT_BASE = 0.05; // 5% base chance for accent particles
 
+const MAX_ILLUMINATION_DISTANCE = 80; // pixels
+
 const TRAIL_MAX = 30;
 const TRAIL_FADE_FACTOR = 0.94;
 const BASE_LIFE = 180;
 const LIFE_VARIANCE = 120;
 const FADE_FRAMES = 45;
+
+// Particle size constants
+const GLOBAL_MIN_SIZE = 0.5; // Smallest background particle size
+const GLOBAL_MAX_SIZE = 6; // Largest accent particle size
+
+// Perspective/movement scaling constants  
+const MIN_PERSPECTIVE_SCALE = 0.2; // Minimum perspective scaling factor
+const PERSPECTIVE_SCALE_RANGE = 0.6; // Additional range (0.2 + 0.6 = 0.8 max)
 
 // Flow field
 const RESOLUTION = 20; // px per cell
@@ -86,6 +96,7 @@ class QuantumNexus {
   private width: number;
   private height: number;
   private particles: QuantumParticle[] = [];
+  private accentParticles: QuantumParticle[] = [];
   private flowField: number[] = [];
   private time = 0;
   private impulse = 0;
@@ -161,13 +172,17 @@ class QuantumNexus {
       if (Math.abs(this.impulse) < 0.001) this.impulse = 0;
     }
 
+    // Pre-filter accent particles once per frame for performance
+    this.accentParticles = this.particles.filter(p => p.isAccentParticle);
+
     // update & draw with illumination effects
     this.particles = this.particles.filter((p) => {
       const alive = p.update(this.flowField);
       if (alive) {
-        // Calculate illumination for non-accent particles
-        if (!p.isAccentParticle) {
-          p.calculateIllumination(this.particles.filter(accent => accent.isAccentParticle));
+        // Calculate illumination for non-accent particles using pre-filtered accents
+        // Early exit: skip illumination calculation if no accent particles exist
+        if (!p.isAccentParticle && this.accentParticles.length > 0) {
+          p.calculateIllumination(this.accentParticles);
         }
         p.draw(this.ctx);
       }
@@ -239,7 +254,8 @@ class QuantumParticle {
       }
     }
     
-    this.sizeNorm = (this.size - 0.5) / (this.maxSize - 0.5); // Normalize across full range
+    // Global normalization: 0.5px (smallest background) to 6px (largest accent)
+    this.sizeNorm = (this.size - GLOBAL_MIN_SIZE) / (GLOBAL_MAX_SIZE - GLOBAL_MIN_SIZE);
 
     if (this.isAccent) {
       this.hue =
@@ -290,10 +306,18 @@ class QuantumParticle {
 
   // Calculate illumination effects from nearby accent particles
   calculateIllumination(accentParticles: QuantumParticle[]) {
+    // Early exit: no accent particles to calculate illumination from
+    if (accentParticles.length === 0) {
+      this.illuminationAlpha = 0;
+      this.illuminationHue = this.hue;
+      return;
+    }
+    
     this.illuminationAlpha = 0;
     this.illuminationHue = this.hue; // Default to original hue
     
-    const maxIlluminationDistance = 80; // pixels
+    const maxIlluminationDistance = MAX_ILLUMINATION_DISTANCE; // pixels
+    const maxDistanceSquared = maxIlluminationDistance * maxIlluminationDistance; // 6400
     let totalIllumination = 0;
     let weightedHue = 0;
     let totalWeight = 0;
@@ -301,15 +325,19 @@ class QuantumParticle {
     for (const accent of accentParticles) {
       const dx = accent.position.x - this.x;
       const dy = accent.position.y - this.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const distanceSquared = dx * dx + dy * dy;
       
-      if (distance < maxIlluminationDistance) {
+      // Early exit using distance-squared comparison (avoids Math.sqrt)
+      if (distanceSquared < maxDistanceSquared) {
+        // Only calculate actual distance when we need it for falloff calculation
+        const distance = Math.sqrt(distanceSquared);
+        
         // Falloff: closer = stronger illumination
         const falloff = 1 - (distance / maxIlluminationDistance);
         const illuminationStrength = falloff * falloff; // Quadratic falloff
         
         // Factor in the accent particle's size (larger = more illumination)
-        const sizeFactor = accent.particleSize / 6; // Normalize by max accent size
+        const sizeFactor = accent.particleSize / GLOBAL_MAX_SIZE; // Normalize by max accent size
         
         // Factor in the receiving particle's size (larger particles catch more light)
         const receiverSizeFactor = 0.5 + (this.sizeNorm * 0.5); // Range: 0.5x to 1.0x light reception
@@ -322,6 +350,12 @@ class QuantumParticle {
         const weight = finalIllumination;
         weightedHue += accent.particleHue * weight;
         totalWeight += weight;
+        
+        // Early exit: if we've reached maximum illumination, no need to check more accents
+        const receiverBonus = 0.5 + (this.sizeNorm * 0.5);
+        if (totalIllumination >= 0.8 * receiverBonus) {
+          break;
+        }
       }
     }
     
@@ -347,7 +381,7 @@ class QuantumParticle {
     const idx = (fy * cols + fx) * 2;
     if (field[idx] !== undefined) {
       // Perspective effect: larger particles (closer) move faster through flow field
-      const perspectiveScale = 0.2 + (this.sizeNorm * 0.6); // Changed from 0.3 + 0.7, now 0.2x to 0.8x speed
+      const perspectiveScale = MIN_PERSPECTIVE_SCALE + (this.sizeNorm * PERSPECTIVE_SCALE_RANGE); // 0.2x to 0.8x speed
       const fScale = INTENSITY_BASE * this.speedFactor * perspectiveScale;
       this.vx += field[idx] * fScale;
       this.vy += field[idx + 1] * fScale;
@@ -362,7 +396,7 @@ class QuantumParticle {
     this.vy = fastSin(ang) * spd;
 
     // move with perspective-based speed
-    const perspectiveMovement = 0.2 + (this.sizeNorm * 0.6); // Reduced from 0.3 + 0.7 for slower non-accent movement
+    const perspectiveMovement = MIN_PERSPECTIVE_SCALE + (this.sizeNorm * PERSPECTIVE_SCALE_RANGE); // Reduced from 0.3 + 0.7 for slower non-accent movement
     this.x += this.vx * perspectiveMovement;
     this.y += (this.vy * perspectiveMovement) + this.scrollVy;
 

@@ -4,6 +4,7 @@ import VanillaTilt from "vanilla-tilt";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
 import config from './config';
+import { BRAND } from './constants';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
 import { AuthHeader } from './components/AuthHeader';
@@ -955,7 +956,7 @@ function App() {
                   letterSpacing: '-0.02em'
                 }}
               >
-                Firmament
+                {BRAND.NAME}
               </div>
               <div
                 className="glow-text"
@@ -988,7 +989,7 @@ function App() {
                     disabled={isLoading}
                     onSuccess={() => {
                       console.log('Sign-in successful');
-                      setSuccessMessage('Successfully signed in! Welcome to Firmament.');
+                      setSuccessMessage(`Successfully signed in! Welcome to ${BRAND.NAME}.`);
                       setError(null); // Clear any previous errors
                       // Clear success message after 5 seconds
                       setTimeout(() => setSuccessMessage(null), 5000);
@@ -1040,7 +1041,7 @@ function App() {
           
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
             <div className="label fade-in" style={{ animationDelay: "0.2s", fontSize: "2rem", marginBottom: "0rem" }}>
-              Firmament
+              {BRAND.NAME}
             </div>
             <div
               className="glow-text fade-in"

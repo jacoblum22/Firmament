@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { BRAND } from '../constants';
 
 /**
  * Props interface for ConnectionScreen component
@@ -99,7 +100,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         className="label"
         style={styles.logo}
       >
-        Firmament
+        {BRAND.NAME}
       </motion.div>
 
       {/* Status Message */}
@@ -110,7 +111,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         style={styles.statusMessage}
       >
         <div style={styles.gradientText}>
-          Connecting to Firmament...
+          Connecting to {BRAND.NAME}...
         </div>
         
         {/* Animated dots */}
@@ -160,7 +161,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
                 ✅ Establishing Connection
               </div>
               <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Just a moment while we connect to Firmament...
+                Just a moment while we connect to {BRAND.NAME}...
               </div>
             </>
           ) : !isBackendReachable ? (
@@ -169,7 +170,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
                 🔧 Backend Unavailable
               </div>
               <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                The Firmament server is currently unreachable. We're working to reconnect automatically.
+                The {BRAND.NAME} server is currently unreachable. We're working to reconnect automatically.
               </div>
             </>
           ) : (
@@ -178,7 +179,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
                 ✅ Connection Established
               </div>
               <div style={{ color: '#888', fontSize: '0.9rem' }}>
-                Connected to Firmament! Redirecting...
+                Connected to {BRAND.NAME}! Redirecting...
               </div>
             </>
           )}
@@ -205,7 +206,7 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({
         transition={{ duration: 0.6, delay: 0.8 }}
         style={styles.footer}
       >
-        Firmament automatically retries the connection every few seconds.
+        {BRAND.NAME} automatically retries the connection every few seconds.
       </motion.div>
     </div>
   );

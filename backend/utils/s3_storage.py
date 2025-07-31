@@ -10,7 +10,7 @@ import logging
 import threading
 import asyncio
 from pathlib import Path
-from typing import Optional, BinaryIO, Union, Any
+from typing import Optional, Any
 from io import BytesIO
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -103,9 +103,8 @@ class S3StorageManager:
                     self.s3_client = None
                     self._s3_initialized = False
 
-        # Run in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, _background_init)
+        # Run in thread pool to avoid blocking (Python 3.10+ compatible)
+        await asyncio.to_thread(_background_init)
 
     def _ensure_s3_ready(self):
         """Ensure S3 is ready for operations (fallback for immediate use)"""
@@ -281,6 +280,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Download from S3
                 response = self.s3_client.get_object(
@@ -317,6 +320,11 @@ class S3StorageManager:
         try:
             # Validate the key first
             self._validate_key(key)
+
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Check S3
                 self.s3_client.head_object(Bucket=self.settings.s3_bucket_name, Key=key)
@@ -350,6 +358,10 @@ class S3StorageManager:
             # Validate the key first
             self._validate_key(key)
 
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # Delete from S3
                 self.s3_client.delete_object(
@@ -380,6 +392,10 @@ class S3StorageManager:
             list[str]: List of file keys
         """
         try:
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
+
             if self.use_s3 and self.s3_client:
                 # List from S3 with pagination support
                 files = []
@@ -432,6 +448,10 @@ class S3StorageManager:
         try:
             # Validate the key first
             self._validate_key(key)
+
+            # Ensure S3 is ready if we're using it
+            if self.use_s3:
+                self._ensure_s3_ready()
 
             if self.use_s3 and self.s3_client:
                 url = self.s3_client.generate_presigned_url(
