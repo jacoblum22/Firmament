@@ -934,10 +934,11 @@ function App() {
             flexDirection: 'column', 
             alignItems: 'center', 
             justifyContent: 'center', 
-            minHeight: '100vh',
+            minHeight: '70vh',
             padding: '2rem',
             fontFamily: '"Outfit", sans-serif',
-            textAlign: 'center'
+            textAlign: 'center',
+            marginTop: '-3rem'
           }}>
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -946,22 +947,22 @@ function App() {
             >
               <div 
                 className="label"
-                style={{ 
+                style={{
                   fontSize: '4.5rem',
-                  marginBottom: '1rem',
+                  marginBottom: '-1rem',
                   color: '#ffffff',
                   fontWeight: '700',
                   letterSpacing: '-0.02em'
                 }}
               >
-                MyStudyMate
+                Firmament
               </div>
               <div
                 className="glow-text"
                 data-text="Smarter Studying Starts Here."
                 style={{ 
-                  fontSize: '2rem',
-                  marginBottom: '3rem',
+                  fontSize: '2.5rem',
+                  marginBottom: '2rem',
                   color: 'rgba(255, 255, 255, 0.9)',
                   fontWeight: '500',
                   letterSpacing: '-0.01em'
@@ -987,7 +988,7 @@ function App() {
                     disabled={isLoading}
                     onSuccess={() => {
                       console.log('Sign-in successful');
-                      setSuccessMessage('Successfully signed in! Welcome to StudyMate.');
+                      setSuccessMessage('Successfully signed in! Welcome to Firmament.');
                       setError(null); // Clear any previous errors
                       // Clear success message after 5 seconds
                       setTimeout(() => setSuccessMessage(null), 5000);
@@ -1038,13 +1039,13 @@ function App() {
           <AuthHeader />
           
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
-            <div className="label fade-in" style={{ animationDelay: "0.2s" }}>
-              MyStudyMate
+            <div className="label fade-in" style={{ animationDelay: "0.2s", fontSize: "2rem", marginBottom: "0rem" }}>
+              Firmament
             </div>
             <div
               className="glow-text fade-in"
               data-text="Smarter Studying Starts Here."
-              style={{ animationDelay: "0.4s" }}
+              style={{ animationDelay: "0.4s", marginBottom: "-1rem" }}
             >
               Smarter Studying Starts Here.
             </div>

@@ -9,6 +9,7 @@ from config import settings
 from middleware import SecurityHeadersMiddleware, RateLimitMiddleware
 import logging
 import json
+import asyncio
 from pathlib import Path
 
 # Apply startup optimizations early
@@ -149,6 +150,17 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to start cleanup service: {e}")
         # Don't fail startup if cleanup service fails
+
+    # Initialize S3 storage in background for better upload performance
+    try:
+        from utils.s3_storage import init_storage_background
+
+        # Start S3 initialization in background - don't await to avoid blocking startup
+        asyncio.create_task(init_storage_background())
+        logger.info("🚀 S3 background initialization started")
+    except Exception as e:
+        logger.error(f"Failed to start S3 background initialization: {e}")
+        # Don't fail startup if S3 background init fails
 
 
 @app.on_event("shutdown")
