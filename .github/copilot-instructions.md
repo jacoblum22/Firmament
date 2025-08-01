@@ -1,7 +1,7 @@
-# GitHub Copilot Instructions for StudyMate-v2
+# GitHub Copilot Instructions for Firmament
 
 ## Project Overview
-StudyMate-v2 is an AI-powered note generator that processes long-form lectures (audio/PDF/text) into structured topics and study materials using FastAPI backend + React frontend.
+Firmament is an AI-powered note generator that processes long-form lectures (audio/PDF/text) into structured topics and study materials using FastAPI backend + React frontend.
 
 ## Architecture & Data Flow
 
@@ -55,7 +55,7 @@ settings.is_production  # Determines security features
 **API Communication**: React app calls FastAPI endpoints
 - File upload with progress tracking via Server-Sent Events
 - Structured topic data returned as TopicResponse interface
-- Environment-specific API base URLs in frontend/my-study-mate/src/config.ts
+- Environment-specific API base URLs in frontend/firmament-frontend/src/config.ts
 
 ## Testing Philosophy
 
@@ -79,7 +79,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 **Frontend Setup**:
 ```bash
-cd frontend/my-study-mate  
+cd frontend/firmament-frontend  
 npm install
 npm run dev  # Runs on port 5173
 ```
@@ -95,7 +95,7 @@ npm run dev  # Runs on port 5173
 - **backend/config.py**: Environment configuration system
 - **backend/utils/content_cache.py**: Content-based caching implementation
 - **backend/utils/bertopic_processor.py**: Core topic modeling
-- **frontend/my-study-mate/src/services/**: API client logic
+- **frontend/firmament-frontend/src/services/**: API client logic
 
 ## Common Patterns When Adding Features
 

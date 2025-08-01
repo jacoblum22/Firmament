@@ -2,7 +2,7 @@
 
 ## Overview
 
-StudyMate v2 now includes a robust content-based caching system that avoids reprocessing identical files regardless of their filename. This significantly improves performance for duplicate content and provides better reliability than filename-based caching.
+Firmament now includes a robust content-based caching system that avoids reprocessing identical files regardless of their filename. This significantly improves performance for duplicate content and provides better reliability than filename-based caching.
 
 ## Features
 

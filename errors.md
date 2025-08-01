@@ -108,9 +108,9 @@ The same e-mail is repeated under “File Processing Evidence”. Ensure all ins
 + User Authentication: `<redacted>`
 
 Avoid exposing real S3 bucket names in public documentation
-Publishing the production bucket name (studymate-prod-storage) can make the account an easier target for enumeration or social-engineering attacks. Replace it with a placeholder or move this detail to a private, internal doc.
+Publishing the production bucket name (firmament-prod-storage) can make the account an easier target for enumeration or social-engineering attacks. Replace it with a placeholder or move this detail to a private, internal doc.
 
-- **S3 Bucket**: `studymate-prod-storage` (us-east-2)
+- **S3 Bucket**: `firmament-prod-storage` (us-east-2)
 + **S3 Bucket**: `<redacted-bucket-name>` (us-east-2)
 
 test_frontend_upload.py:
@@ -505,12 +505,12 @@ AWS_SETUP_GUIDE:
 Tighten IAM permissions – avoid AmazonS3FullAccess
 
 AmazonS3FullAccess grants account-wide S3 admin rights.
-Create a bucket-scoped least-privilege policy (s3:PutObject, s3:GetObject, s3:DeleteObject, s3:ListBucket on arn:aws:s3:::studymate-prod-storage/*) and attach that instead.
+Create a bucket-scoped least-privilege policy (s3:PutObject, s3:GetObject, s3:DeleteObject, s3:ListBucket on arn:aws:s3:::firmament-prod-storage/*) and attach that instead.
 
 -   - Search for and select: `AmazonS3FullAccess`
 +   - Click **“Create policy”** (JSON) and add a least-privilege policy limited to
-+     the StudyMate bucket.  
-+   - Attach the new policy to `studymate-s3-user`.
++     the Firmament bucket.  
++   - Attach the new policy to `firmament-s3-user`.
 
 CORS config is overly permissive
 

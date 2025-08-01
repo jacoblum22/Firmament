@@ -1,4 +1,4 @@
-# Google OAuth Setup Guide for StudyMate-v2
+# Google OAuth Setup Guide for Firmament
 
 This guide will help you set up Google OAuth authentication for user login.
 
@@ -11,7 +11,7 @@ This guide will help you set up Google OAuth authentication for user login.
 1. **Go to Google Cloud Console**: Visit [console.cloud.google.com](https://console.cloud.google.com)
 2. **Create a new project**:
    - Click "Select a project" dropdown → "New Project"
-   - Project name: `StudyMate-v2`
+   - Project name: `Firmament`
    - Leave organization blank (or select if you have one)
    - Click "Create"
 
@@ -32,7 +32,7 @@ This guide will help you set up Google OAuth authentication for user login.
    - Select "External" (for public app)
    - Click "Create"
 3. **Fill in App Information**:
-   - App name: `StudyMate-v2`
+   - App name: `Firmament`
    - User support email: Your email
    - Developer contact email: Your email
    - App logo: (optional)
@@ -52,7 +52,7 @@ This guide will help you set up Google OAuth authentication for user login.
    - Click "Create Credentials" → "OAuth 2.0 Client IDs"
 3. **Configure the OAuth client**:
    - Application type: "Web application"
-   - Name: `StudyMate-v2 Web Client`
+   - Name: `Firmament Web Client`
 4. **Add Authorized JavaScript origins**:
    - For development: `http://localhost:5173`
    - For production: `https://your-production-domain.com`
@@ -138,7 +138,7 @@ const GoogleAuthButton = () => {
 1. **Go back to Google Cloud Console**
 2. **Update Authorized origins and redirect URIs**:
    - Replace localhost URLs with your production domain
-   - Example: `https://studymate-v2.com`
+   - Example: `https://firmament.com`
 
 ### Environment Variables for Production
 ```bash

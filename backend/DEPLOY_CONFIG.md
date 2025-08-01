@@ -72,7 +72,7 @@ python deploy.py --start
 ## Example Output
 
 ```
-🎯 StudyMate Backend Production Deployment
+🎯 Firmament Backend Production Deployment
 ==================================================
 🔍 Checking production environment...
 📋 Configuration validation:

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The StudyMate API includes multiple Docker deployment options to suit different requirements and environments.
+The Firmament API includes multiple Docker deployment options to suit different requirements and environments.
 
 ## Dockerfile Options
 
@@ -56,19 +56,19 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 ### Standard Build
 ```bash
 # Build standard image
-docker build -t studymate-api:latest .
+docker build -t firmament-api:latest .
 
 # Build minimal image
-docker build -f Dockerfile.minimal -t studymate-api:minimal .
+docker build -f Dockerfile.minimal -t firmament-api:minimal .
 ```
 
 ### Multi-stage Build (Advanced)
 ```bash
 # Build for development
-docker build --target development -t studymate-api:dev .
+docker build --target development -t firmament-api:dev .
 
 # Build for production
-docker build --target production -t studymate-api:prod .
+docker build --target production -t firmament-api:prod .
 ```
 
 ## Running Containers
@@ -77,17 +77,17 @@ docker build --target production -t studymate-api:prod .
 ```bash
 # Standard image
 docker run -d \
-  --name studymate-api \
+  --name firmament-api \
   -p 8000:8000 \
   --env-file .env.production \
-  studymate-api:latest
+  firmament-api:latest
 
 # Minimal image
 docker run -d \
-  --name studymate-api \
+  --name firmament-api \
   -p 8000:8000 \
   --env-file .env.production \
-  studymate-api:minimal
+  firmament-api:minimal
 ```
 
 ### Docker Compose
@@ -96,7 +96,7 @@ docker run -d \
 docker-compose up -d
 
 # View logs
-docker-compose logs -f studymate-api
+docker-compose logs -f firmament-api
 
 # Stop services
 docker-compose down
@@ -107,19 +107,19 @@ docker-compose down
 ### Manual Health Check
 ```bash
 # Test curl-based health check
-docker exec studymate-api curl -f http://localhost:8000/health
+docker exec firmament-api curl -f http://localhost:8000/health
 
 # Test Python-based health check
-docker exec studymate-api python healthcheck.py
+docker exec firmament-api python healthcheck.py
 
 # Check health status
-docker inspect --format='{{.State.Health.Status}}' studymate-api
+docker inspect --format='{{.State.Health.Status}}' firmament-api
 ```
 
 ### Health Check Logs
 ```bash
 # View health check logs
-docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' studymate-api
+docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' firmament-api
 ```
 
 ## Image Size Comparison
@@ -156,7 +156,7 @@ ENVIRONMENT=production
 DEBUG=false
 
 # Database
-DATABASE_URL=postgresql://user:pass@db:5432/studymate
+DATABASE_URL=postgresql://user:pass@db:5432/firmament
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -171,7 +171,7 @@ TRUSTED_HOSTS=your-domain.com
 volumes:
   - ./uploads:/var/uploads
   - ./temp:/var/temp
-  - ./logs:/var/log/studymate
+  - ./logs:/var/log/firmament
 ```
 
 ## Troubleshooting
@@ -180,13 +180,13 @@ volumes:
 ```bash
 # Check if service is running
 docker ps
-docker logs studymate-api
+docker logs firmament-api
 
 # Test health endpoint manually
 curl http://localhost:8000/health
 
 # Check health check script
-docker exec studymate-api python healthcheck.py
+docker exec firmament-api python healthcheck.py
 ```
 
 ### Common Issues

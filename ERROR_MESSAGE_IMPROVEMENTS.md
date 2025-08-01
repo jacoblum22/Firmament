@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the improvements made to error handling and user-friendly error messages in StudyMate-v2.
+This document outlines the improvements made to error handling and user-friendly error messages in Firmament.
 
 ## Changes Made
 

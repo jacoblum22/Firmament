@@ -1,8 +1,8 @@
-# File Cleanup Configuration for StudyMate v2
+# File Cleanup Configuration for Firmament
 
 ## Overview
 
-StudyMate v2 now includes a conservative file cleanup system that helps manage disk space while preserving potentially important files. The system is designed with multiple safety mechanisms and is disabled by default.
+Firmament now includes a conservative file cleanup system that helps manage disk space while preserving potentially important files. The system is designed with multiple safety mechanisms and is disabled by default.
 
 ## 🔧 Configuration
 

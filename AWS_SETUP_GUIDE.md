@@ -1,6 +1,6 @@
-# AWS Setup Guide for StudyMate-v2
+# AWS Setup Guide for Firmament
 
-This guide will help you set up an AWS account and configure S3 storage for StudyMate-v2.
+This guide will help you set up an AWS account and configure S3 storage for Firmament.
 
 ## Prerequisites
 - You'll need an email address and credit/debit card for AWS account creation
@@ -12,7 +12,7 @@ This guide will help you set up an AWS account and configure S3 storage for Stud
 2. **Click "Create an AWS Account"**
 3. **Fill in account details**:
    - Email address
-   - Account name (e.g., "StudyMate-v2")
+   - Account name (e.g., "Firmament")
    - Choose "Personal" account type
 4. **Verify your email** and continue
 5. **Add payment information** (required even for free tier)
@@ -25,7 +25,7 @@ This guide will help you set up an AWS account and configure S3 storage for Stud
 2. **Go to IAM Service**: Search for "IAM" in the services search
 3. **Create a new user**:
    - Click "Users" → "Create user"
-   - Username: `studymate-s3-user`
+   - Username: `firmament-s3-user`
    - Select "Programmatic access"
 4. **Set permissions**:
    - Choose "Attach policies directly"  
@@ -45,17 +45,17 @@ This guide will help you set up an AWS account and configure S3 storage for Stud
                 "s3:ListBucket"
             ],
             "Resource": [
-                "arn:aws:s3:::studymate-prod-storage",
-                "arn:aws:s3:::studymate-prod-storage/*"
+                "arn:aws:s3:::firmament-prod-storage",
+                "arn:aws:s3:::firmament-prod-storage/*"
             ]
         }
     ]
 }
 ```
 
-   - **Important**: Replace `studymate-prod-storage` with your actual bucket name
-   - Click **"Review policy"** → Name it `StudyMate-S3-Policy` → **"Create policy"**
-   - Go back to user creation and attach your new `StudyMate-S3-Policy`
+   - **Important**: Replace `firmament-prod-storage` with your actual bucket name
+   - Click **"Review policy"** → Name it `Firmament-S3-Policy` → **"Create policy"**
+   - Go back to user creation and attach your new `Firmament-S3-Policy`
 5. **Create user** and **SAVE the credentials**:
    - Access Key ID
    - Secret Access Key
@@ -65,8 +65,8 @@ This guide will help you set up an AWS account and configure S3 storage for Stud
 
 1. **Go to S3 Service**: Search for "S3" in the AWS Console
 2. **Create bucket**:
-   - Bucket name: `studymate-prod-storage` (must be globally unique)
-   - If name is taken, try: `studymate-[your-initials]-storage`
+   - Bucket name: `firmament-prod-storage` (must be globally unique)
+   - If name is taken, try: `firmament-[your-initials]-storage`
    - Region: `us-east-1` (same as configured in the app)
 3. **Configure settings**:
    - **Block Public Access**: Keep all checkboxes CHECKED (security)
@@ -167,4 +167,4 @@ For a typical MVP, this should be sufficient for several months.
    - Go to S3 Console → Metrics & Analytics
    - Check storage usage and request counts
 
-Remember: With proper cleanup policies (which StudyMate includes), your costs should remain minimal!
+Remember: With proper cleanup policies (which Firmament includes), your costs should remain minimal!

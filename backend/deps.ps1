@@ -1,4 +1,4 @@
-# PowerShell script for StudyMate Backend Dependency Management
+# PowerShell script for Firmament Backend Dependency Management
 # Usage: .\deps.ps1 <command>
 
 param(
@@ -8,7 +8,7 @@ param(
 )
 
 function Show-Help {
-    Write-Host "StudyMate Backend Dependency Management" -ForegroundColor Green
+    Write-Host "Firmament Backend Dependency Management" -ForegroundColor Green
     Write-Host "======================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "Available commands:" -ForegroundColor Yellow

@@ -1,4 +1,4 @@
-# StudyMate Backend CORS Configuration
+# Firmament Backend CORS Configuration
 
 ## Environment Setup
 
