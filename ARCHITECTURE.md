@@ -342,7 +342,7 @@ graph TB
 
 | Layer | Technology | Purpose | Version |
 |-------|------------|---------|---------|
-| **Frontend** | React | UI Framework | 19+ |
+| **Frontend** | React | UI Framework | 18.x |
 | | TypeScript | Type Safety | 5+ |
 | | Vite | Build Tool | 6+ |
 | | Framer Motion | Animations | Latest |

@@ -55,7 +55,7 @@ settings.is_production  # Determines security features
 **API Communication**: React app calls FastAPI endpoints
 - File upload with progress tracking via Server-Sent Events
 - Structured topic data returned as TopicResponse interface
-- Environment-specific API base URLs in frontend/firmament-frontend/src/config.ts
+- Environment-specific API base URLs in frontend/firmament-frontend/vite.config.ts
 
 ## Testing Philosophy
 
