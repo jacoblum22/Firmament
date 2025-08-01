@@ -1,7 +1,27 @@
-# 🚀 Firmament
+# 🚀 ## 📚 Documentation
+
+- **[📸 Visual Demo & Feature Showcase](./DEMO_SHOWCASE.md)** - Interactive screenshots and user journey walkthrough
+- **[📊 Performance Benchmarking Guide](./PERFORMANCE_GUIDE.md)** - How to measure and document system performance
+- **[🔧 API Documentation](./API_DOCUMENTATION.md)** - Complete REST API reference with examples
+- **[🏗️ System Architecture](./ARCHITECTURE.md)** - Detailed architecture diagrams and design decisions
+- **[💻 Code Documentation](./CODE_DOCUMENTATION.md)** - Code quality standards and implementation highlights
+- **[☁️ AWS Setup Guide](./AWS_SETUP_GUIDE.md)** - Step-by-step AWS S3 configuration
+- **[🔐 Google OAuth Setup](./GOOGLE_OAUTH_SETUP.md)** - Google Cloud authentication setup
 **AI-Powered Knowledge Extraction & Topic Modeling Platform**
 
 *Transform lectures, podcasts, and documents into structured, searchable knowledge with advanced machine learning.*
+
+## 📚 Documentation
+
+- **[📸 Visual Demo & Feature Showcase](./DEMO_SHOWCASE.md)** - Interactive screenshots and user journey walkthrough
+- **[⚡ Performance Report](./PERFORMANCE_REPORT.md)** - Live benchmark results and technical analysis
+- **[📊 Performance Benchmarking Guide](./PERFORMANCE_GUIDE.md)** - How to measure and document system performance
+- **[🔧 API Documentation](./API_DOCUMENTATION.md)** - Complete REST API reference with examples
+- **[🏗️ System Architecture](./ARCHITECTURE.md)** - Detailed architecture diagrams and design decisions
+- **[💻 Code Documentation](./CODE_DOCUMENTATION.md)** - Code quality standards and implementation highlights
+- **[☁️ AWS Setup Guide](./AWS_SETUP_GUIDE.md)** - Step-by-step AWS S3 configuration
+- **[🔐 Google OAuth Setup](./GOOGLE_OAUTH_SETUP.md)** - Google Cloud authentication setup
+- **[⚙️ Configuration Guide](./backend/CONFIG_GUIDE.md)** - Environment and deployment configuration
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
@@ -85,7 +105,18 @@ Firmament is a sophisticated full-stack application that leverages cutting-edge 
 
 ---
 
-## 🚀 Quick Start
+## � Documentation
+
+- **[API Documentation](./API_DOCUMENTATION.md)** - Complete REST API reference with examples
+- **[System Architecture](./ARCHITECTURE.md)** - Detailed architecture diagrams and design decisions
+- **[Code Documentation](./CODE_DOCUMENTATION.md)** - Code quality standards and implementation highlights
+- **[AWS Setup Guide](./AWS_SETUP_GUIDE.md)** - Step-by-step AWS S3 configuration
+- **[Google OAuth Setup](./GOOGLE_OAUTH_SETUP.md)** - Google Cloud authentication setup
+- **[Configuration Guide](./backend/CONFIG_GUIDE.md)** - Environment and deployment configuration
+
+---
+
+## �🚀 Quick Start
 
 ### Prerequisites
 - Python 3.12+

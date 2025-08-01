@@ -1,0 +1,24 @@
+{
+  "test_summary": {
+    "total_tests": 6,
+    "successful_tests": 0,
+    "test_date": "2025-07-31 20:45:03",
+    "backend_endpoint": "http://localhost:8000"
+  },
+  "fresh_processing": {
+    "files_tested": 3,
+    "successful": 0,
+    "results": []
+  },
+  "cache_performance": {
+    "files_tested": 3,
+    "successful": 0,
+    "results": []
+  },
+  "performance_summary": {},
+  "system_info": {
+    "cpu_count": 16,
+    "memory_total_gb": 15.726390838623047,
+    "python_version": null
+  }
+}
