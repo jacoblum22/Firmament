@@ -4,48 +4,41 @@
 
 ```mermaid
 graph TB
-    %% Client Layer
-    subgraph "Client Layer"
-        UI[React Frontend - TypeScript + Vite]
-        Mobile[Mobile Browser - Responsive Design]
+    subgraph Client_Layer
+        UI[React_Frontend]
+        Mobile[Mobile_Browser]
     end
 
-    %% API Gateway / Load Balancer
-    LB[Load Balancer - NGINX/Cloudflare]
+    LB[Load_Balancer]
 
-    %% Application Layer
-    subgraph "Application Layer"
-        API[FastAPI Backend - Python 3.12+]
-        Auth[JWT Authentication - Google OAuth]
-        Middleware[Security Middleware - CORS + Rate Limiting]
+    subgraph Application_Layer
+        API[FastAPI_Backend]
+        Auth[JWT_Authentication]
+        Middleware[Security_Middleware]
     end
 
-    %% Processing Layer
-    subgraph "AI/ML Processing Layer"
-        Whisper[Whisper ASR - Audio Transcription]
-        PyMuPDF[PyMuPDF - PDF Text Extraction]
-        NLTK[NLTK - Text Processing]
-        BERTopic[BERTopic - Topic Modeling]
-        Embeddings[Sentence Transformers - Text Embeddings]
-        OpenAI[OpenAI API - Content Enhancement]
+    subgraph AI_ML_Processing
+        Whisper[Whisper_ASR]
+        PyMuPDF[PyMuPDF]
+        NLTK[NLTK]
+        BERTopic[BERTopic]
+        Embeddings[Sentence_Transformers]
+        OpenAI[OpenAI_API]
     end
 
-    %% Data Layer
-    subgraph "Data Storage Layer"
-        Redis[(Redis Cache - Session + Processing)]
-        S3[(AWS S3 - File Storage)]
-        LocalFS[(Local Storage - Temporary Files)]
-        Memory[(In-Memory - Processing State)]
+    subgraph Data_Storage
+        Redis[(Redis_Cache)]
+        S3[(AWS_S3)]
+        LocalFS[(Local_Storage)]
+        Memory[(In_Memory)]
     end
 
-    %% External Services
-    subgraph "External Services"
-        GoogleOAuth[Google OAuth 2.0 - Authentication]
-        OpenAIAPI[OpenAI API - GPT Enhancement]
-        AWS[AWS Services - S3 Storage]
+    subgraph External_Services
+        GoogleOAuth[Google_OAuth]
+        OpenAIAPI[OpenAI_API]
+        AWS[AWS_Services]
     end
 
-    %% Connections
     UI --> LB
     Mobile --> LB
     LB --> API
@@ -67,19 +60,6 @@ graph TB
     Auth --> GoogleOAuth
     OpenAI --> OpenAIAPI
     S3 --> AWS
-
-    %% Styling
-    classDef clientLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef appLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef mlLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    classDef dataLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef externalLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-
-    class UI,Mobile clientLayer
-    class API,Auth,Middleware appLayer
-    class Whisper,PyMuPDF,NLTK,BERTopic,Embeddings,OpenAI mlLayer
-    class Redis,S3,LocalFS,Memory dataLayer
-    class GoogleOAuth,OpenAIAPI,AWS externalLayer
 ```
 
 ## Detailed Component Architecture
@@ -88,40 +68,40 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "React Frontend"
-        App[App.tsx - Main Application]
+    subgraph React_Frontend
+        App[App.tsx]
         
-        subgraph "Components"
-            Auth[AuthHeader - User Authentication]
-            Upload[File Upload - Drag & Drop]
-            Progress[Progress Display - Real-time Updates]
-            Topics[Topic Display - Interactive Expansion]
-            Error[Error Display - User-friendly Messages]
+        subgraph Components
+            Auth[AuthHeader]
+            Upload[File_Upload]
+            Progress[Progress_Display]
+            Topics[Topic_Display]
+            Error[Error_Display]
         end
         
-        subgraph "Services"
-            API[API Service - HTTP Client]
-            AuthSvc[Auth Service - Google OAuth]
-            Network[Network Utils - Connection Handling]
+        subgraph Services
+            API[API_Service]
+            AuthSvc[Auth_Service]
+            Network[Network_Utils]
         end
         
-        subgraph "State Management"
-            Context[Auth Context - User State]
-            Hooks[Custom Hooks - Network Status]
-            Local[Local State - Component State]
+        subgraph State_Management
+            Context[Auth_Context]
+            Hooks[Custom_Hooks]
+            Local[Local_State]
         end
         
-        subgraph "External Libraries"
-            Motion[Framer Motion - Animations]
-            Tilt[Vanilla Tilt - 3D Effects]
-            Markdown[React Markdown - Content Rendering]
+        subgraph External_Libraries
+            Motion[Framer_Motion]
+            Tilt[Vanilla_Tilt]
+            Markdown[React_Markdown]
         end
     end
 
     App --> Components
     App --> Services
-    App --> State Management
-    Components --> External Libraries
+    App --> State_Management
+    Components --> External_Libraries
     Services --> API
 ```
 
@@ -129,28 +109,28 @@ graph LR
 
 ```mermaid
 graph TB
-    subgraph "FastAPI Backend"
-        Main[main.py - Application Entry]
-        Routes[routes.py - API Endpoints]
-        Config[config.py - Environment Management]
-        Middleware[middleware.py - Security & CORS]
+    subgraph FastAPI_Backend
+        Main[main.py]
+        Routes[routes.py]
+        Config[config.py]
+        Middleware[middleware.py]
         
-        subgraph "Utilities"
-            FileValidator[file_validator.py - Upload Validation]
-            ContentCache[content_cache.py - SHA256 Caching]
-            Segmentation[semantic_segmentation.py - Text Chunking]
-            BERTProcessor[bertopic_processor.py - Topic Modeling]
-            ErrorMessages[error_messages.py - User-friendly Errors]
+        subgraph Utilities
+            FileValidator[file_validator.py]
+            ContentCache[content_cache.py]
+            Segmentation[semantic_segmentation.py]
+            BERTProcessor[bertopic_processor.py]
+            ErrorMessages[error_messages.py]
         end
         
-        subgraph "Models"
-            DataModels[Pydantic Models - Request/Response]
-            TypeHints[Type Definitions - Static Typing]
+        subgraph Models
+            DataModels[Pydantic_Models]
+            TypeHints[Type_Definitions]
         end
         
-        subgraph "Background Tasks"
-            FileProcessing[File Processing - Async Tasks]
-            ProgressTracking[Progress Tracking - Job Status]
+        subgraph Background_Tasks
+            FileProcessing[File_Processing]
+            ProgressTracking[Progress_Tracking]
         end
     end
 
@@ -159,7 +139,7 @@ graph TB
     Routes --> Middleware
     Routes --> Utilities
     Routes --> Models
-    Routes --> Background Tasks
+    Routes --> Background_Tasks
 ```
 
 ## Data Flow Architecture
@@ -236,30 +216,30 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph "Security Layers"
-        subgraph "Frontend Security"
-            HTTPS[HTTPS Only - TLS Encryption]
-            CSP[Content Security Policy - XSS Protection]
-            CSRF[CSRF Protection - Token Validation]
+    subgraph Security_Layers
+        subgraph Frontend_Security
+            HTTPS[HTTPS_Only]
+            CSP[Content_Security_Policy]
+            CSRF[CSRF_Protection]
         end
         
-        subgraph "API Security"
-            CORS[CORS Configuration - Origin Validation]
-            RateLimit[Rate Limiting - Request Throttling]
-            JWT[JWT Tokens - Stateless Auth]
-            Validation[Input Validation - File Type Checking]
+        subgraph API_Security
+            CORS[CORS_Configuration]
+            RateLimit[Rate_Limiting]
+            JWT[JWT_Tokens]
+            Validation[Input_Validation]
         end
         
-        subgraph "Data Security"
-            Encryption[At-rest Encryption - S3 + Local Files]
-            TempFiles[Secure Temp Files - Auto-cleanup]
-            Hashing[Content Hashing - SHA256 Integrity]
+        subgraph Data_Security
+            Encryption[At_rest_Encryption]
+            TempFiles[Secure_Temp_Files]
+            Hashing[Content_Hashing]
         end
         
-        subgraph "Infrastructure Security"
-            Network[Network Security - VPC + Firewalls]
-            Access[Access Controls - IAM Policies]
-            Monitoring[Security Monitoring - Audit Logs]
+        subgraph Infrastructure_Security
+            Network[Network_Security]
+            Access[Access_Controls]
+            Monitoring[Security_Monitoring]
         end
     end
 
@@ -276,64 +256,64 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "Local Development"
-        Dev[Developer Machine]
+    subgraph Local_Development
+        Dev[Developer_Machine]
         
-        subgraph "Frontend Dev"
-            Vite[Vite Dev Server - localhost:5173]
-            HMR[Hot Module Reload - Instant Updates]
+        subgraph Frontend_Dev
+            Vite[Vite_Dev_Server]
+            HMR[Hot_Module_Reload]
         end
         
-        subgraph "Backend Dev"
-            Uvicorn[Uvicorn Server - localhost:8000]
-            Reload[Auto-reload - Code Changes]
+        subgraph Backend_Dev
+            Uvicorn[Uvicorn_Server]
+            Reload[Auto_reload]
         end
         
-        subgraph "Services"
-            LocalRedis[Local Redis - Cache Testing]
-            LocalFiles[Local Storage - Development Files]
+        subgraph Services
+            LocalRedis[Local_Redis]
+            LocalFiles[Local_Storage]
         end
     end
 
-    Dev --> Frontend Dev
-    Dev --> Backend Dev
-    Backend Dev --> Services
+    Dev --> Frontend_Dev
+    Dev --> Backend_Dev
+    Backend_Dev --> Services
 ```
 
 ### Production Environment Options
 
 ```mermaid
 graph TB
-    subgraph "Production Deployment Options"
-        subgraph "Cloud Platforms"
-            Railway[Railway - Full Stack Deploy]
-            Render[Render - Web Services]
-            Vercel[Vercel - Frontend Only]
-            Heroku[Heroku - App Platform]
+    subgraph Production_Deployment
+        subgraph Cloud_Platforms
+            Railway[Railway]
+            Render[Render]
+            Vercel[Vercel]
+            Heroku[Heroku]
         end
         
-        subgraph "Container Deployment"
-            Docker[Docker Containers - Isolated Environment]
-            Compose[Docker Compose - Multi-service]
-            K8s[Kubernetes - Orchestrated Scale]
+        subgraph Container_Deployment
+            Docker[Docker_Containers]
+            Compose[Docker_Compose]
+            K8s[Kubernetes]
         end
         
-        subgraph "Traditional Hosting"
-            VPS[VPS Hosting - Full Control]
-            Shared[Shared Hosting - Budget Option]
+        subgraph Traditional_Hosting
+            VPS[VPS_Hosting]
+            Shared[Shared_Hosting]
         end
     end
 
-    subgraph "External Services"
-        S3Storage[AWS S3 - File Storage]
-        RedisCloud[Redis Cloud - Managed Cache]
-        GoogleAuth[Google OAuth - Authentication]
-        OpenAIService[OpenAI API - AI Enhancement]
+    subgraph External_Services
+        S3Storage[AWS_S3]
+        RedisCloud[Redis_Cloud]
+        GoogleAuth[Google_OAuth]
+        OpenAIService[OpenAI_API]
     end
 
-    Cloud Platforms --> External Services
-    Container Deployment --> External Services
-    Traditional Hosting --> External Services
+    Cloud_Platforms --> External_Services
+    Container_Deployment --> External_Services
+    Traditional_Hosting --> External_Services
 ```
 
 ## Technology Stack Details
