@@ -398,13 +398,6 @@ curl -X POST http://localhost:8000/expand-bullet-point \
   }'
 ```
 
-## Performance Characteristics
-
-- **PDF Processing**: ~1-2 seconds per MB
-- **Audio Transcription**: ~0.3x real-time (30min audio = 9min processing)
-- **Topic Modeling**: ~2-5 seconds per 1000 words
-- **Bullet Point Expansion**: ~1-3 seconds per expansion
-
 ## Security Features
 
 - JWT token authentication

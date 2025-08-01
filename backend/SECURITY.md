@@ -166,7 +166,6 @@ ufw deny 5432/tcp   # PostgreSQL (internal only)
 
 1. **Log analysis**: Structured logging with security events
 2. **Intrusion detection**: Failed login attempts, unusual patterns
-3. **Performance monitoring**: Response times, error rates
 
 ### Audit Tools
 

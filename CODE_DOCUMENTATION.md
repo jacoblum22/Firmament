@@ -181,7 +181,6 @@ const handleProgressStream = (jobId: string) => {
 ### 3. **Monitoring & Observability**
 - Structured logging with correlation IDs
 - Health check endpoints
-- Performance metrics collection
 - Error tracking and alerting
 
 ## Architecture Decision Records

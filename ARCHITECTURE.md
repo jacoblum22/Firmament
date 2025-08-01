@@ -6,43 +6,43 @@
 graph TB
     %% Client Layer
     subgraph "Client Layer"
-        UI[React Frontend<br/>TypeScript + Vite]
-        Mobile[Mobile Browser<br/>Responsive Design]
+        UI[React Frontend - TypeScript + Vite]
+        Mobile[Mobile Browser - Responsive Design]
     end
 
     %% API Gateway / Load Balancer
-    LB[Load Balancer<br/>NGINX/Cloudflare]
+    LB[Load Balancer - NGINX/Cloudflare]
 
     %% Application Layer
     subgraph "Application Layer"
-        API[FastAPI Backend<br/>Python 3.12+]
-        Auth[JWT Authentication<br/>Google OAuth]
-        Middleware[Security Middleware<br/>CORS + Rate Limiting]
+        API[FastAPI Backend - Python 3.12+]
+        Auth[JWT Authentication - Google OAuth]
+        Middleware[Security Middleware - CORS + Rate Limiting]
     end
 
     %% Processing Layer
     subgraph "AI/ML Processing Layer"
-        Whisper[Whisper ASR<br/>Audio Transcription]
-        PyMuPDF[PyMuPDF<br/>PDF Text Extraction]
-        NLTK[NLTK<br/>Text Processing]
-        BERTopic[BERTopic<br/>Topic Modeling]
-        Embeddings[Sentence Transformers<br/>Text Embeddings]
-        OpenAI[OpenAI API<br/>Content Enhancement]
+        Whisper[Whisper ASR - Audio Transcription]
+        PyMuPDF[PyMuPDF - PDF Text Extraction]
+        NLTK[NLTK - Text Processing]
+        BERTopic[BERTopic - Topic Modeling]
+        Embeddings[Sentence Transformers - Text Embeddings]
+        OpenAI[OpenAI API - Content Enhancement]
     end
 
     %% Data Layer
     subgraph "Data Storage Layer"
-        Redis[(Redis Cache<br/>Session + Processing)]
-        S3[(AWS S3<br/>File Storage)]
-        LocalFS[(Local Storage<br/>Temporary Files)]
-        Memory[(In-Memory<br/>Processing State)]
+        Redis[(Redis Cache - Session + Processing)]
+        S3[(AWS S3 - File Storage)]
+        LocalFS[(Local Storage - Temporary Files)]
+        Memory[(In-Memory - Processing State)]
     end
 
     %% External Services
     subgraph "External Services"
-        GoogleOAuth[Google OAuth 2.0<br/>Authentication]
-        OpenAIAPI[OpenAI API<br/>GPT Enhancement]
-        AWS[AWS Services<br/>S3 Storage]
+        GoogleOAuth[Google OAuth 2.0 - Authentication]
+        OpenAIAPI[OpenAI API - GPT Enhancement]
+        AWS[AWS Services - S3 Storage]
     end
 
     %% Connections
@@ -89,32 +89,32 @@ graph TB
 ```mermaid
 graph LR
     subgraph "React Frontend"
-        App[App.tsx<br/>Main Application]
+        App[App.tsx - Main Application]
         
         subgraph "Components"
-            Auth[AuthHeader<br/>User Authentication]
-            Upload[File Upload<br/>Drag & Drop]
-            Progress[Progress Display<br/>Real-time Updates]
-            Topics[Topic Display<br/>Interactive Expansion]
-            Error[Error Display<br/>User-friendly Messages]
+            Auth[AuthHeader - User Authentication]
+            Upload[File Upload - Drag & Drop]
+            Progress[Progress Display - Real-time Updates]
+            Topics[Topic Display - Interactive Expansion]
+            Error[Error Display - User-friendly Messages]
         end
         
         subgraph "Services"
-            API[API Service<br/>HTTP Client]
-            AuthSvc[Auth Service<br/>Google OAuth]
-            Network[Network Utils<br/>Connection Handling]
+            API[API Service - HTTP Client]
+            AuthSvc[Auth Service - Google OAuth]
+            Network[Network Utils - Connection Handling]
         end
         
         subgraph "State Management"
-            Context[Auth Context<br/>User State]
-            Hooks[Custom Hooks<br/>Network Status]
-            Local[Local State<br/>Component State]
+            Context[Auth Context - User State]
+            Hooks[Custom Hooks - Network Status]
+            Local[Local State - Component State]
         end
         
         subgraph "External Libraries"
-            Motion[Framer Motion<br/>Animations]
-            Tilt[Vanilla Tilt<br/>3D Effects]
-            Markdown[React Markdown<br/>Content Rendering]
+            Motion[Framer Motion - Animations]
+            Tilt[Vanilla Tilt - 3D Effects]
+            Markdown[React Markdown - Content Rendering]
         end
     end
 
@@ -130,27 +130,27 @@ graph LR
 ```mermaid
 graph TB
     subgraph "FastAPI Backend"
-        Main[main.py<br/>Application Entry]
-        Routes[routes.py<br/>API Endpoints]
-        Config[config.py<br/>Environment Management]
-        Middleware[middleware.py<br/>Security & CORS]
+        Main[main.py - Application Entry]
+        Routes[routes.py - API Endpoints]
+        Config[config.py - Environment Management]
+        Middleware[middleware.py - Security & CORS]
         
         subgraph "Utilities"
-            FileValidator[file_validator.py<br/>Upload Validation]
-            ContentCache[content_cache.py<br/>SHA256 Caching]
-            Segmentation[semantic_segmentation.py<br/>Text Chunking]
-            BERTProcessor[bertopic_processor.py<br/>Topic Modeling]
-            ErrorMessages[error_messages.py<br/>User-friendly Errors]
+            FileValidator[file_validator.py - Upload Validation]
+            ContentCache[content_cache.py - SHA256 Caching]
+            Segmentation[semantic_segmentation.py - Text Chunking]
+            BERTProcessor[bertopic_processor.py - Topic Modeling]
+            ErrorMessages[error_messages.py - User-friendly Errors]
         end
         
         subgraph "Models"
-            DataModels[Pydantic Models<br/>Request/Response]
-            TypeHints[Type Definitions<br/>Static Typing]
+            DataModels[Pydantic Models - Request/Response]
+            TypeHints[Type Definitions - Static Typing]
         end
         
         subgraph "Background Tasks"
-            FileProcessing[File Processing<br/>Async Tasks]
-            ProgressTracking[Progress Tracking<br/>Job Status]
+            FileProcessing[File Processing - Async Tasks]
+            ProgressTracking[Progress Tracking - Job Status]
         end
     end
 
@@ -238,28 +238,28 @@ sequenceDiagram
 graph TB
     subgraph "Security Layers"
         subgraph "Frontend Security"
-            HTTPS[HTTPS Only<br/>TLS Encryption]
-            CSP[Content Security Policy<br/>XSS Protection]
-            CSRF[CSRF Protection<br/>Token Validation]
+            HTTPS[HTTPS Only - TLS Encryption]
+            CSP[Content Security Policy - XSS Protection]
+            CSRF[CSRF Protection - Token Validation]
         end
         
         subgraph "API Security"
-            CORS[CORS Configuration<br/>Origin Validation]
-            RateLimit[Rate Limiting<br/>Request Throttling]
-            JWT[JWT Tokens<br/>Stateless Auth]
-            Validation[Input Validation<br/>File Type Checking]
+            CORS[CORS Configuration - Origin Validation]
+            RateLimit[Rate Limiting - Request Throttling]
+            JWT[JWT Tokens - Stateless Auth]
+            Validation[Input Validation - File Type Checking]
         end
         
         subgraph "Data Security"
-            Encryption[At-rest Encryption<br/>S3 + Local Files]
-            TempFiles[Secure Temp Files<br/>Auto-cleanup]
-            Hashing[Content Hashing<br/>SHA256 Integrity]
+            Encryption[At-rest Encryption - S3 + Local Files]
+            TempFiles[Secure Temp Files - Auto-cleanup]
+            Hashing[Content Hashing - SHA256 Integrity]
         end
         
         subgraph "Infrastructure Security"
-            Network[Network Security<br/>VPC + Firewalls]
-            Access[Access Controls<br/>IAM Policies]
-            Monitoring[Security Monitoring<br/>Audit Logs]
+            Network[Network Security - VPC + Firewalls]
+            Access[Access Controls - IAM Policies]
+            Monitoring[Security Monitoring - Audit Logs]
         end
     end
 
@@ -280,18 +280,18 @@ graph LR
         Dev[Developer Machine]
         
         subgraph "Frontend Dev"
-            Vite[Vite Dev Server<br/>localhost:5173]
-            HMR[Hot Module Reload<br/>Instant Updates]
+            Vite[Vite Dev Server - localhost:5173]
+            HMR[Hot Module Reload - Instant Updates]
         end
         
         subgraph "Backend Dev"
-            Uvicorn[Uvicorn Server<br/>localhost:8000]
-            Reload[Auto-reload<br/>Code Changes]
+            Uvicorn[Uvicorn Server - localhost:8000]
+            Reload[Auto-reload - Code Changes]
         end
         
         subgraph "Services"
-            LocalRedis[Local Redis<br/>Cache Testing]
-            LocalFiles[Local Storage<br/>Development Files]
+            LocalRedis[Local Redis - Cache Testing]
+            LocalFiles[Local Storage - Development Files]
         end
     end
 
@@ -306,29 +306,29 @@ graph LR
 graph TB
     subgraph "Production Deployment Options"
         subgraph "Cloud Platforms"
-            Railway[Railway<br/>Full Stack Deploy]
-            Render[Render<br/>Web Services]
-            Vercel[Vercel<br/>Frontend Only]
-            Heroku[Heroku<br/>App Platform]
+            Railway[Railway - Full Stack Deploy]
+            Render[Render - Web Services]
+            Vercel[Vercel - Frontend Only]
+            Heroku[Heroku - App Platform]
         end
         
         subgraph "Container Deployment"
-            Docker[Docker Containers<br/>Isolated Environment]
-            Compose[Docker Compose<br/>Multi-service]
-            K8s[Kubernetes<br/>Orchestrated Scale]
+            Docker[Docker Containers - Isolated Environment]
+            Compose[Docker Compose - Multi-service]
+            K8s[Kubernetes - Orchestrated Scale]
         end
         
         subgraph "Traditional Hosting"
-            VPS[VPS Hosting<br/>Full Control]
-            Shared[Shared Hosting<br/>Budget Option]
+            VPS[VPS Hosting - Full Control]
+            Shared[Shared Hosting - Budget Option]
         end
     end
 
     subgraph "External Services"
-        S3Storage[AWS S3<br/>File Storage]
-        RedisCloud[Redis Cloud<br/>Managed Cache]
-        GoogleAuth[Google OAuth<br/>Authentication]
-        OpenAIService[OpenAI API<br/>AI Enhancement]
+        S3Storage[AWS S3 - File Storage]
+        RedisCloud[Redis Cloud - Managed Cache]
+        GoogleAuth[Google OAuth - Authentication]
+        OpenAIService[OpenAI API - AI Enhancement]
     end
 
     Cloud Platforms --> External Services
@@ -373,38 +373,5 @@ graph TB
 | | Jest | JavaScript Testing |
 | **Build** | Docker | Containerization |
 | | GitHub Actions | CI/CD Pipeline |
-
-## Performance Characteristics
-
-### Processing Performance
-
-```mermaid
-graph LR
-    subgraph "File Processing Times"
-        PDF[PDF Processing<br/>~1-2 sec/MB]
-        Audio[Audio Transcription<br/>~0.3x real-time]
-        Text[Text Processing<br/>~0.1 sec/1000 words]
-    end
-    
-    subgraph "ML Processing Times"
-        Topics[Topic Generation<br/>~2-5 sec/1000 words]
-        Expansion[Bullet Expansion<br/>~1-3 seconds]
-        Embedding[Text Embedding<br/>~0.1 sec/sentence]
-    end
-    
-    subgraph "System Performance"
-        Memory[Memory Usage<br/>~500MB-2GB peak]
-        Storage[Storage Efficiency<br/>Content-based caching]
-        Network[Network Optimization<br/>Progressive loading]
-    end
-```
-
-### Scalability Considerations
-
-- **Horizontal Scaling**: Stateless API design enables multiple instances
-- **Caching Strategy**: Content-based SHA256 caching prevents reprocessing
-- **Background Processing**: Async task handling for long operations
-- **Resource Management**: Configurable memory limits and cleanup
-- **Database Sharding**: Topic data can be distributed across instances
 
 This architecture provides a robust, scalable foundation for AI-powered document analysis and study material generation.

@@ -86,7 +86,6 @@ python -m pytest tests/test_file_upload_comprehensive.py -v
 - ✅ Real server testing
 - ✅ Generated test files
 - ✅ Interactive validation
-- ✅ Performance metrics
 - ✅ Detailed reporting
 
 ---
