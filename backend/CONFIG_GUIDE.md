@@ -1,8 +1,8 @@
-# StudyMate API Configuration Guide
+# Firmament API Configuration Guide
 
 ## Environment-Specific Configuration
 
-The StudyMate API supports separate configurations for development and production environments. This ensures optimal settings for each deployment scenario.
+The Firmament API supports separate configurations for development and production environments. This ensures optimal settings for each deployment scenario.
 
 ## Quick Start
 
@@ -132,7 +132,7 @@ python start.py --env production
 docker-compose up -d
 
 # View logs
-docker-compose logs -f studymate-api
+docker-compose logs -f firmament-api
 
 # Stop services
 docker-compose down

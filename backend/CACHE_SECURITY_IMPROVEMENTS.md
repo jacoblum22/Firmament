@@ -1,7 +1,7 @@
 # Cache Cleanup Security Improvements Summary
 
 ## Overview
-Enhanced security for cache cleanup endpoints in the StudyMate-v2 backend application.
+Enhanced security for cache cleanup endpoints in the Firmament backend application.
 
 ## Security Improvements Implemented
 

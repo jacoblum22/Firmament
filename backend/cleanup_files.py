@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manual cleanup script for StudyMate v2.
+Manual cleanup script for Firmament.
 Safe, conservative file cleanup with multiple safeguards.
 
 Usage:
@@ -99,7 +99,7 @@ def show_directory_status():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Conservative file cleanup for StudyMate v2",
+        description="Conservative file cleanup for Firmament",
         epilog="By default, runs in dry-run mode to show what would be cleaned.",
     )
 
@@ -183,7 +183,7 @@ def main():
         "dry_run": dry_run,
     }
 
-    print("\n🧹 StudyMate File Cleanup")
+    print("\n🧹 Firmament File Cleanup")
     print("=" * 50)
     print(
         f"Mode: {'DRY RUN (no files will be deleted)' if dry_run else 'REAL CLEANUP (files will be deleted)'}"

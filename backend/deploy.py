@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Production deployment script for StudyMate backend
+Production deployment script for Firmament backend
 """
 import os
 import sys
@@ -286,7 +286,7 @@ def start_server():
 
 def main():
     """Main deployment function"""
-    print("🎯 StudyMate Backend Production Deployment")
+    print("🎯 Firmament Backend Production Deployment")
     print("=" * 50)
 
     if not check_environment():

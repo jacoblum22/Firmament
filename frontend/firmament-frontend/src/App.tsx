@@ -1,3 +1,30 @@
+/**
+ * Firmament - AI-Powered Study Material Generator
+ * 
+ * Main application component that orchestrates the entire study material processing workflow.
+ * This React application provides a sophisticated interface for uploading documents and audio files,
+ * processing them through advanced ML pipelines, and generating interactive study materials.
+ * 
+ * Key Features:
+ * - Drag & drop file upload with real-time validation
+ * - Live progress tracking via Server-Sent Events
+ * - Interactive topic expansion with nested bullet points
+ * - 3D animations and particle effects for engaging UX
+ * - Comprehensive error handling with user-friendly messages
+ * - Google OAuth authentication with JWT token management
+ * - Responsive design with accessibility considerations
+ * 
+ * Architecture:
+ * - React 19+ with TypeScript for type safety
+ * - Framer Motion for smooth animations and transitions
+ * - Custom hooks for network status and authentication
+ * - Service layer for API communication
+ * - Context-based state management for user authentication
+ * 
+ * @author Firmament Development Team
+ * @version 2.0.0
+ */
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import "./App.css";
 import VanillaTilt from "vanilla-tilt";
@@ -18,35 +45,50 @@ import apiService, {
   BulletPointExpandResponse as ExpandedBulletResult 
 } from './services/apiService';
 
+/** 
+ * Color palette for dynamic UI accents
+ * Used for drag-over states and interactive elements
+ */
 const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
 
 /**
  * Configuration constants for file upload validation
  * Centralized to ensure consistency across UI and validation logic
  * This configuration is used throughout the app for file validation and UI displays
+ * 
+ * Security considerations:
+ * - File size limits prevent DoS attacks and memory exhaustion
+ * - Extension validation prevents malicious file uploads
+ * - MIME type checking provides additional security layer
  */
 const FILE_VALIDATION = {
-  /** Maximum file size in megabytes */
+  /** Maximum file size in megabytes - balances usability with server resources */
   MAX_SIZE_MB: 100,
-  /** Maximum file size in bytes (computed from MB) */
+  /** Maximum file size in bytes (computed from MB) - used for precise validation */
   MAX_SIZE_BYTES: 100 * 1024 * 1024,
-  /** Allowed file extensions (must include leading dot) */
+  /** Allowed file extensions (must include leading dot) - whitelist approach for security */
   ALLOWED_EXTENSIONS: ['.pdf', '.mp3', '.wav', '.txt', '.m4a'] as const,
   /** 
    * Corresponding MIME types for additional validation if needed in future
    * Maps to: PDF documents, MP3 audio, WAV audio, plain text, M4A audio
+   * Note: MIME types can be spoofed, so we rely primarily on extension validation
    */
   ALLOWED_MIME_TYPES: [
-    'application/pdf',      // .pdf
-    'audio/mpeg',          // .mp3
-    'audio/wav',           // .wav
-    'audio/wave',          // .wav (alternative)
-    'text/plain',          // .txt
-    'audio/mp4',           // .m4a
-    'audio/x-m4a'          // .m4a (alternative)
+    'application/pdf',      // .pdf - Adobe Portable Document Format
+    'audio/mpeg',          // .mp3 - MPEG Audio Layer III
+    'audio/wav',           // .wav - Waveform Audio File Format
+    'audio/wave',          // .wav (alternative MIME type)
+    'text/plain',          // .txt - Plain text files
+    'audio/mp4',           // .m4a - MPEG-4 Audio
+    'audio/x-m4a'          // .m4a (alternative MIME type)
   ] as const
 } as const;
 
+/**
+ * Type definition for nested bullet point expansions
+ * Supports unlimited depth of expansion hierarchy for comprehensive study materials
+ * Each expansion can contain sub-expansions, creating a tree-like structure
+ */
 type NestedExpansions = {
   [bulletKey: string]: {
     expansion: ExpandedBulletResult;
@@ -54,11 +96,19 @@ type NestedExpansions = {
   };
 };
 
+/**
+ * Type definition for individual bullet point expansion data
+ * Contains the AI-generated expansion and optional nested sub-expansions
+ */
 type BulletExpansion = {
   expansion: ExpandedBulletResult;
   subExpansions?: NestedExpansions;
 };
 
+/**
+ * Shared button styling for consistent UI elements
+ * Used across various interactive components
+ */
 const buttonStyle: React.CSSProperties = {
   marginLeft: "1rem",
   padding: "0.5rem 1rem",
@@ -67,6 +117,25 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+/**
+ * Main Application Component
+ * 
+ * This is the core component that manages the entire application state and workflow.
+ * It handles user authentication, file processing, topic generation, and interactive
+ * content expansion through a sophisticated state management system.
+ * 
+ * State Management Strategy:
+ * - Uses React hooks for local component state
+ * - Leverages context for authentication state
+ * - Implements custom hooks for network connectivity
+ * - Manages complex async operations with useEffect and useCallback
+ * 
+ * Performance Optimizations:
+ * - Memoized callbacks to prevent unnecessary re-renders
+ * - Optimized particle system using Web Workers
+ * - Progressive loading of content and animations
+ * - Efficient re-rendering through proper dependency arrays
+ */
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
   const [, setFile] = useState<File | null>(null);

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  studymate-api:
+  firmament-api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -14,7 +14,7 @@ services:
     volumes:
       - ./uploads:/var/uploads
       - ./temp_chunks:/var/temp
-      - ./logs:/var/log/studymate
+      - ./logs:/var/log/firmament
     restart: unless-stopped
     depends_on:
       - redis
@@ -42,7 +42,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-studymate_prod}
+      - POSTGRES_DB=${POSTGRES_DB:-firmament_prod}
       - POSTGRES_USER=${POSTGRES_USER:-studymate}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     env_file:

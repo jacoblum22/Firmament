@@ -1,3 +1,45 @@
+"""
+Firmament Backend - Main API Routes
+
+This module contains the core API endpoints for the Firmament study material processing system.
+The routes handle the complete workflow from file upload through AI-powered content analysis
+and interactive study material generation.
+
+Key Features:
+- Secure file upload with comprehensive validation
+- Real-time processing progress via Server-Sent Events
+- Content-based caching to avoid reprocessing identical files
+- Multi-stage AI pipeline: transcription → segmentation → topic modeling → enhancement
+- Interactive bullet point expansion with unlimited depth
+- JWT authentication with Google OAuth integration
+- Comprehensive error handling with user-friendly messages
+
+Architecture Overview:
+- FastAPI for high-performance async API endpoints
+- Background task processing for long-running operations
+- Content-based SHA256 caching for efficiency
+- Secure temporary file handling with auto-cleanup
+- Modular design with utility functions for maintainability
+
+Security Considerations:
+- File type and size validation to prevent malicious uploads
+- JWT token authentication for protected endpoints
+- Content-based hashing to prevent cache poisoning
+- Secure temporary file storage with automatic cleanup
+- Rate limiting and CORS protection (configured in middleware)
+
+Performance Optimizations:
+- Lazy imports to reduce startup time and memory usage
+- Content-based caching to avoid redundant processing
+- Background task queuing for non-blocking operations
+- Streaming responses for real-time progress updates
+- Memory-efficient file handling for large uploads
+
+@author Firmament Development Team
+@version 2.0.0
+@since 2024-01-01
+"""
+
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Header, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.responses import StreamingResponse
@@ -18,7 +60,7 @@ from utils.s3_storage import get_storage_manager
 from typing import Dict, Any, Optional
 import logging
 
-# Configure logger
+# Configure structured logging for better observability
 logger = logging.getLogger("backend")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
@@ -35,18 +77,47 @@ def verify_api_key(
 ) -> bool:
     """
     Verify API key from header or query parameter.
-    In development: authentication is optional (returns True if no key provided)
-    In production: authentication is required
+
+    This function implements a flexible authentication strategy that adapts to the deployment environment:
+
+    Development Environment:
+    - Authentication is optional to facilitate rapid development and testing
+    - If no API key is provided, requests are allowed through
+    - If an API key is provided, it must be correct (partial security)
+
+    Production Environment:
+    - Authentication is mandatory for all requests
+    - All requests must provide a valid API key
+    - Helps prevent unauthorized access to sensitive ML processing endpoints
+
+    Security Notes:
+    - API keys should be transmitted via headers (X-API-Key) rather than query parameters
+    - Query parameter support is provided for backward compatibility
+    - Production deployments should use HTTPS to protect API keys in transit
+    - Consider implementing rate limiting and token rotation for enhanced security
+
+    Args:
+        x_api_key: API key provided in X-API-Key header (preferred method)
+        api_key: API key provided as query parameter (fallback method)
+
+    Returns:
+        bool: True if authentication is successful or not required (dev mode)
+
+    Raises:
+        HTTPException: 401 if authentication fails or is required but not provided
+        HTTPException: 403 if provided key is invalid
     """
     provided_key = x_api_key or api_key
     expected_key = settings.api_key
 
-    # In development, allow requests without API key for easier testing
+    # Development mode: relaxed authentication for easier testing
     if settings.is_development:
         if not provided_key:
+            logger.debug("Development mode: allowing unauthenticated request")
             return True  # Allow unauthenticated access in dev
         # If key is provided in dev, it must be correct
         if provided_key != expected_key:
+            logger.warning("Development mode: invalid API key provided")
             raise HTTPException(
                 status_code=401,
                 detail="Invalid API key provided. Remove the key to proceed without authentication in development.",

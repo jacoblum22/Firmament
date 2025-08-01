@@ -1,3 +1,41 @@
+"""
+Firmament Backend Configuration Management
+
+This module provides a comprehensive configuration system for the Firmament backend,
+supporting multiple deployment environments with proper security defaults and validation.
+
+Key Features:
+- Environment-specific configuration loading (.env.development, .env.production)
+- Secure defaults that prioritize production security
+- Comprehensive validation with detailed error messages
+- Type hints for better IDE support and code reliability
+- Flexible property-based access with runtime validation
+- Support for both development and production deployment scenarios
+
+Design Philosophy:
+- Security by default: production settings are secure unless explicitly overridden
+- Development convenience: development settings prioritize ease of use
+- Fail fast: invalid configurations raise clear errors during startup
+- Zero-config operation: sensible defaults for common scenarios
+- Environment isolation: clear separation between dev/prod configurations
+
+Configuration Priority (highest to lowest):
+1. Environment variables
+2. .env.{ENVIRONMENT} files
+3. Default .env file
+4. Hard-coded secure defaults
+
+Security Considerations:
+- Production secrets must be provided via environment variables
+- Development uses insecure defaults for convenience
+- API keys and JWT secrets are validated for minimum security requirements
+- Database and external service credentials use secure defaults
+- CORS and rate limiting are environment-appropriate
+
+@author Firmament Development Team
+@version 2.0.0
+"""
+
 import os
 import sys
 from typing import List, Optional
@@ -5,46 +43,107 @@ from dotenv import load_dotenv
 
 
 class ConfigurationError(Exception):
-    """Custom exception for configuration errors"""
+    """
+    Custom exception for configuration-related errors.
+
+    Raised when:
+    - Required environment variables are missing
+    - Invalid configuration values are provided
+    - Security requirements are not met
+    - External service configuration is invalid
+    """
 
     pass
 
 
 class Settings:
+    """
+    Centralized configuration management for the Firmament backend.
+
+    This class implements a property-based configuration system that:
+    - Loads configuration from multiple sources in priority order
+    - Validates configuration values at access time
+    - Provides environment-specific defaults
+    - Ensures security requirements are met
+
+    Usage:
+        settings = Settings()
+        if settings.is_production:
+            # Production-specific logic
+            pass
+
+        # Access configuration values
+        db_url = settings.database_url
+        api_key = settings.api_key
+    """
+
     def __init__(self):
-        # Load environment variables from .env file
+        """
+        Initialize configuration by loading environment variables.
+
+        Loading Strategy:
+        1. Check for environment-specific file (.env.development, .env.production)
+        2. Fall back to generic .env file
+        3. Use environment variables as overrides
+        4. Apply secure defaults
+        """
+        # Load environment-specific configuration first
         env_file = f".env.{os.getenv('ENVIRONMENT', 'development')}"
         if os.path.exists(env_file):
             load_dotenv(env_file)
+            print(f"Loaded configuration from {env_file}")
         else:
             # Fallback to default .env file
             load_dotenv()
+            print("Loaded configuration from default .env file")
 
+    # Environment Detection Properties
     @property
     def environment(self) -> str:
+        """Get the current deployment environment (development/production)."""
         return os.getenv("ENVIRONMENT", "development")
 
     @property
     def is_production(self) -> bool:
+        """Check if running in production environment."""
         return self.environment == "production"
 
     @property
     def is_development(self) -> bool:
+        """Check if running in development environment."""
         return self.environment == "development"
 
     @property
     def debug(self) -> bool:
-        # Debug should be False in production by default
+        """
+        Get debug mode setting.
+
+        Security: Debug is disabled by default in production to prevent
+        information disclosure vulnerabilities.
+        """
+        # Debug should be False in production by default for security
         default_debug = "false" if self.is_production else "true"
         return os.getenv("DEBUG", default_debug).lower() == "true"
 
-    # Server Configuration
+    # Server Configuration Properties
     @property
     def host(self) -> str:
+        """
+        Get server host binding address.
+
+        Development: Binds to localhost (127.0.0.1) for security
+        Production: Binds to all interfaces (0.0.0.0) for accessibility
+        """
         return os.getenv("HOST", "127.0.0.1" if self.is_development else "0.0.0.0")
 
     @property
     def port(self) -> int:
+        """
+        Get server port number with validation.
+
+        Validates that the port is within the valid range (1-65535)
+        and handles deployment platform port assignment.
+        """
         port_str = os.getenv("PORT", "8000")
         default_port = 8000
 
