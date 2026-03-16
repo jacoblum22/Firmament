@@ -355,3 +355,52 @@ python -c "import secrets, string; print(''.join(secrets.choice(string.ascii_let
 6. **Use HTTPS everywhere** in production
 7. **Implement proper backup** and recovery procedures
 8. **Monitor and alert** on security events
+
+---
+
+## File Upload Security
+
+StudyMate implements multi-layer file upload validation against common vulnerabilities.
+
+### Validation Layers
+
+1. **Extension validation** — only `.pdf`, `.mp3`, `.wav`, `.txt`, `.m4a` accepted
+2. **MIME type checking** — validates actual content type
+3. **File signature (magic bytes)** — prevents file type spoofing
+4. **Frontend pre-validation** — client-side checks before upload begins
+
+### Size Limits
+
+| Type | Limit |
+|------|-------|
+| PDF | 50 MB |
+| MP3/M4A | 200 MB |
+| WAV | 500 MB |
+| Text | 10 MB |
+
+Override via environment variables:
+```env
+UPLOAD_MAX_SIZE_PDF=52428800
+UPLOAD_MAX_SIZE_AUDIO=209715200
+UPLOAD_MAX_SIZE_WAV=524288000
+UPLOAD_MAX_SIZE_TEXT=10485760
+UPLOAD_DIRECTORY=uploads
+TEMP_DIRECTORY=temp_chunks
+```
+
+### Filename Security
+
+- Blocks `../` and `..\` (path traversal)
+- Strips dangerous characters: `< > : " | ? * / \`
+- Blocks null bytes; limits length to 255 chars
+
+### Usage
+
+```python
+from utils.file_validator import FileValidator, FileValidationError
+
+try:
+    extension, safe_filename = FileValidator.validate_upload(file_bytes, filename)
+except FileValidationError as e:
+    return {"error": str(e)}
+```

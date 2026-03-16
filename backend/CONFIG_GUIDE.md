@@ -217,3 +217,47 @@ The configuration system loads environment variables in this order:
 3. System environment variables (highest priority)
 
 This allows you to override specific settings without modifying the environment files.
+
+---
+
+## File Cleanup Configuration
+
+The cleanup service is **disabled by default**. Enable and configure it via environment variables:
+
+```env
+# Enable automatic background cleanup (default: false)
+CLEANUP_ENABLED=false
+CLEANUP_INTERVAL_HOURS=24
+CLEANUP_STARTUP_DELAY_MINUTES=10
+
+# Age limits before deletion
+CLEANUP_TEMP_MAX_AGE_HOURS=24
+CLEANUP_UPLOADS_MAX_AGE_DAYS=30
+CLEANUP_OUTPUT_MAX_AGE_DAYS=90
+CLEANUP_PROCESSED_MAX_AGE_DAYS=180
+
+# Directory size triggers (MB)
+CLEANUP_UPLOADS_MAX_SIZE_MB=5000
+CLEANUP_OUTPUT_MAX_SIZE_MB=2000
+CLEANUP_PROCESSED_MAX_SIZE_MB=1000
+
+# Safety: always keep N newest files
+CLEANUP_MIN_FILES_TO_KEEP=5
+```
+
+### Manual Cleanup CLI
+
+```bash
+python cleanup_files.py --status          # Show directory status
+python cleanup_files.py --dry-run         # Preview what would be deleted
+python cleanup_files.py --temp-only --for-real   # Delete only temp files
+python cleanup_files.py --for-real        # Full cleanup
+```
+
+### Recommended Settings
+
+| Environment | `CLEANUP_ENABLED` | Uploads Max Age | Processed Max Age |
+|-------------|-------------------|-----------------|-------------------|
+| Development | `false` | — (manual) | — |
+| Production (conservative) | `true` | 60 days | 365 days |
+| Production (aggressive) | `true` | 14 days | 90 days |

@@ -113,19 +113,19 @@ SECURE_HEADERS=true
 
 ## Testing
 
-### CORS Testing
+Run the full test suite from the project root:
+
 ```bash
-python test_cors.py
+pytest
 ```
 
-### Manual CORS Test
+Or from the `backend/` directory:
+
 ```bash
-curl -H "Origin: http://localhost:5173" \
-     -H "Access-Control-Request-Method: POST" \
-     -H "Access-Control-Request-Headers: Content-Type" \
-     -X OPTIONS \
-     http://localhost:8000/
+python -m pytest tests/
 ```
+
+See `tests/README.md` for details on test categories and individual test commands.
 
 ## Deployment Checklist
 
@@ -185,3 +185,42 @@ curl -H "Origin: http://localhost:5173" \
 ## License
 
 [Your License Here]
+
+---
+
+## Dependency Management
+
+### Requirements Files
+
+| File | Purpose |
+|------|---------|
+| `requirements.txt` | Core runtime dependencies (pinned versions) |
+| `requirements-dev.txt` | Development extras: testing, linting, formatting |
+
+### Installation
+
+```bash
+# Runtime only
+pip install -r requirements.txt
+
+# Development setup (includes testing, linting)
+pip install -r requirements.txt -r requirements-dev.txt
+```
+
+### Management Scripts
+
+**Windows (PowerShell):**
+```powershell
+.\deps.ps1 install       # Install production deps
+.\deps.ps1 install-dev   # Install dev deps
+.\deps.ps1 test          # Run full test suite
+.\deps.ps1 lint          # Run linter
+.\deps.ps1 format        # Auto-format code
+```
+
+**Unix/Linux (Make):**
+```bash
+make install     # Install production deps
+make install-dev # Install dev deps
+make test        # Run full test suite
+```

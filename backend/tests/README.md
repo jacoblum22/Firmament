@@ -23,9 +23,13 @@ tests/
 │   └── test_kmeans_integration.py # K-means clustering integration tests
 ├── unit/                       # Unit tests
 │   ├── __init__.py
-│   ├── test_datetime_fix.py    # DateTime utility tests
+│   ├── test_cache.py           # Cache unit tests
+│   ├── test_cache_security.py  # Cache security tests
+│   ├── test_cleanup.py         # Cleanup utility tests
+│   ├── test_content_cache.py   # Content-based cache tests
 │   ├── test_import.py          # Import functionality tests
-│   └── test_kmeans.py          # K-means unit tests
+│   ├── test_kmeans.py          # K-means unit tests
+│   └── test_thread_safety.py   # Thread safety tests
 └── utils/                      # Utility and processing tests
     ├── __init__.py
     ├── test_bertopic_changes.py # BERTopic changes tests

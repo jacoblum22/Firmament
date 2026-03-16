@@ -10,7 +10,7 @@ from typing import List, Tuple
 # Use local model file instead of system path
 # Get the directory where this script is located, then go up one level to backend/
 script_dir = Path(__file__).parent
-model_path = script_dir.parent / "std.rnnn"
+model_path = script_dir.parent / "models" / "std.rnnn"
 RNNOISE_OUTPUT_DIR = "rnnoise_output"
 MAX_DIR_SIZE_MB = 1024  # 1GB limit
 

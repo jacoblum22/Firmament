@@ -1,6 +1,6 @@
 # Makefile for StudyMate Backend Dependency Management
 
-.PHONY: help install install-dev install-prod update-deps test clean
+.PHONY: help install install-dev install-prod test clean setup-dev security-check format lint
 
 # Default target
 help:
@@ -10,10 +10,12 @@ help:
 	@echo "Available targets:"
 	@echo "  install      - Install production dependencies"
 	@echo "  install-dev  - Install development dependencies"
-	@echo "  install-prod - Install production dependencies (alias for install)"
-	@echo "  update-deps  - Update dependency versions (requires pip-tools)"
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean virtual environment"
+	@echo "  setup-dev    - Full dev setup with pre-commit hooks"
+	@echo "  security-check - Scan for dependency vulnerabilities"
+	@echo "  format       - Auto-format code with black"
+	@echo "  lint         - Run flake8 + mypy"
 	@echo ""
 	@echo "Usage examples:"
 	@echo "  make install"
@@ -22,34 +24,23 @@ help:
 
 # Install production dependencies
 install:
-	pip install --no-deps -r requirements.txt
+	pip install -r requirements.txt
 
 # Install development dependencies
 install-dev:
-	pip install --no-deps -r requirements.txt
-	pip install --no-deps -r requirements-dev.txt
+	pip install -r requirements.txt
+	pip install -r requirements-dev.txt
 
 # Install production dependencies (alias)
 install-prod: install
-
-# Update dependencies using pip-tools
-update-deps:
-	@echo "Updating dependencies..."
-	@echo "Installing pip-tools if not available..."
-	pip install pip-tools
-	@echo "Compiling requirements..."
-	pip-compile requirements.in
-	pip-compile requirements-dev.in
-	pip-compile requirements-prod.in
-	@echo "Dependencies updated. Review changes and commit."
 
 # Run tests
 test:
 	python -m pytest tests/ -v
 
-# Run configuration tests
+# Run configuration tests only
 test-config:
-	python test_config.py
+	python -m pytest tests/config/ -v
 
 # Clean virtual environment
 clean:

@@ -355,3 +355,42 @@ graph TB
 | | GitHub Actions | CI/CD Pipeline |
 
 This architecture provides a robust, scalable foundation for AI-powered document analysis and study material generation.
+
+---
+
+## Content-Based Caching
+
+The processing pipeline uses SHA256 content hashing to avoid reprocessing identical files regardless of filename.
+
+### Cache Structure
+
+```
+backend/cache/
+├── transcriptions/
+│   ├── <content_hash>.txt        # Raw transcription text
+│   └── <content_hash>.meta.json  # Metadata (filename, timestamp)
+├── processed/
+│   ├── <content_hash>.json       # Processed segments, topics, clusters
+│   └── <content_hash>.meta.json  # Metadata
+└── index.json                    # Fast-lookup index
+```
+
+### Processing Flow
+
+1. File uploaded → SHA256 hash calculated from content
+2. Check **processed** cache → return immediately if hit
+3. Check **transcription** cache → skip transcription stage if hit
+4. Transcribe/extract → save to transcription cache
+5. Run topic analysis → save to processed cache
+6. Return results
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/cache/stats` | Cache statistics (size, entry count, timestamps) |
+| `POST` | `/cache/cleanup` | Remove entries older than `max_age_days` |
+
+### Error Handling
+
+All cache operations fail gracefully — a cache read failure continues with normal processing; a write failure logs a warning and continues. Corrupted entries are automatically skipped.
