@@ -82,7 +82,8 @@ pytest tests/utils/test_bertopic_processor.py -v
 ### Manual live-server test (requires a running backend):
 ```bash
 # Start the server first: python start.py --env development
-python tests/manual_upload_test.py --server-url http://localhost:8000
+python scripts/manual_upload_test.py --server-url http://localhost:8000
+python scripts/frontend_upload_probe.py --server-url http://localhost:8000
 ```
 
 ## Test Categories

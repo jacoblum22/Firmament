@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""
-Frontend Upload Integration Tests
+"""Manual frontend upload probe for live server diagnostics.
 
-This test suite simulates various frontend file upload scenarios including:
-1. Normal, valid multipart form uploads (should succeed)
-2. Malformed requests with incorrect Content-Type headers (should fail gracefully)
-3. Proper request handling verification
-
-Test 2 specifically tests server robustness against malformed requests where the
-Content-Type header doesn't match the actual request body format.
+This script simulates frontend-style uploads and a malformed multipart request
+to quickly verify backend request handling behavior.
 """
 
+import argparse
 import requests
-import json
 
 
-def test_frontend_like_upload(
-    base_url="http://localhost:8000", test_file_path="../test_upload.txt"
+def run_frontend_like_upload(
+    base_url: str = "http://localhost:8000",
+    test_file_path: str = "test-data/test_upload.txt",
 ):
     """Test upload simulating frontend behavior"""
     url = f"{base_url}/upload"
@@ -91,4 +86,17 @@ def test_frontend_like_upload(
 
 
 if __name__ == "__main__":
-    test_frontend_like_upload()
+    parser = argparse.ArgumentParser(description="Run manual frontend upload probe")
+    parser.add_argument(
+        "--server-url",
+        default="http://localhost:8000",
+        help="Backend base URL (default: http://localhost:8000)",
+    )
+    parser.add_argument(
+        "--test-file",
+        default="test-data/test_upload.txt",
+        help="Path to local test file (default: test-data/test_upload.txt)",
+    )
+    args = parser.parse_args()
+
+    run_frontend_like_upload(args.server_url, args.test_file)

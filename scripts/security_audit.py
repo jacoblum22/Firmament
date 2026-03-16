@@ -10,9 +10,13 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+DEFAULT_AUDIT_DIR = REPO_ROOT / "backend"
+
 
 class SecurityAuditor:
-    def __init__(self, base_path: str = "."):
+    def __init__(self, base_path: str = str(DEFAULT_AUDIT_DIR)):
         self.base_path = Path(base_path)
         self.issues = []
         self.recommendations = []
@@ -184,6 +188,8 @@ def main():
     auditor = SecurityAuditor()
     report = auditor.generate_report()
 
+    print(f"Scanning security config in: {auditor.base_path}")
+
     print("\n" + "=" * 50)
     print("STUDYMATE SECURITY AUDIT REPORT")
     print("=" * 50)
@@ -208,7 +214,7 @@ def main():
     print("\n" + "=" * 50)
 
     # Save report to file
-    report_path = Path("security_audit_report.json")
+    report_path = auditor.base_path / "security_audit_report.json"
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 

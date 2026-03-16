@@ -7,7 +7,7 @@ This script helps verify the upload system works correctly by:
 3. Providing detailed reports
 
 Usage:
-    python manual_upload_test.py [--server-url http://localhost:8000] [--output-dir ./test_files]
+    python scripts/manual_upload_test.py [--server-url http://localhost:8000] [--output-dir ./test_files]
 """
 
 import argparse
@@ -17,9 +17,11 @@ import json
 import time
 from typing import Dict
 import sys
+from pathlib import Path
 
-# Add the parent directory to Python path so we can import our modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add backend/ to Python path so we can import backend tests utilities.
+backend_dir = Path(__file__).resolve().parent.parent / "backend"
+sys.path.insert(0, str(backend_dir))
 
 from tests.utils.test_file_generators import TestFileGenerator
 
