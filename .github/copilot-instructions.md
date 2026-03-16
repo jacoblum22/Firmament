@@ -55,7 +55,7 @@ settings.is_production  # Determines security features
 **API Communication**: React app calls FastAPI endpoints
 - File upload with progress tracking via Server-Sent Events
 - Structured topic data returned as TopicResponse interface
-- Environment-specific API base URLs in frontend/firmament-frontend/vite.config.ts
+- Environment-specific API base URLs in frontend/vite.config.ts
 
 ## Testing Philosophy
 
@@ -79,15 +79,15 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 **Frontend Setup**:
 ```bash
-cd frontend/firmament-frontend  
+cd frontend
 npm install
 npm run dev  # Runs on port 5173
 ```
 
 **Key Commands**:
 - `python deploy.py --start` - Production deployment
-- `python cleanup_files.py` - Clean processed files
-- `python security_audit.py` - Security checks
+- `python scripts/cleanup_files.py` - Clean processed files
+- `python scripts/security_audit.py` - Security checks
 
 ## Critical Files to Understand
 
@@ -95,7 +95,7 @@ npm run dev  # Runs on port 5173
 - **backend/config.py**: Environment configuration system
 - **backend/utils/content_cache.py**: Content-based caching implementation
 - **backend/utils/bertopic_processor.py**: Core topic modeling
-- **frontend/firmament-frontend/src/services/**: API client logic
+- **frontend/src/services/**: API client logic
 
 ## Common Patterns When Adding Features
 

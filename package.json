@@ -2,12 +2,12 @@
   "name": "firmament",
   "private": true,
   "workspaces": [
-    "frontend/firmament-frontend"
+    "frontend"
   ],
   "scripts": {
-    "dev:frontend": "npm run dev --workspace=frontend/firmament-frontend",
-    "build:frontend": "npm run build --workspace=frontend/firmament-frontend",
-    "lint:frontend": "npm run lint --workspace=frontend/firmament-frontend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "lint:frontend": "npm run lint --workspace=frontend",
     "dev:backend": "cd backend && uvicorn main:app --reload",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "start:backend": "cd backend && uvicorn main:app",

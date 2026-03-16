@@ -9,7 +9,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ## 🖼️ Application Screenshots
 
 ### 1. Welcome & Authentication
-![Firmament Landing Page](./demo_pictures/Firmament1.png)
+![Firmament Landing Page](./screenshots/Firmament1.png)
 
 **Key Features Demonstrated:**
 - **Elegant Dark Theme UI** with particle effects and smooth animations
@@ -27,7 +27,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ---
 
 ### 2. File Upload Interface
-![File Upload Interface](./demo_pictures/Firmament2.png)
+![File Upload Interface](./screenshots/Firmament2.png)
 
 **Key Features Demonstrated:**
 - **Drag & Drop Upload** with visual feedback and hover states
@@ -45,7 +45,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ---
 
 ### 3. AI Processing Pipeline
-![Processing Progress](./demo_pictures/Firmament3.png)
+![Processing Progress](./screenshots/Firmament3.png)
 
 **Key Features Demonstrated:**
 - **Real-Time Progress Updates** showing transcription stages
@@ -63,7 +63,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ---
 
 ### 4. AI-Generated Topic Organization
-![Topic Generation Results](./demo_pictures/Firmament4.png)
+![Topic Generation Results](./screenshots/Firmament4.png)
 
 **Key Features Demonstrated:**
 - **Intelligent Topic Extraction** using advanced NLP and topic modeling
@@ -81,7 +81,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ---
 
 ### 5. Interactive Content Expansion
-![Bullet Point Expansion](./demo_pictures/Firmament5.png)
+![Bullet Point Expansion](./screenshots/Firmament5.png)
 
 **Key Features Demonstrated:**
 - **AI-Powered Content Enhancement** expanding key concepts into detailed explanations
@@ -99,7 +99,7 @@ Firmament is a sophisticated AI-powered study material generator that transforms
 ---
 
 ### 6. Complete Study Material Generation
-![Final Study Guide](./demo_pictures/Firmament6.png)
+![Final Study Guide](./screenshots/Firmament6.png)
 
 **Key Features Demonstrated:**
 - **Comprehensive Study Materials** transformed from raw input

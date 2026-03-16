@@ -150,7 +150,7 @@ class ApiService {
   private async enhancedFetch(
     endpoint: string,
     options: RequestInit = {},
-    retryOptions?: { maxRetries?: number; baseDelay?: number }
+    retryOptions?: { maxRetries?: number; baseDelay?: number; timeout?: number }
   ): Promise<Response> {
     const url = config.getApiUrl(endpoint);
     
@@ -307,7 +307,7 @@ class ApiService {
       const response = await this.enhancedFetch('process-chunks', {
         method: 'POST',
         body: JSON.stringify({ text, filename }),
-      });
+      }, { timeout: 300000, maxRetries: 1 });
 
       return this.handleResponse<ProcessChunksResponse>(response);
     } catch (error) {
@@ -327,7 +327,7 @@ class ApiService {
       const response = await this.enhancedFetch('generate-headings', {
         method: 'POST',
         body: JSON.stringify({ filename }),
-      });
+      }, { timeout: 300000, maxRetries: 1 });
 
       return this.handleResponse<TopicResponse>(response);
     } catch (error) {

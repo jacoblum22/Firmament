@@ -16,13 +16,15 @@ import sys
 import os
 from pathlib import Path
 
-# Add the backend directory to the Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the backend directory to the Python path (script lives in scripts/, backend is ../backend)
+_scripts_dir = os.path.dirname(os.path.abspath(__file__))
+_backend_dir = os.path.join(_scripts_dir, "..", "backend")
+sys.path.insert(0, os.path.abspath(_backend_dir))
 
 from utils.file_cleanup import run_conservative_cleanup, SafeFileCleanup
 import logging
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.abspath(_backend_dir)
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 PROCESSED_DIR = os.path.join(BASE_DIR, "processed")

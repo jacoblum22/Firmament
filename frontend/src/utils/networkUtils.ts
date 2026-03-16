@@ -18,6 +18,7 @@ export interface RetryOptions {
   baseDelay: number;
   maxDelay: number;
   backoffMultiplier: number;
+  timeout?: number;
   retryCondition?: (error: NetworkError) => boolean;
 }
 
@@ -87,7 +88,8 @@ class NetworkUtils {
       try {
         // Add timeout to fetch
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutMs = defaultRetryOptions.timeout ?? 30000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const response = await fetch(url, {
           ...options,

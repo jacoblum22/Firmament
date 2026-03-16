@@ -1,9 +1,8 @@
 ## 📚 Documentation
 
-- **[📸 Visual Demo & Feature Showcase](./DEMO_SHOWCASE.md)** - Interactive screenshots and user journey walkthrough
-- **[🔧 API Documentation](./API_DOCUMENTATION.md)** - Complete REST API reference with examples
-- **[🏗️ System Architecture](./ARCHITECTURE.md)** - Detailed architecture diagrams and design decisions
-- **[💻 Code Documentation](./CODE_DOCUMENTATION.md)** - Code quality standards and implementation highlights
+- **[📸 Visual Demo & Feature Showcase](./docs/demo.md)** - Interactive screenshots and user journey walkthrough
+- **[🔧 API Documentation](./docs/api.md)** - Complete REST API reference with examples
+- **[🏗️ System Architecture](./docs/architecture.md)** - Detailed architecture diagrams and design decisions
 - **[⚙️ Configuration Guide](./backend/CONFIG_GUIDE.md)** - Environment and deployment configuration
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://python.org)
