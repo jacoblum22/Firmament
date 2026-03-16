@@ -584,7 +584,7 @@ function App() {
       // ✅ Define the variables you're about to use
       const offscreen = canvas.transferControlToOffscreen();
       const worker = new Worker(
-        new URL("./particleWorker2.ts", import.meta.url),
+        new URL("./particleWorker.ts", import.meta.url),
         {
           type: "module",
         }

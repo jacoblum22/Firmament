@@ -10,8 +10,11 @@ from dotenv import load_dotenv
 # Set production environment
 os.environ["ENVIRONMENT"] = "production"
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the backend directory to Python path for imports
+scripts_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.join(os.path.dirname(scripts_dir), "backend")
+sys.path.insert(0, backend_dir)
+os.chdir(backend_dir)  # config.py loads .env files relative to cwd
 
 try:
     from config import Settings

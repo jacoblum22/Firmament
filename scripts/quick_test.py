@@ -2,6 +2,14 @@
 """
 Quick test to verify our setup works
 """
+import os
+import sys
+from pathlib import Path
+
+# Run from backend directory so config files resolve correctly
+backend_dir = Path(__file__).parent.parent / "backend"
+sys.path.insert(0, str(backend_dir))
+os.chdir(backend_dir)
 
 
 def test_basic_setup():
