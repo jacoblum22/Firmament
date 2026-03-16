@@ -44,7 +44,7 @@ tests/
 
 ## Running Tests
 
-### Using the deps.ps1 script (recommended):
+### Using the deps.ps1 script (recommended on Windows):
 ```powershell
 # Run all tests
 .\deps.ps1 test
@@ -67,9 +67,18 @@ pytest tests/integration/ -v
 pytest tests/config/ -v
 pytest tests/utils/ -v
 
-# Run specific test files
+# Run upload/security tests specifically
+pytest tests/integration/test_file_upload_comprehensive.py tests/integration/test_file_upload_validation.py -v
+
+# Run a specific test file
 pytest tests/config/test_config.py -v
 pytest tests/utils/test_bertopic_processor.py -v
+```
+
+### Manual live-server test (requires a running backend):
+```bash
+# Start the server first: python start.py --env development
+python tests/manual_upload_test.py --server-url http://localhost:8000
 ```
 
 ## Test Categories
