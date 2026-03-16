@@ -17,24 +17,25 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Create non-root user before COPY so chown works correctly
+RUN adduser --disabled-password --gecos '' appuser
+
+# Create directories for uploads and logs
+RUN mkdir -p /var/uploads /var/temp /var/log/studymate && \
+    chown -R appuser:appuser /app /var/uploads /var/temp /var/log/studymate
+
+# Copy requirements first for better layer caching
 COPY --chown=appuser:appuser requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download NLTK data to avoid runtime downloads (only if NLTK is installed)
-RUN python -c "try: import nltk; print('NLTK found, downloading data...'); nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True); nltk.download('wordnet', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True); print('NLTK data downloaded successfully') except ImportError: print('NLTK not installed, skipping data download')" || true
+# Download NLTK data to avoid runtime downloads
+COPY --chown=appuser:appuser setup_nltk_data.py .
+RUN python setup_nltk_data.py || true
 
 # Copy application code
 COPY --chown=appuser:appuser . .
-
-# Create directories for uploads and logs
-RUN mkdir -p /var/uploads /var/temp /var/log/studymate
-
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app /var/uploads /var/temp /var/log/studymate
 
 USER appuser
 

@@ -60,7 +60,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf
       - ./ssl:/etc/nginx/ssl
     depends_on:
-      - studymate-api
+      - firmament-api
     restart: unless-stopped
 
 volumes:
