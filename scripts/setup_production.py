@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
 """
-Secure Setup Script for StudyMate Production Environment
+Secure Setup Script for StudyMate Production Environment.
 
-This script generates secure passwords and provides deployment instructions.
-Run this script before deploying to production.
+Generates cryptographically-secure passwords and patches them directly into
+backend/.env.production. Run once before the first production deployment.
+
+Usage (from project root):
+    python scripts/setup_production.py
 """
 
 import os
+import sys
 import secrets
 import string
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
+
+# Resolve backend/ directory and run from within it so all relative paths
+# (.env.production, config imports) resolve correctly.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
+sys.path.insert(0, str(_BACKEND_DIR))
+os.chdir(_BACKEND_DIR)
 
 
 def generate_secure_password(length: int = 32) -> str:

@@ -3,26 +3,24 @@ version: '3.8'
 services:
   firmament-api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       - ENVIRONMENT=production
     env_file:
-      - .env.production
+      - ./backend/.env.production
     volumes:
-      - ./uploads:/var/uploads
-      - ./temp_chunks:/var/temp
-      - ./logs:/var/log/firmament
+      - ./backend/uploads:/var/uploads
+      - ./backend/temp_chunks:/var/temp
+      - ./backend/logs:/var/log/firmament
     restart: unless-stopped
     depends_on:
       - redis
       - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      # Alternative Python-based health check:
-      # test: ["CMD", "python", "healthcheck.py"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -46,7 +44,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-studymate}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     env_file:
-      - .env.production
+      - ./backend/.env.production
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -57,8 +55,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
+      - ./backend/nginx.conf:/etc/nginx/nginx.conf
+      - ./backend/ssl:/etc/nginx/ssl
     depends_on:
       - firmament-api
     restart: unless-stopped

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-Production deployment script for Firmament backend
+Production deployment script for Firmament backend.
+
+Usage (from project root):
+    python scripts/deploy.py
+    python scripts/deploy.py --start
 """
 import os
 import sys
@@ -8,6 +12,12 @@ import subprocess
 import platform
 import stat
 from pathlib import Path
+
+# Resolve backend/ directory and run from within it so all relative
+# paths (requirements.txt, .env.production, main:app) resolve correctly.
+_BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
+sys.path.insert(0, str(_BACKEND_DIR))
+os.chdir(_BACKEND_DIR)
 
 
 def check_file_permissions(file_path):

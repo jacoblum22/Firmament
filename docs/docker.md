@@ -53,12 +53,16 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 ## Build Commands
 
+> All `docker build` commands are run from inside `backend/` (the Docker build context).
+> `docker-compose` is run from the **project root**.
+
 ### Standard Build
 ```bash
-# Build standard image
+# From backend/:
+cd backend
 docker build -t firmament-api:latest .
 
-# Build minimal image
+# Minimal image:
 docker build -f Dockerfile.minimal -t firmament-api:minimal .
 ```
 

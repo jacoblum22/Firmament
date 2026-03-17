@@ -40,13 +40,22 @@ FastAPI backend for StudyMate v2 with comprehensive CORS configuration and secur
 
 1. **Configure production environment**
    ```bash
-   cp .env.example .env.production
-   # Edit .env.production with your production settings
+   cp backend/.env.example backend/.env.production
+   # Edit backend/.env.production with your production settings
    ```
 
-2. **Run deployment script**
+2. **Generate secure credentials**
    ```bash
-   python deploy.py --start
+   python scripts/setup_production.py
+   ```
+
+3. **Deploy**
+   ```bash
+   # Docker Compose (recommended) — run from project root:
+   docker-compose up -d --build
+
+   # Or directly:
+   python scripts/deploy.py --start
    ```
 
 ## Environment Configuration
