@@ -1,6 +1,8 @@
 import os
 import json
+import torch
 from bertopic import BERTopic
+from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.cluster import KMeans
 import statistics
@@ -177,8 +179,17 @@ def process_cluster_with_bertopic(
             ngram_range=(1, 2),  # Include both unigrams and bigrams
         )
 
+        # Configure embedding model with explicit device handling
+        # This fixes PyTorch 2.7+ meta tensor compatibility issues
+        embedding_model = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            device="cpu",
+            model_kwargs={"low_cpu_mem_usage": False},
+        )
+
         # Configure BERTopic
         topic_model = BERTopic(
+            embedding_model=embedding_model,
             vectorizer_model=vectorizer_model,
             min_topic_size=dynamic_min_topic_size,  # Dynamic minimum based on cluster size
             nr_topics="auto",  # Automatically determine number of topics
@@ -200,7 +211,15 @@ def process_cluster_with_bertopic(
                 ngram_range=(1, 2),
             )
 
+            # Configure embedding model with explicit device handling for fallback
+            embedding_model_fallback = SentenceTransformer(
+                "sentence-transformers/all-MiniLM-L6-v2",
+                device="cpu",
+                model_kwargs={"low_cpu_mem_usage": False},
+            )
+
             topic_model = BERTopic(
+                embedding_model=embedding_model_fallback,
                 vectorizer_model=vectorizer_model,
                 min_topic_size=2,
                 nr_topics="auto",

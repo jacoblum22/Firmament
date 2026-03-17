@@ -8,7 +8,11 @@ from typing import List, Dict, Tuple
 from .openai_client import get_openai_client
 
 load_dotenv()
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+embedding_model = SentenceTransformer(
+    "all-MiniLM-L6-v2",
+    device="cpu",
+    model_kwargs={"low_cpu_mem_usage": False},
+)
 encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 
 client = get_openai_client()

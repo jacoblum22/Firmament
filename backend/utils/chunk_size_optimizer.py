@@ -21,7 +21,11 @@ def get_shared_model() -> SentenceTransformer:
     with model_lock:
         if shared_model is None:
             try:
-                shared_model = SentenceTransformer("all-MiniLM-L6-v2")
+                shared_model = SentenceTransformer(
+                    "all-MiniLM-L6-v2",
+                    device="cpu",
+                    model_kwargs={"low_cpu_mem_usage": False},
+                )
             except Exception as e:
                 logging.error(f"Failed to initialize SentenceTransformer model: {e}")
                 raise

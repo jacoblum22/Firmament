@@ -11,7 +11,11 @@ def get_model():
     """Lazy-load and cache the SentenceTransformer model."""
     global _model_instance
     if _model_instance is None:
-        _model_instance = SentenceTransformer("all-MiniLM-L6-v2")
+        _model_instance = SentenceTransformer(
+            "all-MiniLM-L6-v2",
+            device="cpu",
+            model_kwargs={"low_cpu_mem_usage": False},
+        )
     return _model_instance
 
 
