@@ -39,7 +39,7 @@ EXPOSE 8000
 
 # Python-based health check (no curl required)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python healthcheck.py || exit 1
+    CMD python docker/healthcheck.py || exit 1
 
 # Start command
 CMD ["python", "start.py", "--env", "production"]

@@ -60,19 +60,19 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 ```bash
 # From backend/:
 cd backend
-docker build -t firmament-api:latest .
+docker build -f docker/Dockerfile -t firmament-api:latest .
 
 # Minimal image:
-docker build -f Dockerfile.minimal -t firmament-api:minimal .
+docker build -f docker/Dockerfile.minimal -t firmament-api:minimal .
 ```
 
 ### Multi-stage Build (Advanced)
 ```bash
 # Build for development
-docker build --target development -t firmament-api:dev .
+docker build -f docker/Dockerfile --target development -t firmament-api:dev .
 
 # Build for production
-docker build --target production -t firmament-api:prod .
+docker build -f docker/Dockerfile --target production -t firmament-api:prod .
 ```
 
 ## Running Containers

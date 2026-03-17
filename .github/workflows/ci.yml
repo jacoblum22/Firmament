@@ -45,7 +45,7 @@ jobs:
 
       - name: Set up NLTK data
         working-directory: backend
-        run: python setup_nltk_data.py || true
+        run: python docker/setup_nltk_data.py || true
 
       - name: Run config tests
         working-directory: backend

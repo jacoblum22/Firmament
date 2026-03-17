@@ -22,7 +22,7 @@ FastAPI backend for StudyMate v2 with comprehensive CORS configuration and secur
 
 2. **Setup NLTK data (recommended)**
    ```bash
-   python setup_nltk_data.py
+   python docker/setup_nltk_data.py
    ```
 
 3. **Configure environment**
@@ -142,7 +142,7 @@ See `tests/README.md` for details on test categories and individual test command
 - [ ] Update `.env.production` with actual domains
 - [ ] Update `TrustedHostMiddleware` allowed hosts in `main.py`
 - [ ] Set `ENVIRONMENT=production`
-- [ ] Run NLTK data setup: `python setup_nltk_data.py`
+- [ ] Run NLTK data setup: `python docker/setup_nltk_data.py`
 - [ ] Test CORS with production frontend
 - [ ] Verify security headers
 - [ ] Test rate limiting

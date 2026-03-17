@@ -31,7 +31,7 @@ COPY --chown=appuser:appuser requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download NLTK data to avoid runtime downloads
-COPY --chown=appuser:appuser setup_nltk_data.py .
+COPY --chown=appuser:appuser docker/setup_nltk_data.py .
 RUN python setup_nltk_data.py || true
 
 # Copy application code
@@ -48,7 +48,7 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Alternative Python-based health check (uncomment to use instead of curl):
 # HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-#     CMD python healthcheck.py || exit 1
+#     CMD python docker/healthcheck.py || exit 1
 
 # Start command
 CMD ["python", "start.py", "--env", "production"]

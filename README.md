@@ -3,7 +3,7 @@
 - **[📸 Visual Demo & Feature Showcase](./docs/demo.md)** - Interactive screenshots and user journey walkthrough
 - **[🔧 API Documentation](./docs/api.md)** - Complete REST API reference with examples
 - **[🏗️ System Architecture](./docs/architecture.md)** - Detailed architecture diagrams and design decisions
-- **[⚙️ Configuration Guide](./backend/CONFIG_GUIDE.md)** - Environment and deployment configuration
+- **[⚙️ Configuration Guide](./docs/config.md)** - Environment and deployment configuration
 - **[🔒 Security Guide](./docs/security.md)** - Security hardening and audit checklist
 - **[🐳 Docker Deployment](./docs/docker.md)** - Container setup and production deployment
 

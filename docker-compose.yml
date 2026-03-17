@@ -4,7 +4,7 @@ services:
   firmament-api:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     environment:
