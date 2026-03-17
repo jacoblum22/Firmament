@@ -1,179 +1,252 @@
 """
-Test script to verify CORS configuration
+Standalone CORS test script that is more reliable and provides better error handling
 """
 
-import sys
-import os
 import json
+import time
+from typing import Dict, Any
+
+# Conditional imports with availability flags
+try:
+    import requests
+
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    print("⚠️  Warning: requests module not available. CORS tests will be skipped.")
 
 try:
-    import httpx
+    import pytest
 
-    HTTPX_AVAILABLE = True
+    PYTEST_AVAILABLE = True
 except ImportError:
-    HTTPX_AVAILABLE = False
-    print("⚠️  Warning: httpx module not available. CORS tests will be skipped.")
+    PYTEST_AVAILABLE = False
+    print("⚠️  Warning: pytest module not available. Using fallback skip mechanism.")
+
+    # Define a fallback skip function if pytest is not available
+    class _FallbackSkip:
+        def skip(self, reason: str):
+            print(f"⏭️  Skipping test: {reason}")
+            return
+
+    pytest = _FallbackSkip()
 
 
-def is_running_under_pytest():
-    """
-    Detect if code is running under pytest.
+def wait_for_server(
+    base_url: str = "http://127.0.0.1:8000", max_attempts: int = 5
+) -> bool:
+    """Wait for server to be ready"""
+    if not REQUESTS_AVAILABLE:
+        print("⚠️  Cannot check server status - requests module not available")
+        return False
 
-    Returns:
-        bool: True if running under pytest, False otherwise
-    """
-    # Check if pytest is in sys.modules (most reliable method)
-    if "pytest" in sys.modules:
-        return True
-
-    # Check for pytest-specific environment variable
-    if "PYTEST_CURRENT_TEST" in os.environ:
-        return True
-
-    # Check command line arguments for pytest
-    if any("pytest" in arg for arg in sys.argv):
-        return True
-
+    for attempt in range(max_attempts):
+        try:
+            response = requests.get(f"{base_url}/health", timeout=2)
+            if response.status_code == 200:
+                print(f"✅ Server is ready (attempt {attempt + 1})")
+                return True
+        except Exception:
+            print(f"⏳ Waiting for server... (attempt {attempt + 1}/{max_attempts})")
+            time.sleep(1)
     return False
 
 
-def test_cors_preflight(
-    base_url="http://127.0.0.1:8000", origin="http://localhost:5173"
-):
-    """Test CORS preflight request"""
-    if not HTTPX_AVAILABLE:
-        print(f"⚠️  Skipping CORS preflight test - httpx module not available")
-        return  # Skip test, don't return a value
-
-    print(f"Testing CORS preflight for {origin} -> {base_url}")
-
-    headers = {
-        "Origin": origin,
-        "Access-Control-Request-Method": "POST",
-        "Access-Control-Request-Headers": "Content-Type",
-    }
-
-    try:
-        with httpx.Client() as client:
-            response = client.options(base_url, headers=headers, timeout=5.0)
-        print(f"Status Code: {response.status_code}")
-        print("Response Headers:")
-        for key, value in response.headers.items():
-            if key.lower().startswith("access-control"):
-                print(f"  {key}: {value}")
-
-        # For authorized origins, we expect 200 status code
-        # For unauthorized origins, we expect 400 status code
-        if origin in [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-        ]:
-            assert (
-                response.status_code == 200
-            ), f"Expected 200 for authorized origin {origin}, got {response.status_code}"
-            assert (
-                "access-control-allow-origin" in response.headers
-            ), "Missing CORS allow-origin header"
-            print("✅ CORS preflight successful")
-        else:
-            # For unauthorized origins, the server should still respond but may not include the origin
-            print(
-                "✅ CORS preflight completed (unauthorized origin handled appropriately)"
-            )
-
-    except Exception as e:
-        print(f"❌ Error testing CORS: {e}")
-        print("⚠️  Test completed (server connectivity may affect results)")
-        # For pytest compatibility, we'll skip the test instead of failing when server is not available
-        if is_running_under_pytest():
-            import pytest
-
-            pytest.skip(f"Server not available: {e}")
-
-
-def test_health_endpoint(base_url="http://127.0.0.1:8000"):
-    """Test health endpoint"""
-    if not HTTPX_AVAILABLE:
-        print(f"⚠️  Skipping health endpoint test - httpx module not available")
-        return  # Skip test, don't return a value
-
-    print(f"\nTesting health endpoint: {base_url}/health")
-
-    try:
-        with httpx.Client() as client:
-            response = client.get(f"{base_url}/health", timeout=5.0)
-        print(f"Status Code: {response.status_code}")
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
-
-        data = response.json()
-        print(f"Response: {json.dumps(data, indent=2)}")
-
-        # Check required fields in health response
-        assert "status" in data, "Missing 'status' field in health response"
-        assert (
-            data["status"] == "healthy"
-        ), f"Expected status 'healthy', got {data.get('status')}"
-        assert "environment" in data, "Missing 'environment' field in health response"
-        assert "timestamp" in data, "Missing 'timestamp' field in health response"
-
-        print("✅ Health check successful")
-
-    except Exception as e:
-        print(f"❌ Error testing health endpoint: {e}")
-        print("⚠️  Test completed (server connectivity may affect results)")
-        # For pytest compatibility, we'll skip the test instead of failing when server is not available
-        if is_running_under_pytest():
-            import pytest
-
-            pytest.skip(f"Server not available: {e}")
-
-
-def test_cors_configuration():
-    """Test CORS configuration - pytest compatible function"""
-    if not HTTPX_AVAILABLE:
-        print("⚠️  Skipping CORS tests - httpx module not available")
-        # Don't fail the test, just skip it
+def test_server_health():
+    """Test that the server health endpoint is working"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
         return
 
-    print("🧪 Testing CORS Configuration")
-    print("=" * 40)
+    base_url = "http://127.0.0.1:8000"
 
-    # Test development setup
-    print("\n=== Testing Development CORS ===")
-    test_cors_preflight()
-    test_health_endpoint()
+    if not wait_for_server(base_url):
+        pytest.skip("Server not available for testing")
 
-    # Test with different origins
-    print("\n=== Testing Different Origins ===")
-    test_cors_preflight(origin="http://localhost:3000")
-    test_cors_preflight(origin="http://127.0.0.1:5173")
+    response = requests.get(f"{base_url}/health", timeout=5)
 
-    # Test with unauthorized origin
-    print("\n=== Testing Unauthorized Origin ===")
-    test_cors_preflight(origin="http://malicious-site.com")
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
-    # For pytest compatibility, we'll be lenient about failures
-    # since this requires a running server
-    print("\n✅ CORS tests completed (server connectivity may affect results)")
+    data = response.json()
+    required_fields = ["status", "environment", "timestamp"]
+
+    for field in required_fields:
+        assert field in data, f"Missing required field: {field}"
+
+    assert (
+        data["status"] == "healthy"
+    ), f"Expected status 'healthy', got {data.get('status')}"
+
+    print(f"✅ Health check passed: {data}")
 
 
-def test_cors_test_configuration():
-    """Test that the CORS test configuration is valid - doesn't require running server"""
-    # Test that httpx is available
-    assert HTTPX_AVAILABLE, "httpx module should be available for CORS tests"
+def test_cors_allowed_origins():
+    """Test CORS for allowed origins"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
 
-    # Test that pytest detection works
-    is_pytest = is_running_under_pytest()
-    assert isinstance(is_pytest, bool), "pytest detection should return a boolean"
+    base_url = "http://127.0.0.1:8000"
 
-    # Test that we can create httpx client
-    if HTTPX_AVAILABLE:
-        with httpx.Client() as client:
-            assert client is not None, "httpx client should be created successfully"
+    if not wait_for_server(base_url):
+        pytest.skip("Server not available for testing")
 
-    print("✅ CORS test configuration is valid")
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
+
+    for origin in allowed_origins:
+        headers = {
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        }
+
+        response = requests.options(base_url, headers=headers, timeout=5)
+
+        assert (
+            response.status_code == 200
+        ), f"CORS failed for allowed origin {origin}: {response.status_code}"
+
+        # Check that the origin is properly echoed back
+        assert (
+            "access-control-allow-origin" in response.headers
+        ), f"Missing CORS origin header for {origin}"
+        assert (
+            response.headers["access-control-allow-origin"] == origin
+        ), f"Wrong origin returned for {origin}"
+
+        # Check required CORS headers
+        required_cors_headers = [
+            "access-control-allow-methods",
+            "access-control-allow-headers",
+            "access-control-allow-credentials",
+        ]
+
+        for header in required_cors_headers:
+            assert (
+                header in response.headers
+            ), f"Missing CORS header {header} for origin {origin}"
+
+        print(f"✅ CORS test passed for allowed origin: {origin}")
+
+
+def test_cors_unauthorized_origin():
+    """Test CORS for unauthorized origins"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
+    base_url = "http://127.0.0.1:8000"
+
+    if not wait_for_server(base_url):
+        pytest.skip("Server not available for testing")
+
+    unauthorized_origins = [
+        "http://malicious-site.com",
+        "http://evil-domain.net",
+        "https://untrusted.example.com",
+    ]
+
+    for origin in unauthorized_origins:
+        headers = {
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        }
+
+        response = requests.options(base_url, headers=headers, timeout=5)
+
+        # For unauthorized origins, we expect either 400 or the origin to not be echoed back
+        if response.status_code == 200:
+            # If status is 200, the origin should not be in the allow-origin header
+            # or the header should be missing
+            if "access-control-allow-origin" in response.headers:
+                returned_origin = response.headers["access-control-allow-origin"]
+                assert (
+                    returned_origin != origin
+                ), f"Unauthorized origin {origin} was allowed!"
+        else:
+            # Status should be 400 for unauthorized origins
+            assert (
+                response.status_code == 400
+            ), f"Expected 400 for unauthorized origin {origin}, got {response.status_code}"
+
+        print(f"✅ CORS properly rejected unauthorized origin: {origin}")
+
+
+def test_cors_methods_and_headers():
+    """Test that CORS allows the expected methods and headers"""
+    if not REQUESTS_AVAILABLE:
+        pytest.skip("requests module not available")
+        return
+
+    base_url = "http://127.0.0.1:8000"
+
+    if not wait_for_server(base_url):
+        pytest.skip("Server not available for testing")
+
+    headers = {
+        "Origin": "http://localhost:5173",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type,Authorization",
+    }
+
+    response = requests.options(base_url, headers=headers, timeout=5)
+
+    assert response.status_code == 200, f"CORS preflight failed: {response.status_code}"
+
+    # Check allowed methods
+    allowed_methods = response.headers.get("access-control-allow-methods", "").split(
+        ", "
+    )
+    expected_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+
+    for method in expected_methods:
+        assert (
+            method in allowed_methods
+        ), f"Method {method} not in allowed methods: {allowed_methods}"
+
+    # Check that credentials are allowed
+    assert (
+        response.headers.get("access-control-allow-credentials") == "true"
+    ), "Credentials should be allowed"
+
+    print(f"✅ CORS methods and headers test passed")
+    print(f"   Allowed methods: {allowed_methods}")
+    print(
+        f"   Credentials allowed: {response.headers.get('access-control-allow-credentials')}"
+    )
 
 
 if __name__ == "__main__":
-    test_cors_configuration()
+    print("🧪 Running Standalone CORS Tests")
+    print("=" * 50)
+
+    # Check dependencies before running tests
+    if not REQUESTS_AVAILABLE:
+        print("\n❌ Cannot run CORS tests: requests module not available")
+        print("   Install with: pip install requests")
+        exit(1)
+
+    try:
+        print("\n1. Testing server health...")
+        test_server_health()
+
+        print("\n2. Testing allowed origins...")
+        test_cors_allowed_origins()
+
+        print("\n3. Testing unauthorized origins...")
+        test_cors_unauthorized_origin()
+
+        print("\n4. Testing methods and headers...")
+        test_cors_methods_and_headers()
+
+        print("\n✅ All CORS tests passed!")
+
+    except Exception as e:
+        print(f"\n❌ Test failed: {e}")
+        raise

@@ -13,7 +13,7 @@ tests/
 │   ├── __init__.py
 │   ├── test_config.py          # Main configuration tests
 │   ├── test_config_validation.py # Configuration validation tests
-│   ├── test_cors.py            # CORS configuration tests
+│   ├── test_cors.py            # CORS live-server tests (skips if server unavailable)
 │   ├── test_port_edge_cases.py # Port handling edge cases
 │   ├── test_port_simple.py     # Basic port handling tests
 │   └── test_port_validation.py # Port validation tests
@@ -32,9 +32,7 @@ tests/
 │   └── test_thread_safety.py   # Thread safety tests
 └── utils/                      # Utility and processing tests
     ├── __init__.py
-    ├── test_bertopic_changes.py # BERTopic changes tests
-    ├── test_bertopic_processor.py # BERTopic processor tests
-    ├── test_bertopic_processor_new_features.py # New BERTopic features
+│   ├── test_bertopic_processor.py # BERTopic processor tests (incl. stopwords + redistribution)
     ├── test_chunk_analysis.py   # Text chunk analysis tests
     ├── test_chunk_size_optimizer.py # Chunk size optimization tests
     ├── test_clean_text.py       # Text cleaning utility tests
