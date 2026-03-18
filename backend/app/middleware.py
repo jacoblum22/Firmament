@@ -1,7 +1,7 @@
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from config import settings
+from .config import settings
 import time
 import redis
 import json

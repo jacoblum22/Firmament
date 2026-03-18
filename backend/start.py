@@ -14,7 +14,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-from config import settings
+from app.config import settings
 
 
 def main():
@@ -44,13 +44,13 @@ def main():
     os.environ["ENVIRONMENT"] = args.env
 
     # Reload settings to pick up environment changes
-    from config import Settings
+    from app.config import Settings
 
     settings_instance = Settings()
 
     # Configuration
     config = {
-        "app": "main:app",
+        "app": "app.main:app",
         "host": args.host or settings_instance.host,
         "port": args.port or settings_instance.port,
         "log_level": settings_instance.log_level.lower(),

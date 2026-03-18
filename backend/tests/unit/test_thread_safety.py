@@ -5,7 +5,7 @@ import time
 from unittest.mock import patch
 import pytest
 
-from startup_config import ModelManager
+from app.startup_config import ModelManager
 
 
 class TestModelManagerThreadSafety:
@@ -26,15 +26,15 @@ class TestModelManagerThreadSafety:
                 with patch("faster_whisper.WhisperModel") as mock_whisper:
                     mock_instance = mock_whisper.return_value
                     with patch(
-                        "startup_config.get_optimal_device_config",
+                        "app.startup_config.get_optimal_device_config",
                         return_value=("cpu", "int8"),
                     ):
                         with patch(
-                            "startup_config.get_model_cache_dir",
+                            "app.startup_config.get_model_cache_dir",
                             return_value="./test_models",
                         ):
                             with patch(
-                                "startup_config.os.path.exists", return_value=True
+                                "app.startup_config.os.path.exists", return_value=True
                             ):
                                 model = manager.get_whisper_model()
                                 results.append(model)
@@ -127,15 +127,15 @@ class TestModelManagerThreadSafety:
                 with patch("faster_whisper.WhisperModel") as mock_whisper:
                     mock_instance = mock_whisper.return_value
                     with patch(
-                        "startup_config.get_optimal_device_config",
+                        "app.startup_config.get_optimal_device_config",
                         return_value=("cpu", "int8"),
                     ):
                         with patch(
-                            "startup_config.get_model_cache_dir",
+                            "app.startup_config.get_model_cache_dir",
                             return_value="./test_models",
                         ):
                             with patch(
-                                "startup_config.os.path.exists", return_value=True
+                                "app.startup_config.os.path.exists", return_value=True
                             ):
                                 model = manager.get_whisper_model()
                                 whisper_results.append(model)

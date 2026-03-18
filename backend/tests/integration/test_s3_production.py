@@ -8,7 +8,7 @@ import os
 os.environ["ENVIRONMENT"] = "production"
 
 try:
-    from config import Settings
+    from app.config import Settings
     from utils.s3_storage import S3StorageManager
 
     print("🧪 Testing S3 Connection in Production Mode")

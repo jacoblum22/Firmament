@@ -48,7 +48,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test1234567890abcdef")
 
 def test_main_module_import():
     """Test that main.py can be imported successfully"""
-    from main import app
+    from app.main import app
 
     assert app is not None, "FastAPI app should not be None"
     assert hasattr(app, "title"), "FastAPI app should have a title attribute"
@@ -77,7 +77,7 @@ def test_config_settings():
 
 def test_app_properties():
     """Test that the FastAPI app has expected properties"""
-    from main import app
+    from app.main import app
 
     # Test app title and version
     assert app.title == "StudyMate API"

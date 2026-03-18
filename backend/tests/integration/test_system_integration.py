@@ -17,7 +17,7 @@ def test_config():
     print("=" * 30)
 
     try:
-        from config import Settings
+        from app.config import Settings
 
         settings = Settings()
 
@@ -43,7 +43,7 @@ def test_auth():
 
     try:
         from utils.auth import UserAuthManager
-        from config import Settings
+        from app.config import Settings
 
         settings = Settings()
         auth_manager = UserAuthManager(settings)
@@ -92,7 +92,7 @@ def test_storage_integration():
     try:
         from utils.s3_storage import S3StorageManager
         from utils.auth import UserAuthManager
-        from config import Settings
+        from app.config import Settings
 
         settings = Settings()
         storage = S3StorageManager(settings)

@@ -14,7 +14,7 @@ from typing import Optional, Any
 from io import BytesIO
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from config import Settings
+from app.config import Settings
 
 # Reduce boto3 logging verbosity for better performance
 logging.getLogger("boto3").setLevel(logging.WARNING)

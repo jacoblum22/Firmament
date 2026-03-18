@@ -44,11 +44,11 @@ def import_config() -> Tuple[Any, Any]:
     setup_backend_path()
 
     # Clear any existing config module to force reload
-    if "config" in sys.modules:
-        del sys.modules["config"]
+    if "app.config" in sys.modules:
+        del sys.modules["app.config"]
 
     # Import the config module using importlib
-    config_module = importlib.import_module("config")
+    config_module = importlib.import_module("app.config")
     return config_module.Settings, config_module.ConfigurationError
 
 

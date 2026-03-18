@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from io import BytesIO
 
 # Import the router and create test app
-from routes import router
+from app.routes import router
 
 # Create test FastAPI app
 app = FastAPI()

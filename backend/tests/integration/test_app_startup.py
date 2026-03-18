@@ -9,7 +9,7 @@ def test_app_creation():
         print("🚀 Testing FastAPI app creation...")
 
         # Import main app
-        import main
+        import app.main as main
 
         # Check if app was created
         if hasattr(main, "app"):

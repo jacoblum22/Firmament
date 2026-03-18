@@ -4,16 +4,16 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime, timezone
-from routes import router
-from config import settings
-from middleware import SecurityHeadersMiddleware, RateLimitMiddleware
+from .routes import router
+from .config import settings
+from .middleware import SecurityHeadersMiddleware, RateLimitMiddleware
 import logging
 import json
 import asyncio
 from pathlib import Path
 
 # Apply startup optimizations early
-from startup_config import apply_startup_optimizations
+from .startup_config import apply_startup_optimizations
 
 apply_startup_optimizations()
 

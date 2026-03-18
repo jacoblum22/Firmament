@@ -144,7 +144,7 @@ def check_environment():
         load_dotenv(".env.production")
 
         # Import configuration settings for validation
-        from config import settings
+        from app.config import settings
 
         required_vars = ["ENVIRONMENT", "ALLOWED_ORIGINS"]
         missing_vars = []
@@ -262,7 +262,7 @@ def start_server():
     os.environ["ENVIRONMENT"] = "production"
 
     # Load configuration settings
-    from config import settings
+    from app.config import settings
 
     # Get configuration values
     host = settings.host

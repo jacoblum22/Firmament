@@ -15,7 +15,7 @@ import jwt
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from fastapi import HTTPException, status
-from config import Settings
+from app.config import Settings
 
 logger = logging.getLogger(__name__)
 

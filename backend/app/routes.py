@@ -51,7 +51,7 @@ from uuid import uuid4
 from fastapi import BackgroundTasks
 import asyncio
 from datetime import datetime, timedelta
-from config import settings
+from .config import settings
 from utils.file_validator import FileValidator, FileValidationError
 from utils.error_messages import ErrorMessages
 from utils.content_cache import get_content_cache

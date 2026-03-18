@@ -17,7 +17,7 @@ sys.path.insert(0, backend_dir)
 os.chdir(backend_dir)  # config.py loads .env files relative to cwd
 
 try:
-    from config import Settings
+    from app.config import Settings
 
     print("🔍 Loading production configuration...")
     settings = Settings()

@@ -15,7 +15,7 @@ os.chdir(backend_dir)
 def test_basic_setup():
     try:
         # Test config
-        from config import Settings
+        from app.config import Settings
 
         settings = Settings()
         print(f"✓ Config: {settings.environment}")

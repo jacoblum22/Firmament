@@ -7,10 +7,10 @@ This script tests the authentication and validation for the cache cleanup endpoi
 
 import pytest
 from fastapi.testclient import TestClient
-from config import settings
+from app.config import settings
 
 # Import the FastAPI app
-from main import app
+from app.main import app
 
 # Create test client
 client = TestClient(app)

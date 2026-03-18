@@ -15,7 +15,7 @@ from tests.utils.test_file_generators import TestFileGenerator
 
 # Import the components to test
 from utils.file_validator import FileValidator, FileValidationError
-from routes import router
+from app.routes import router
 
 # Create test FastAPI app
 app = FastAPI()
