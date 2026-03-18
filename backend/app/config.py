@@ -40,6 +40,9 @@ import os
 import sys
 from typing import List, Optional
 from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigurationError(Exception):
@@ -91,11 +94,11 @@ class Settings:
         env_file = f".env.{os.getenv('ENVIRONMENT', 'development')}"
         if os.path.exists(env_file):
             load_dotenv(env_file)
-            print(f"Loaded configuration from {env_file}")
+            logger.info(f"Loaded configuration from {env_file}")
         else:
             # Fallback to default .env file
             load_dotenv()
-            print("Loaded configuration from default .env file")
+            logger.info("Loaded configuration from default .env file")
 
     # Environment Detection Properties
     @property
@@ -156,8 +159,8 @@ class Settings:
                     f"Please check your environment configuration."
                 )
             else:
-                print(
-                    f"⚠️  Warning: Invalid PORT value '{port_str}'. Using default port {default_port}."
+                logger.warning(
+                    f"️ Warning: Invalid PORT value '{port_str}'. Using default port {default_port}."
                 )
                 return default_port
 
@@ -169,8 +172,8 @@ class Settings:
                     f"Please check your environment configuration."
                 )
             else:
-                print(
-                    f"⚠️  Warning: Invalid PORT value {port}. Port must be between 1 and 65535. Using default port {default_port}."
+                logger.warning(
+                    f"️ Warning: Invalid PORT value {port}. Port must be between 1 and 65535. Using default port {default_port}."
                 )
                 return default_port
 
@@ -236,7 +239,7 @@ class Settings:
                 )
             else:
                 # Development fallback with warning
-                print("⚠️  Warning: JWT_SECRET is not set. Using development default.")
+                logger.warning("JWT_SECRET is not set. Using development default.")
                 return "dev-jwt-secret-change-in-production"
 
         # Check for placeholder values that should be replaced
@@ -257,8 +260,8 @@ class Settings:
                     f"Current value contains: {[p for p in placeholder_patterns if p in jwt_secret]}"
                 )
             else:
-                print(
-                    "⚠️  Warning: JWT_SECRET contains placeholder text. Should be replaced for security."
+                logger.warning(
+                    "️ Warning: JWT_SECRET contains placeholder text. Should be replaced for security."
                 )
 
         # Validate JWT secret strength
@@ -347,8 +350,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_MAX_SIZE value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -363,8 +366,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: UPLOAD_MAX_SIZE {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: UPLOAD_MAX_SIZE {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -385,8 +388,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_PDF value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_MAX_SIZE_PDF value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -401,8 +404,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: UPLOAD_MAX_SIZE_PDF {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: UPLOAD_MAX_SIZE_PDF {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -425,8 +428,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_AUDIO value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_MAX_SIZE_AUDIO value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -441,8 +444,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: UPLOAD_MAX_SIZE_AUDIO {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: UPLOAD_MAX_SIZE_AUDIO {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -465,8 +468,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_WAV value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_MAX_SIZE_WAV value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -481,8 +484,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: UPLOAD_MAX_SIZE_WAV {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: UPLOAD_MAX_SIZE_WAV {size // 1024 // 1024}MB is out of range. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -503,8 +506,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_MAX_SIZE_TEXT value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_MAX_SIZE_TEXT value '{size_str}'. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -519,8 +522,8 @@ class Settings:
                 )
             else:
                 default_int = int(default_size)
-                print(
-                    f"⚠️  Warning: UPLOAD_MAX_SIZE_TEXT {size // 1024}KB is out of range. Using default {default_int // 1024 // 1024}MB."
+                logger.warning(
+                    f"️ Warning: UPLOAD_MAX_SIZE_TEXT {size // 1024}KB is out of range. Using default {default_int // 1024 // 1024}MB."
                 )
                 return default_int
 
@@ -537,8 +540,8 @@ class Settings:
                     "UPLOAD_ALLOWED_EXTENSIONS cannot be empty. Please specify allowed file extensions."
                 )
             else:
-                print(
-                    "⚠️  Warning: UPLOAD_ALLOWED_EXTENSIONS is empty. Using default extensions."
+                logger.warning(
+                    "️ Warning: UPLOAD_ALLOWED_EXTENSIONS is empty. Using default extensions."
                 )
                 extensions_str = "pdf,mp3,wav,txt,m4a"
 
@@ -553,8 +556,8 @@ class Settings:
                         "UPLOAD_ALLOWED_EXTENSIONS contains no valid extensions after processing."
                     )
                 else:
-                    print(
-                        "⚠️  Warning: No valid extensions found. Using default extensions."
+                    logger.warning(
+                        "️ Warning: No valid extensions found. Using default extensions."
                     )
                     return ["pdf", "mp3", "wav", "txt", "m4a"]
 
@@ -573,8 +576,8 @@ class Settings:
                         f"Extensions must contain only letters and numbers."
                     )
                 else:
-                    print(
-                        f"⚠️  Warning: Invalid extensions removed: {invalid_extensions}"
+                    logger.warning(
+                        f"️ Warning: Invalid extensions removed: {invalid_extensions}"
                     )
                     extensions = [
                         ext for ext in extensions if valid_ext_pattern.match(ext)
@@ -585,8 +588,8 @@ class Settings:
                 recommended_extensions = {"pdf", "mp3", "wav", "txt", "m4a"}
                 missing_recommended = recommended_extensions - set(extensions)
                 if missing_recommended:
-                    print(
-                        f"⚠️  Notice: Recommended extensions not included: {missing_recommended}"
+                    logger.warning(
+                        f"️ Notice: Recommended extensions not included: {missing_recommended}"
                     )
 
             return extensions
@@ -597,7 +600,7 @@ class Settings:
                     f"Error processing UPLOAD_ALLOWED_EXTENSIONS: {e}"
                 )
             else:
-                print(f"⚠️  Warning: Error processing extensions: {e}. Using defaults.")
+                logger.error(f"️ Warning: Error processing extensions: {e}. Using defaults.")
                 return ["pdf", "mp3", "wav", "txt", "m4a"]
 
     @property
@@ -612,15 +615,15 @@ class Settings:
                     f"Must be one of: true, false, 1, 0, yes, no"
                 )
             else:
-                print(
-                    f"⚠️  Warning: Invalid UPLOAD_VALIDATE_CONTENT value '{validate_str}'. Using default 'true'."
+                logger.warning(
+                    f"️ Warning: Invalid UPLOAD_VALIDATE_CONTENT value '{validate_str}'. Using default 'true'."
                 )
                 validate_str = "true"
 
         # More permissive in development for faster testing
         if self.is_development and validate_str == "true":
-            print(
-                "💡 Tip: Set UPLOAD_VALIDATE_CONTENT=false in development to speed up file uploads during testing."
+            logger.info(
+                " Tip: Set UPLOAD_VALIDATE_CONTENT=false in development to speed up file uploads during testing."
             )
 
         return validate_str in ["true", "1", "yes"]
@@ -636,7 +639,7 @@ class Settings:
                     "UPLOAD_DIRECTORY cannot be empty. Please specify a valid directory path."
                 )
             else:
-                print("⚠️  Warning: UPLOAD_DIRECTORY is empty. Using default 'uploads'.")
+                logger.warning("UPLOAD_DIRECTORY is empty. Using default 'uploads'.")
                 directory = "uploads"
 
         # Security validation: prevent path traversal
@@ -654,8 +657,8 @@ class Settings:
                     f"Please use relative paths for security."
                 )
             else:
-                print(
-                    f"⚠️  Warning: UPLOAD_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
+                logger.warning(
+                    f"️ Warning: UPLOAD_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
                 )
 
         # Validate directory name format
@@ -672,8 +675,8 @@ class Settings:
                     f"Use only letters, numbers, hyphens, underscores, and path separators."
                 )
             else:
-                print(
-                    f"⚠️  Warning: UPLOAD_DIRECTORY '{directory}' contains potentially problematic characters."
+                logger.warning(
+                    f"️ Warning: UPLOAD_DIRECTORY '{directory}' contains potentially problematic characters."
                 )
 
         return directory
@@ -689,8 +692,8 @@ class Settings:
                     "TEMP_DIRECTORY cannot be empty. Please specify a valid directory path."
                 )
             else:
-                print(
-                    "⚠️  Warning: TEMP_DIRECTORY is empty. Using default 'temp_chunks'."
+                logger.warning(
+                    "️ Warning: TEMP_DIRECTORY is empty. Using default 'temp_chunks'."
                 )
                 directory = "temp_chunks"
 
@@ -709,8 +712,8 @@ class Settings:
                     f"Please use relative paths for security."
                 )
             else:
-                print(
-                    f"⚠️  Warning: TEMP_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
+                logger.warning(
+                    f"️ Warning: TEMP_DIRECTORY '{directory}' is an absolute path. Consider using relative paths."
                 )
 
         # Validate directory name format
@@ -727,8 +730,8 @@ class Settings:
                     f"Use only letters, numbers, hyphens, underscores, and path separators."
                 )
             else:
-                print(
-                    f"⚠️  Warning: TEMP_DIRECTORY '{directory}' contains potentially problematic characters."
+                logger.warning(
+                    f"️ Warning: TEMP_DIRECTORY '{directory}' contains potentially problematic characters."
                 )
 
         return directory
@@ -757,8 +760,8 @@ class Settings:
 
         # In development, warn if missing but don't fail
         if self.is_development and not api_key:
-            print(
-                "⚠️  Warning: OPENAI_API_KEY is not set. OpenAI features will not work."
+            logger.warning(
+                "️ Warning: OPENAI_API_KEY is not set. OpenAI features will not work."
             )
             return ""
 
@@ -770,8 +773,8 @@ class Settings:
                         "Invalid OPENAI_API_KEY format. OpenAI API keys should start with 'sk-'."
                     )
                 else:
-                    print(
-                        "⚠️  Warning: OPENAI_API_KEY does not appear to be in the correct format."
+                    logger.warning(
+                        "️ Warning: OPENAI_API_KEY does not appear to be in the correct format."
                     )
 
         return api_key
@@ -803,8 +806,8 @@ class Settings:
                     "Please set the AWS_ACCESS_KEY_ID environment variable."
                 )
             else:
-                print(
-                    "⚠️  Warning: AWS_ACCESS_KEY_ID is not set. S3 storage will not work."
+                logger.warning(
+                    "️ Warning: AWS_ACCESS_KEY_ID is not set. S3 storage will not work."
                 )
 
         return aws_key
@@ -820,8 +823,8 @@ class Settings:
                     "Please set the AWS_SECRET_ACCESS_KEY environment variable."
                 )
             else:
-                print(
-                    "⚠️  Warning: AWS_SECRET_ACCESS_KEY is not set. S3 storage will not work."
+                logger.warning(
+                    "️ Warning: AWS_SECRET_ACCESS_KEY is not set. S3 storage will not work."
                 )
 
         return aws_secret
@@ -843,8 +846,8 @@ class Settings:
                     "Please set the S3_BUCKET_NAME environment variable."
                 )
             else:
-                print(
-                    "⚠️  Warning: S3_BUCKET_NAME is not set. S3 storage will not work."
+                logger.warning(
+                    "️ Warning: S3_BUCKET_NAME is not set. S3 storage will not work."
                 )
 
         return bucket_name
@@ -876,8 +879,8 @@ class Settings:
                 "Please set the GOOGLE_CLIENT_ID environment variable."
             )
         elif self.is_development and not client_id:
-            print(
-                "⚠️  Warning: GOOGLE_CLIENT_ID is not set. Google OAuth will not work."
+            logger.warning(
+                "️ Warning: GOOGLE_CLIENT_ID is not set. Google OAuth will not work."
             )
 
         return client_id
@@ -893,8 +896,8 @@ class Settings:
                 "Please set the GOOGLE_CLIENT_SECRET environment variable."
             )
         elif self.is_development and not client_secret:
-            print(
-                "⚠️  Warning: GOOGLE_CLIENT_SECRET is not set. Google OAuth will not work."
+            logger.warning(
+                "️ Warning: GOOGLE_CLIENT_SECRET is not set. Google OAuth will not work."
             )
 
         return client_secret
@@ -1050,9 +1053,9 @@ class Settings:
             errors.append(f"File upload configuration validation failed: {e}")
         # Report errors and warnings
         if warnings:
-            print("⚠️  Configuration Warnings:")
+            logger.warning("Configuration Warnings:")
             for warning in warnings:
-                print(f"   • {warning}")
+                logger.warning(f" • {warning}")
 
         if errors:
             error_message = "❌ Configuration Errors:\n" + "\n".join(
@@ -1065,7 +1068,7 @@ class Settings:
                 error_message += "\n   • Ensure all CHANGE_ME_ values are replaced with secure values"
             raise ConfigurationError(error_message)
 
-        print(f"✅ Configuration validation passed for {self.environment} environment")
+        logger.info(f"Configuration validation passed for {self.environment} environment")
 
     def get_config_summary(self) -> dict:
         """Get a summary of current configuration (safe for logging)"""
@@ -1093,10 +1096,10 @@ settings = Settings()
 try:
     settings.validate_configuration()
 except ConfigurationError as e:
-    print(f"\n{e}")
-    print("\n💡 Please check your environment configuration and try again.")
+    logger.error(f"{e}")
+    logger.error("Please check your environment configuration and try again.")
     if settings.is_production:
-        print("🚨 Application cannot start with invalid production configuration.")
+        logger.error("Application cannot start with invalid production configuration.")
         sys.exit(1)
     else:
-        print("⚠️  Development mode: Continuing with warnings...")
+        logger.warning("Development mode: Continuing with warnings...")

@@ -60,13 +60,7 @@ from utils.s3_storage import get_storage_manager
 from typing import Dict, Any, Optional
 import logging
 
-# Configure structured logging for better observability
-logger = logging.getLogger("backend")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger = logging.getLogger(__name__)
 from utils.secure_temp_files import SecureTempFile, get_memory_storage
 
 
@@ -298,7 +292,7 @@ def set_status(job_id: str, **kwargs):
         msg += f" ({new_status['current']}/{new_status['total']})"
     if "error" in new_status:
         msg += f" [WARNING] error: {new_status['error']}"
-    print(msg)
+    logger.info(msg)
 
 
 # Create the directories if they don't exist
@@ -357,29 +351,25 @@ async def upload_file(
     user_id = None
     if current_user:
         user_id = current_user["user_id"]
-        print(f"[{job_id[:8]}] Authenticated upload for user: {current_user['email']}")
+        logger.info(f"[{job_id[:8]}] Authenticated upload for user: {current_user['email']}")
     elif settings.is_production:
         raise HTTPException(
             status_code=401,
             detail="Authentication required for file uploads in production",
         )
     else:
-        print(f"[{job_id[:8]}] Anonymous upload (development mode)")
+        logger.info(f"[{job_id[:8]}] Anonymous upload (development mode)")
 
-    # Debug logging to help diagnose 422 errors
-    print(f"[{job_id[:8]}] Upload request received:")
-    print(f"[{job_id[:8]}] File: {file.filename}")
-    print(f"[{job_id[:8]}] Content-Type: {file.content_type}")
-    print(f"[{job_id[:8]}] Size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    logger.info(f"[{job_id[:8]}] Upload: {file.filename}, Content-Type: {file.content_type}, Size: {file.size if hasattr(file, 'size') else 'unknown'}")
 
     # Read file content NOW, while request is active
     try:
         file_bytes = await file.read()
-        print(
+        logger.info(
             f"[{job_id[:8]}] File read successfully, size: {len(file_bytes)} bytes ({len(file_bytes)/(1024*1024):.1f}MB)"
         )
     except Exception as e:
-        print(f"[{job_id[:8]}] Failed to read file: {e}")
+        logger.error(f"[{job_id[:8]}] Failed to read file: {e}")
         raise HTTPException(
             status_code=400, detail=f"Failed to read uploaded file: {str(e)}"
         ) from e
@@ -388,11 +378,11 @@ async def upload_file(
 
     try:
         # Comprehensive file validation
-        print(f"[{job_id[:8]}] Starting file validation...")
+        logger.info(f"[{job_id[:8]}] Starting file validation...")
         extension, safe_filename = FileValidator.validate_upload(file_bytes, filename)
-        print(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
+        logger.info(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
     except FileValidationError as e:
-        print(f"[{job_id[:8]}] File validation failed: {e}")
+        logger.warning(f"[{job_id[:8]}] File validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     def process_file(file_bytes: bytes, filename: str, safe_filename: str):
@@ -453,7 +443,7 @@ async def upload_file(
             # Check for cached processed data first (most complete cache)
             cached_processed = cache.get_processed_cache(file_bytes)
             if cached_processed:
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Found cached processed data (content hash: {cached_processed['cache_info']['content_hash'][:8]}...)"
                 )
 
@@ -461,7 +451,7 @@ async def upload_file(
                 clusters = cached_processed.get("clusters", [])
                 meta = cached_processed.get("meta", {})
 
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Loaded from content cache - Segments: {len(segments)}, Clusters: {len(clusters)}"
                 )
 
@@ -509,11 +499,11 @@ async def upload_file(
                 try:
                     os.remove(file_location)
                 except Exception as e:
-                    print(
-                        f"Warning: Failed to remove original file {file_location}: {e}"
+                    logger.warning(
+                        f"Failed to remove original file {file_location}: {e}"
                     )
 
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Completed processing using cached processed data"
                 )
                 return
@@ -522,15 +512,15 @@ async def upload_file(
             cached_transcription = cache.get_transcription_cache(file_bytes)
             if cached_transcription:
                 text = cached_transcription["text"]
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Found cached transcription (content hash: {cached_transcription['cache_info']['content_hash'][:8]}...)"
                 )
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Using cached transcription, will process into topics..."
                 )
             else:
                 # No cache found, need to transcribe/extract text
-                print(f"[{job_id[:8]}] No cache found, processing file...")
+                logger.info(f"[{job_id[:8]}] No cache found, processing file...")
 
             # Define paths for legacy compatibility
             base_name = (file.filename or "uploaded_file").rsplit(".", 1)[0]
@@ -547,17 +537,16 @@ async def upload_file(
                 clusters = processed_data.get("clusters", [])
                 meta = processed_data.get("meta", {})
 
-                print(f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}")
-                print(
+                logger.info(f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}")
+                logger.info(
                     f"[{job_id[:8]}] Segments: {len(segments)}, Clusters: {len(clusters)}"
                 )
-                print(f"\nReconstructing transcript from JSON:")
-                print(f"Number of segments in JSON: {len(segments)}")
-                print(
-                    f"Total words in segments: {meta.get('words_in_segments', 'N/A')}"
+                logger.info(
+                    f"Reconstructing transcript: {len(segments)} segments, "
+                    f"words in segments: {meta.get('words_in_segments', 'N/A')}, "
+                    f"in topics: {meta.get('words_in_topics', 'N/A')}, "
+                    f"in noise: {meta.get('words_in_noise', 'N/A')}"
                 )
-                print(f"Words in topics: {meta.get('words_in_topics', 'N/A')}")
-                print(f"Words in noise: {meta.get('words_in_noise', 'N/A')}")
 
                 # Sort segments by position to reconstruct full transcript
                 full_text = "\n\n".join(
@@ -566,15 +555,10 @@ async def upload_file(
 
                 # Print reconstruction stats
                 reconstructed_words = len(full_text.split())
-                print(f"\nReconstruction stats:")
-                print(f"Words in reconstructed text: {reconstructed_words}")
-                print(
-                    f"Expected words from segments: {meta.get('words_in_segments', 'N/A')}"
-                )
-                if meta.get("words_in_segments"):
-                    print(
-                        f"Word count difference: {reconstructed_words - meta.get('words_in_segments')}"
-                    )  # Convert cluster structure to match TopicResponse in frontend
+                logger.info(
+                    f"Reconstruction: {reconstructed_words} words "
+                    f"(expected {meta.get('words_in_segments', 'N/A')})"
+                )  # Convert cluster structure to match TopicResponse in frontend
                 topics = {
                     str(cluster["cluster_id"]): {
                         "concepts": cluster.get("concepts", []),
@@ -600,8 +584,8 @@ async def upload_file(
                 try:
                     os.remove(file_location)
                 except Exception as e:
-                    print(
-                        f"Warning: Failed to remove original file {file_location}: {e}"
+                    logger.warning(
+                        f"Failed to remove original file {file_location}: {e}"
                     )
 
                 set_status(
@@ -627,8 +611,8 @@ async def upload_file(
                 try:
                     os.remove(file_location)
                 except Exception as e:
-                    print(
-                        f"Warning: Failed to remove original file {file_location}: {e}"
+                    logger.warning(
+                        f"Failed to remove original file {file_location}: {e}"
                     )
 
                 set_status(
@@ -651,7 +635,7 @@ async def upload_file(
             if cached_transcription:
                 # Use cached transcription
                 text = cached_transcription["text"]
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Using cached transcription text ({len(text)} characters)"
                 )
             else:
@@ -678,7 +662,7 @@ async def upload_file(
 
                         # Convert m4a to wav if necessary
                         if ext == "m4a":
-                            print("Converting m4a to wav...")
+                            logger.info("Converting m4a to wav...")
                             file_location = convert_m4a_to_wav(file_location)
                         text, rnnoise_file = transcribe_audio_in_chunks(
                             file_location,
@@ -715,8 +699,8 @@ async def upload_file(
                             try:
                                 os.remove(file_location)
                             except Exception as e:
-                                print(
-                                    f"Warning: Failed to remove converted file {file_location}: {e}"
+                                logger.warning(
+                                    f"Failed to remove converted file {file_location}: {e}"
                                 )
 
                 # Save new transcription to content cache
@@ -725,12 +709,12 @@ async def upload_file(
                         content_hash = cache.save_transcription_cache(
                             file_bytes, text.strip(), filename, ext
                         )
-                        print(
+                        logger.info(
                             f"[{job_id[:8]}] Saved transcription to content cache (hash: {content_hash[:8]}...)"
                         )
                     except Exception as cache_error:
-                        print(
-                            f"[{job_id[:8]}] Warning: Failed to save transcription cache: {cache_error}"
+                        logger.warning(
+                            f"[{job_id[:8]}] Failed to save transcription cache: {cache_error}"
                         )
 
             # Save the transcribed/extracted text to a file in the 'output' folder (for legacy compatibility)
@@ -758,7 +742,7 @@ async def upload_file(
                     "job_id": job_id,
                 },
             ):
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Stored content securely in memory (hash: {content_hash[:8]}...)"
                 )
             else:
@@ -774,12 +758,12 @@ async def upload_file(
                         file_bytes, f"{job_id}_{content_hash}"
                     )
                     temp_storage_type = "secure_temp"
-                    print(
+                    logger.info(
                         f"[{job_id[:8]}] Stored content in secure temp file with restricted permissions (hash: {content_hash[:8]}...)"
                     )
                 except Exception as temp_error:
-                    print(
-                        f"[{job_id[:8]}] Warning: Failed to create secure temp file, falling back to memory cleanup: {temp_error}"
+                    logger.warning(
+                        f"[{job_id[:8]}] Failed to create secure temp file, falling back to memory cleanup: {temp_error}"
                     )
                     # Force cleanup and fail gracefully
                     if temp_manager:
@@ -811,11 +795,11 @@ async def upload_file(
             try:
                 with open(metadata_file, "w", encoding="utf-8") as f:
                     json.dump(metadata, f, indent=2)
-                print(
+                logger.info(
                     f"[{job_id[:8]}] Saved metadata for potential topic generation (storage: {temp_storage_type})"
                 )
             except Exception as e:
-                print(f"[{job_id[:8]}] Warning: Failed to save metadata: {e}")
+                logger.warning(f"[{job_id[:8]}] Failed to save metadata: {e}")
                 # Clean up temp storage if metadata save failed
                 if temp_storage_type == "memory":
                     memory_storage.remove(f"{job_id}_{content_hash}")
@@ -831,9 +815,9 @@ async def upload_file(
                 # Remove RNNoise file if it was created
                 if rnnoise_file and os.path.exists(rnnoise_file):
                     os.remove(rnnoise_file)
-                    print(f"Deleted RNNoise file: {rnnoise_file}")
+                    logger.info(f"Deleted RNNoise file: {rnnoise_file}")
             except Exception as e:
-                print(f"Warning: Failed to remove file {file_location}: {e}")
+                logger.warning(f"Failed to remove file {file_location}: {e}")
 
             set_status(
                 job_id,
@@ -847,7 +831,7 @@ async def upload_file(
                 },
             )
         except Exception as e:
-            print(f"[{job_id[:8]}] [ERROR]: {e}")
+            logger.error(f"[{job_id[:8]}] Processing error: {e}")
 
             # Clean up any temporary storage on error
             try:
@@ -866,10 +850,10 @@ async def upload_file(
                         temp_manager.cleanup_file(
                             temp_file_path, f"{job_id}_{content_hash}"
                         )
-                        print(f"[{job_id[:8]}] Cleaned up temporary storage on error")
+                        logger.info(f"[{job_id[:8]}] Cleaned up temporary storage on error")
             except Exception as cleanup_error:
-                print(
-                    f"[{job_id[:8]}] Warning: Failed to cleanup temporary storage on error: {cleanup_error}"
+                logger.warning(
+                    f"[{job_id[:8]}] Failed to cleanup temporary storage on error: {cleanup_error}"
                 )
 
             error_info = ErrorMessages.get_user_friendly_error(
@@ -886,10 +870,10 @@ async def upload_file(
             try:
                 if "file_location" in locals() and os.path.exists(file_location):
                     os.remove(file_location)
-                    print(f"[{job_id[:8]}] Cleaned up temporary file: {file_location}")
+                    logger.info(f"[{job_id[:8]}] Cleaned up temporary file: {file_location}")
             except Exception as cleanup_error:
-                print(
-                    f"[{job_id[:8]}] Warning: Failed to cleanup temporary file: {cleanup_error}"
+                logger.warning(
+                    f"[{job_id[:8]}] Failed to cleanup temporary file: {cleanup_error}"
                 )
 
     # Validate file extension before processing
@@ -1044,10 +1028,9 @@ def process_chunks(data: dict):
         sorted_counts = sorted(word_counts)
         second_min_words = sorted_counts[1]  # Second smallest value
 
-    print(f"\n[CHUNKING] Chunking Summary for '{filename}':")
-    print(f"Total Chunks: {len(chunks)}")
-    print(
-        f"Words per Chunk -> second-min: {second_min_words}, max: {max_words}, avg: {avg_words}"
+    logger.info(
+        f"Chunking '{filename}': {len(chunks)} chunks, "
+        f"second-min: {second_min_words}, max: {max_words}, avg: {avg_words}"
     )
 
     return {
@@ -1122,12 +1105,12 @@ def generate_headings(data: dict):
                 memory_storage = get_memory_storage()
                 file_bytes = memory_storage.retrieve(f"{job_id}_{content_hash}")
                 if file_bytes:
-                    print(
+                    logger.info(
                         f"Retrieved file content from secure memory storage (hash: {content_hash[:8]}...)"
                     )
                 else:
-                    print(
-                        "Warning: File content not found in memory storage, may have been cleaned up"
+                    logger.warning(
+                        "File content not found in memory storage, may have been cleaned up"
                     )
 
             elif (
@@ -1154,12 +1137,12 @@ def generate_headings(data: dict):
                 try:
                     with open(temp_content_file, "rb") as f:
                         file_bytes = f.read()
-                    print(
+                    logger.info(
                         f"Retrieved file content from legacy temp file (hash: {content_hash[:8]}...)"
                     )
                 except Exception as read_error:
-                    print(
-                        f"Warning: Failed to read legacy temp file {temp_content_file}: {read_error}"
+                    logger.warning(
+                        f"Failed to read legacy temp file {temp_content_file}: {read_error}"
                     )
 
             if file_bytes and content_hash:
@@ -1169,12 +1152,12 @@ def generate_headings(data: dict):
                     saved_hash = cache.save_processed_cache(
                         file_bytes, result, original_filename
                     )
-                    print(
+                    logger.info(
                         f"Saved processed data to content cache (hash: {saved_hash[:8]}...)"
                     )
                 except Exception as cache_error:
-                    print(
-                        f"Warning: Failed to save processed data to cache: {cache_error}"
+                    logger.warning(
+                        f"Failed to save processed data to cache: {cache_error}"
                     )
 
                 # Clean up temporary storage after successful caching
@@ -1182,22 +1165,22 @@ def generate_headings(data: dict):
                     if temp_storage_type == "memory" and job_id:
                         memory_storage = get_memory_storage()
                         if memory_storage.remove(f"{job_id}_{content_hash}"):
-                            print(f"Cleaned up memory storage for job {job_id}")
+                            logger.info(f"Cleaned up memory storage for job {job_id}")
                     elif temp_content_file and os.path.exists(temp_content_file):
                         # For both secure_temp and legacy files, use secure deletion
                         temp_manager = SecureTempFile(secure_delete=True)
                         if temp_manager.cleanup_file(temp_content_file):
-                            print(
+                            logger.info(
                                 f"Securely cleaned up temporary content file: {temp_content_file}"
                             )
                         else:
                             # Fallback to regular deletion if secure deletion fails
                             os.remove(temp_content_file)
-                            print(
+                            logger.info(
                                 f"Cleaned up temporary content file (fallback): {temp_content_file}"
                             )
                 except Exception as cleanup_error:
-                    print(f"Warning: Failed to clean up temp storage: {cleanup_error}")
+                    logger.warning(f"Failed to clean up temp storage: {cleanup_error}")
 
                 # Update metadata to remove temp file reference and add caching info
                 metadata.pop("temp_content_file", None)
@@ -1209,8 +1192,8 @@ def generate_headings(data: dict):
                     json.dump(metadata, f, indent=2)
 
         except Exception as e:
-            print(
-                f"Warning: Failed to process content cache during topic generation: {e}"
+            logger.warning(
+                f"Failed to process content cache during topic generation: {e}"
             )
 
     return {
@@ -1307,18 +1290,14 @@ def expand_bullet_point_endpoint(data: dict):
     layer = data.get("layer", 1)  # Default to layer 1 if not specified
     other_bullets = data.get("other_bullets", [])  # Get other bullets in the topic
 
-    print(f"\n[EXPAND] Bullet point endpoint called")
-    print(f"[BULLET] Bullet point: {bullet_point[:50] if bullet_point else 'None'}...")
-    print(f"[CHUNKS] Received {len(chunks)} chunks for expansion")
-    print(f"[OTHER_BULLETS] Received {len(other_bullets)} other bullets for context")
-    print(f"[TOPIC] Topic heading: {topic_heading}")
-    print(f"[FILE] Filename: {filename}")
-    print(f"[ID] Topic ID: {topic_id}")
-    print(f"[LAYER] Expansion layer: {layer}")
+    logger.info(
+        f"Expand bullet point: layer={layer}, chunks={len(chunks)}, "
+        f"topic={topic_heading}, id={topic_id}"
+    )
 
     if not bullet_point or not chunks:
         error_msg = "Missing required fields: 'bullet_point' or 'chunks'."
-        print(f"[ERROR] Error: {error_msg}")
+        logger.warning(f"Expand bullet point error: {error_msg}")
         return {"error": error_msg}
 
     try:
@@ -1327,7 +1306,7 @@ def expand_bullet_point_endpoint(data: dict):
         result = expand_bullet_point(
             bullet_point, chunks, topic_heading, layer, other_bullets
         )
-        print(f"[SUCCESS] Expansion completed successfully")
+        logger.info("Expansion completed successfully")
 
         # Save the expansion to the processed JSON file
         if filename and topic_id and not result.get("error"):
@@ -1367,23 +1346,23 @@ def expand_bullet_point_endpoint(data: dict):
                         # Save back to file
                         with open(processed_file, "w", encoding="utf-8") as f:
                             json.dump(processed_data, f, indent=2)
-                        print(
-                            f"[SAVE] Saved expansion to cluster {topic_id} in {processed_file}"
+                        logger.info(
+                            f"Saved expansion to cluster {topic_id} in {processed_file}"
                         )
                     else:
-                        print(
-                            f"[WARNING] Failed to save expansion using utility function"
+                        logger.warning(
+                            "Failed to save expansion using utility function"
                         )
                 else:
-                    print(f"[WARNING] Processed file not found: {processed_file}")
+                    logger.warning(f"Processed file not found: {processed_file}")
             except Exception as save_error:
-                print(f"[WARNING] Failed to save expansion: {save_error}")
+                logger.warning(f"Failed to save expansion: {save_error}")
                 # Don't fail the request if saving fails
 
         return result
     except Exception as e:
         error_msg = f"Failed to expand bullet point: {str(e)}"
-        print(f"[ERROR]: {error_msg}")
+        logger.error(error_msg)
         return {"error": error_msg}
 
 
@@ -1550,7 +1529,7 @@ def get_temp_storage_stats():
                             pending_cleanup.append(filename)
 
                     except Exception as e:
-                        print(f"Warning: Failed to read metadata file {filename}: {e}")
+                        logger.warning(f"Failed to read metadata file {filename}: {e}")
 
         return {
             "memory_storage": memory_stats,
@@ -1686,8 +1665,8 @@ def cleanup_temp_storage(
                                     metadata_updated += 1
 
                     except Exception as e:
-                        print(
-                            f"Warning: Failed to process metadata file {filename}: {e}"
+                        logger.warning(
+                            f"Failed to process metadata file {filename}: {e}"
                         )
 
             results["file_cleanup"] = {

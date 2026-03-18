@@ -12,6 +12,9 @@ Environment Variables:
 """
 
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 from functools import lru_cache
 from typing import Optional
 
@@ -75,7 +78,7 @@ class ModelManager:
                         )
 
                         if not os.path.exists(model_path):
-                            print(f"Downloading Whisper model: {model_size}")
+                            logger.info(f"Downloading Whisper model: {model_size}")
 
                         self._whisper_model = WhisperModel(
                             model_size,
@@ -83,11 +86,11 @@ class ModelManager:
                             device=device,
                             compute_type=compute_type,
                         )
-                        print(
+                        logger.info(
                             f"Whisper model {model_size} loaded successfully on {device} with {compute_type}"
                         )
                     except Exception as e:
-                        print(f"Failed to load Whisper model: {e}")
+                        logger.error(f"Failed to load Whisper model: {e}")
                         raise
         return self._whisper_model
 
@@ -113,22 +116,22 @@ class ModelManager:
                             verbose=False,  # Reduce output
                             calculate_probabilities=False,  # Faster processing
                         )
-                        print("BERTopic model initialized successfully")
+                        logger.info("BERTopic model initialized successfully")
                     except Exception as e:
-                        print(f"Failed to initialize BERTopic model: {e}")
+                        logger.error(f"Failed to initialize BERTopic model: {e}")
                         raise
         return self._bertopic_model
 
     def warmup_models(self):
         """Preload models if configured to do so."""
         if should_preload_models():
-            print("Warming up models...")
+            logger.info("Warming up models...")
             try:
                 self.get_whisper_model()
                 self.get_bertopic_model()
-                print("Model warmup completed")
+                logger.info("Model warmup completed")
             except Exception as e:
-                print(f"Model warmup failed: {e}")
+                logger.warning(f"Model warmup failed: {e}")
 
 
 # Global model manager instance
@@ -157,10 +160,10 @@ def configure_torch_for_startup():
         try:
             max_threads = int(os.getenv("TORCH_NUM_THREADS", "4"))
             if max_threads < 1:
-                print(f"Warning: TORCH_NUM_THREADS must be positive, using default 4")
+                logger.warning(f"Warning: TORCH_NUM_THREADS must be positive, using default 4")
                 max_threads = 4
         except ValueError:
-            print(f"Warning: Invalid TORCH_NUM_THREADS value, using default 4")
+            logger.warning(f"Warning: Invalid TORCH_NUM_THREADS value, using default 4")
             max_threads = 4
 
         # Get current thread count
@@ -173,7 +176,7 @@ def configure_torch_for_startup():
         # Disable autograd if not needed for inference
         torch.set_grad_enabled(False)
 
-        print(
+        logger.info(
             f"PyTorch configured: {torch.get_num_threads()} threads (max: {max_threads}), CUDA available: {torch.cuda.is_available()}"
         )
     except ImportError:
@@ -209,7 +212,7 @@ def apply_startup_optimizations():
         if should_preload_models():
             model_manager.warmup_models()
 
-        print("Startup optimizations applied")
+        logger.info("Startup optimizations applied")
 
 
 def get_optimal_device_config():
@@ -237,12 +240,12 @@ def get_optimal_device_config():
         if env_device in valid_devices and env_compute_type in valid_compute_types.get(
             env_device, []
         ):
-            print(
+            logger.info(
                 f"Using environment-specified Whisper config: device={env_device}, compute_type={env_compute_type}"
             )
             return env_device, env_compute_type
         else:
-            print(
+            logger.warning(
                 f"Warning: Invalid environment config device={env_device}, compute_type={env_compute_type}. Using auto-detection."
             )
 
@@ -258,17 +261,17 @@ def get_optimal_device_config():
                 )
                 # Use float16 for GPUs with sufficient memory, int8 for lower memory
                 compute_type = "float16" if gpu_memory_gb >= 6 else "int8"
-                print(
+                logger.info(
                     f"Auto-detected GPU with {gpu_memory_gb:.1f}GB memory, using {compute_type}"
                 )
             except Exception as e:
-                print(f"Warning: Failed to get GPU memory info: {e}")
+                logger.warning(f"Warning: Failed to get GPU memory info: {e}")
                 compute_type = "float16"  # Default for CUDA
             return "cuda", compute_type
         else:
-            print("CUDA not available, using CPU with int8")
+            logger.info("CUDA not available, using CPU with int8")
             return "cpu", "int8"
     except ImportError:
         # Fallback if torch is not available
-        print("PyTorch not available, using CPU with int8")
+        logger.info("PyTorch not available, using CPU with int8")
         return "cpu", "int8"
