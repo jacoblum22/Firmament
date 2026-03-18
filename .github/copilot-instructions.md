@@ -74,7 +74,7 @@ Run tests: `pytest backend/tests/`
 cd backend
 pip install -r requirements.txt
 python docker/setup_nltk_data.py  # Required for NLP features
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Frontend Setup**:

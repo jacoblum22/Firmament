@@ -194,7 +194,7 @@ class UploadTester:
             print(f"❌ Cannot reach server: {str(e)}")
             print("\nPlease make sure the StudyMate backend is running:")
             print("  cd backend")
-            print("  python -m uvicorn main:app --reload")
+            print("  python -m uvicorn app.main:app --reload")
             return False
 
     def generate_report(self) -> str:

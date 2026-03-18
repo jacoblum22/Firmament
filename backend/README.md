@@ -33,7 +33,7 @@ FastAPI backend for StudyMate v2 with comprehensive CORS configuration and secur
 
 4. **Run development server**
    ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
 ### Production Deployment

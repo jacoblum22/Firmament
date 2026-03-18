@@ -14,7 +14,7 @@ import stat
 from pathlib import Path
 
 # Resolve backend/ directory and run from within it so all relative
-# paths (requirements.txt, .env.production, main:app) resolve correctly.
+# paths (requirements.txt, .env.production, app.main:app) resolve correctly.
 _BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 sys.path.insert(0, str(_BACKEND_DIR))
 os.chdir(_BACKEND_DIR)
@@ -280,7 +280,7 @@ def start_server():
         sys.executable,
         "-m",
         "uvicorn",
-        "main:app",
+        "app.main:app",
         "--host",
         host,
         "--port",
