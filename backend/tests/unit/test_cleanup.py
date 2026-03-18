@@ -3,10 +3,9 @@ import sys
 import pytest
 from pathlib import Path
 
-# Add the backend directory to the Python path
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+# cleanup_files.py lives in scripts/ at the project root
+_project_root = Path(__file__).parents[3]  # unit -> tests -> backend -> project root
+sys.path.insert(0, str(_project_root / "scripts"))
 
 from cleanup_files import BASE_DIR, directories, show_directory_status
 
