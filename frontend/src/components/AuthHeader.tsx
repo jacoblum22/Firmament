@@ -22,9 +22,7 @@ export const AuthHeader: React.FC = () => {
       ) : (
         <GoogleSignInButton 
           disabled={isLoading}
-          onSuccess={() => {
-            console.log('Sign-in successful');
-          }}
+          onSuccess={() => {}}
           onError={(error) => {
             console.error('Sign-in error:', error);
           }}
