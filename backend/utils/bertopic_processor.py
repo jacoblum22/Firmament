@@ -787,7 +787,6 @@ def redistribute_large_topics(
         f"Cluster {cluster_id}: Found {len(large_topics)} large topics requiring redistribution"
     )
     # Import necessary libraries for similarity calculation
-    from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
     import numpy as np
     import scipy.sparse
