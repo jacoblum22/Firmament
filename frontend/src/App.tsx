@@ -173,50 +173,20 @@ function App() {
   const memoizedGetAllTopicChunks = useCallback((
     topicData: TopicResponse['topics'][string], 
     allSegments?: Array<{ position: string; text: string }>,
-    topicId?: string,
-    context?: string
+    topicId?: string
   ): string[] => {
-    const contextLabel = context || "getAllTopicChunks";
-    console.log(`🔍 ${contextLabel} called for topic ${topicId || 'unknown'}`);
-    console.log(`📊 ${contextLabel} topic data available:`, {
-      hasSegmentPositions: !!topicData.segment_positions,
-      segmentPositionsCount: topicData.segment_positions?.length || 0,
-      examplesCount: topicData.examples?.length || 0,
-      hasAllSegments: !!allSegments,
-      allSegmentsCount: allSegments?.length || 0
-    });
-
     if (!topicData.segment_positions || !allSegments) {
-      console.warn(`⚠️ ${contextLabel}: Missing segment_positions or segments data, falling back to examples`);
-      console.log(`📝 ${contextLabel} fallback: Using ${topicData.examples?.length || 0} examples instead`);
       return topicData.examples || [];
     }
     
-    // Create a lookup map for faster access
     const segmentMap = new Map<string, string>();
     allSegments.forEach(segment => {
       segmentMap.set(segment.position, segment.text);
     });
-    console.log(`🗂️ ${contextLabel}: Created segment lookup map with ${segmentMap.size} positions`);
     
-    // Extract all chunks for this topic
-    const topicChunks = topicData.segment_positions
+    return topicData.segment_positions
       .map((position: string) => segmentMap.get(position))
       .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-    
-    const improvement = topicChunks.length - (topicData.examples?.length || 0);
-    console.log(`🎯 ${contextLabel}: Successfully extracted ${topicChunks.length} chunks for topic ${topicId || 'unknown'}`);
-    console.log(`📈 ${contextLabel} improvement: +${improvement} chunks over examples (${topicData.examples?.length || 0} -> ${topicChunks.length})`);
-    
-    // Log first few chunks for verification (only for main expansion, not debug)
-    if (context === "Expansion" && topicChunks.length > 0) {
-      console.log(`📄 First chunk preview: "${topicChunks[0].substring(0, 100)}..."`);
-      if (topicChunks.length > 1) {
-        console.log(`📄 Last chunk preview: "${topicChunks[topicChunks.length - 1].substring(0, 100)}..."`);
-      }
-    }
-    
-    return topicChunks;
   }, []);
 
   /**
@@ -463,8 +433,6 @@ function App() {
                   num_chunks: segments.length,
                   total_words: totalWords,
                 });
-                
-                console.log(`🔄 Processed file loaded: Set processedChunks with ${segments.length} chunks and ${totalWords} total words`);
               }
             }
           }
@@ -613,7 +581,7 @@ function App() {
         reverse: false,
       });
     }
-  }, [status, coreControls, glowControls, status?.stage]);
+  }, [status, coreControls, glowControls]);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -642,8 +610,7 @@ function App() {
         filename: response.filename,
         cluster_id: clusterId,
       });
-      const clusterData = data as { cluster?: { bullet_points?: string[] } }; // Type assertion for legacy API
-      console.log("Received bullet points:", clusterData.cluster?.bullet_points);
+      const clusterData = data as { cluster?: { bullet_points?: string[] } };
       // Update the specific topic with the expanded cluster data
       setTopics((prevTopics) => {
         if (!prevTopics) return prevTopics;
@@ -662,65 +629,27 @@ function App() {
   };
 
   const handleExpandBulletPoint = async (bulletPoint: string, topicId: string) => {
-    console.log("🔧 Expand bullet point clicked:", { bulletPoint, topicId });
-    
-    if (!topics || !topics.topics[topicId]) {
-      console.error("❌ No topics or topic not found:", { topics: !!topics, topicExists: !!topics?.topics[topicId] });
-      return;
-    }
+    if (!topics || !topics.topics[topicId]) return;
 
     const topic = topics.topics[topicId];
-    
-    // Try to get all chunks, fallback to examples if not available
-    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Expansion") || topic.examples || [];
+    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId) || topic.examples || [];
     const topicHeading = topic.heading;
 
-    console.log("📊 Expansion request data:", { 
-      bullet_point: bulletPoint,
-      chunks_count: topicChunks?.length || 0,
-      topic_heading: topicHeading 
-    });
-
     try {
-      const res = await fetch(config.getApiUrl("expand-bullet-point"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bullet_point: bulletPoint,
-          chunks: topicChunks,
-          topic_heading: topicHeading,
-          filename: response?.filename, // Add filename for saving
-          topic_id: topicId, // Add topic_id for saving
-          layer: 1, // First expansion layer
-        }),
+      const data = await apiService.expandBulletPoint({
+        bullet_point: bulletPoint,
+        chunks: topicChunks,
+        topic_heading: topicHeading,
+        filename: response?.filename || '',
+        topic_id: topicId,
+        layer: 1,
       });
 
-      if (!res.ok) {
-        console.error("❌ HTTP error:", res.status, res.statusText);
-        const errorText = await res.text();
-        console.error("Error response:", errorText);
-        return;
-      }
-
-      const data = await res.json();
-      console.log("📥 Backend expansion response:", data);
-
-      if (data.error) {
-        console.error("Error expanding bullet point:", data.error);
-      } else {
-        console.log("✅ Expansion result received:", data);
-        // Store the expansion result using a consistent key generation
+      if (!data.error) {
         const bulletKey = `${topicId}_${generateBulletKey(bulletPoint)}`;
-        console.log(`🔑 Generated frontend expansion key: '${bulletKey}'`);
-        
         setExpandedBullets(prev => ({
           ...prev,
-          [bulletKey]: {
-            expansion: data,
-            subExpansions: {}
-          }
+          [bulletKey]: { expansion: data, subExpansions: {} }
         }));
       }
     } catch (error) {
@@ -734,61 +663,29 @@ function App() {
     parentBulletKey: string,
     depth: number = 1
   ) => {
-    // Prevent infinite recursion by limiting depth to maximum 2 layers
-    if (depth >= 2) {
-      console.log("Maximum expansion depth of 2 layers reached");
-      return;
-    }
-
-    console.log("🔍 Expanding sub-bullet:", subBullet);
-    console.log("Parent bullet key:", parentBulletKey);
-    console.log("Expansion depth:", depth);
+    if (depth >= 2) return;
 
     const topic = topics?.topics[topicId];
-    if (!topic) {
-      console.error("Topic not found for expansion:", topicId);
-      return;
-    }
+    if (!topic) return;
 
-    // Try to get all chunks, fallback to examples if not available
-    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId, "Sub-bullet Expansion") || topic.examples || [];
+    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId) || topic.examples || [];
     const topicHeading = topic.heading || `Topic ${topicId}`;
 
     try {
-      const res = await fetch(config.getApiUrl("expand-bullet-point"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bullet_point: subBullet,
-          chunks: topicChunks,
-          topic_heading: topicHeading,
-          filename: response?.filename, // Add filename for saving
-          topic_id: topicId, // Add topic_id for saving
-          parent_bullet: parentBulletKey, // Add parent bullet for layer 2 tracking
-          layer: depth + 1, // Pass the layer based on expansion depth
-        }),
+      const data = await apiService.expandBulletPoint({
+        bullet_point: subBullet,
+        chunks: topicChunks,
+        topic_heading: topicHeading,
+        filename: response?.filename || '',
+        topic_id: topicId,
+        parent_bullet: parentBulletKey,
+        layer: depth + 1,
       });
 
-      if (!res.ok) {
-        console.error("❌ HTTP error:", res.status, res.statusText);
-        return;
-      }
-
-      const data = await res.json();
-      console.log("📥 Backend sub-bullet expansion response:", data);
-
-      if (data.error) {
-        console.error("Error expanding sub-bullet:", data.error);
-      } else {
-        console.log("✅ Sub-bullet expansion result received:", data);
-        // Store the sub-expansion result in the nested structure
+      if (!data.error) {
         const subBulletKey = `${parentBulletKey}_sub_${subBullet.slice(0, 30)}`;
         setExpandedBullets(prev => {
           const updated = { ...prev };
-          
-          // Ensure the parent expansion exists
           if (updated[parentBulletKey]) {
             if (!updated[parentBulletKey].subExpansions) {
               updated[parentBulletKey].subExpansions = {};
@@ -798,13 +695,6 @@ function App() {
               subExpansions: {}
             };
           }
-          
-          return updated;
-        });
-      }
-    } catch (error) {
-      console.error("Failed to expand sub-bullet:", error);
-    }
   };
 
   // Function to generate a consistent bullet key (must match backend logic)
@@ -816,19 +706,15 @@ function App() {
   
   // Function to load saved bullet point expansions
   const loadSavedExpansions = (topicsData: TopicResponse) => {
-    console.log("🔄 Loading saved expansions from topics data");
     const newExpandedBullets: Record<string, BulletExpansion> = {};
     
     Object.entries(topicsData.topics).forEach(([topicId, topic]) => {
       const bulletExpansions = topic.bullet_expansions;
       if (bulletExpansions) {
-        console.log(`📂 Found saved expansions for topic ${topicId}:`, bulletExpansions);
         
         Object.entries(bulletExpansions).forEach(([bulletKey, expansionData]) => {
           const originalBullet = expansionData.original_bullet || bulletKey;
           const frontendKey = `${topicId}_${generateBulletKey(originalBullet)}`;
-          
-          console.log(`🔑 Loading layer 1 expansion: backend key '${bulletKey}' -> frontend key '${frontendKey}'`);
           
           // Load the main expansion
           newExpandedBullets[frontendKey] = {
@@ -844,13 +730,10 @@ function App() {
           
           // Load layer 2 sub-expansions if they exist
           if (expansionData.sub_expansions) {
-            console.log(`🔗 Loading layer 2 sub-expansions for '${frontendKey}':`, expansionData.sub_expansions);
             
             Object.entries(expansionData.sub_expansions).forEach(([subKey, subExpansionData]) => {
               const originalSubBullet = subExpansionData.original_bullet || subKey;
               const subFrontendKey = `${frontendKey}_sub_${originalSubBullet.slice(0, 30)}`;
-              
-              console.log(`🔑 Loading layer 2 expansion: backend key '${subKey}' -> frontend key '${subFrontendKey}'`);
               
               if (!newExpandedBullets[frontendKey].subExpansions) {
                 newExpandedBullets[frontendKey].subExpansions = {};
@@ -872,7 +755,6 @@ function App() {
       }
     });
     
-    console.log("✅ Loaded saved expansions:", newExpandedBullets);
     setExpandedBullets(newExpandedBullets);
   };
 
@@ -945,8 +827,6 @@ function App() {
           const cleanedPoint = point.replace(/^[-*+]\s*/, '').trim();
           const bulletKey = `${topicId}_${generateBulletKey(point)}`;
           const isExpanded = expandedBullets[bulletKey];
-          
-          console.log(`🔍 Rendering bullet ${idx}: key='${bulletKey}', expanded=${!!isExpanded}`);
           
           return (
             <li 
@@ -1057,7 +937,6 @@ function App() {
                     size="large"
                     disabled={isLoading}
                     onSuccess={() => {
-                      console.log('Sign-in successful');
                       setSuccessMessage(`Successfully signed in! Welcome to ${BRAND.NAME}.`);
                       setError(null); // Clear any previous errors
                       // Clear success message after 5 seconds
