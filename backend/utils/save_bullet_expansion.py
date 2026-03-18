@@ -2,9 +2,12 @@
 Utility function for saving bullet point expansions to processed JSON files.
 """
 
+import logging
 import re
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def save_bullet_expansion(
@@ -39,7 +42,7 @@ def save_bullet_expansion(
                 break
 
         if not cluster:
-            print(f"[WARNING] Cluster {topic_id} not found in processed data")
+            logger.warning(f"Cluster {topic_id} not found in processed data")
             return False
 
         # Initialize bullet_expansions if it doesn't exist
@@ -48,7 +51,7 @@ def save_bullet_expansion(
 
         # Generate a consistent bullet key
         bullet_key = _generate_bullet_key(bullet_point)
-        print(f"[SAVE] Generated bullet key: '{bullet_key}'")
+        logger.debug(f"Generated bullet key: '{bullet_key}'")
 
         # Prepare the expansion data with metadata
         full_expansion_data = {
@@ -61,14 +64,14 @@ def save_bullet_expansion(
         if layer == 1:
             # Save as top-level expansion
             cluster["bullet_expansions"][bullet_key] = full_expansion_data
-            print(f"[SAVE] Saved layer 1 expansion: '{bullet_key}'")
+            logger.info(f"Saved layer 1 expansion: '{bullet_key}'")
             return True
 
         elif layer == 2:
             # Save as nested expansion under parent
             if not parent_bullet:
-                print(
-                    f"[WARNING] No parent_bullet provided for layer 2 expansion, saving as top-level"
+                logger.warning(
+                    f"No parent_bullet provided for layer 2 expansion, saving as top-level"
                 )
                 cluster["bullet_expansions"][bullet_key] = full_expansion_data
                 return True
@@ -82,19 +85,19 @@ def save_bullet_expansion(
             )
 
             if not parent_found:
-                print(
-                    f"[WARNING] Parent bullet not found for layer 2 expansion. Parent: '{parent_bullet_clean}', saving as top-level fallback"
+                logger.warning(
+                    f"Parent bullet not found for layer 2 expansion. Parent: '{parent_bullet_clean}', saving as top-level fallback"
                 )
                 cluster["bullet_expansions"][bullet_key] = full_expansion_data
 
             return True
 
         else:
-            print(f"[WARNING] Unsupported expansion layer: {layer}")
+            logger.warning(f"Unsupported expansion layer: {layer}")
             return False
 
     except Exception as e:
-        print(f"[ERROR] Failed to save bullet expansion: {e}")
+        logger.error(f"Failed to save bullet expansion: {e}")
         return False
 
 
@@ -137,8 +140,8 @@ def _save_nested_expansion(
 
             # Save the layer 2 expansion under the parent
             existing_data["sub_expansions"][bullet_key] = expansion_data
-            print(
-                f"[SAVE] Saved layer 2 expansion '{bullet_key}' under parent '{existing_key}'"
+            logger.info(
+                f"Saved layer 2 expansion '{bullet_key}' under parent '{existing_key}'"
             )
             return True
 

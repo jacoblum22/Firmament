@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 from dotenv import load_dotenv
 from .openai_client import get_openai_client
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 client = get_openai_client()
 
@@ -25,12 +28,12 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
     """
     processed_file = os.path.join("processed", filename)
 
-    print(
-        f"Received request to expand cluster: filename={filename}, cluster_id={cluster_id}"
+    logger.info(
+        f"Expanding cluster: filename={filename}, cluster_id={cluster_id}"
     )
 
     if not os.path.exists(processed_file):
-        print(f"Error: File {filename} not found in processed folder.")
+        logger.error(f"File {filename} not found in processed folder.")
         return {"error": f"File {filename} not found in processed folder."}
 
     with open(processed_file, "r", encoding="utf-8") as f:
@@ -44,16 +47,14 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
             break
 
     if not cluster:
-        print(f"Error: Cluster ID {cluster_id} not found in file {filename}.")
+        logger.error(f"Cluster ID {cluster_id} not found in file {filename}.")
         return {"error": f"Cluster ID {cluster_id} not found in file {filename}."}
-
-    print(f"Cluster data before expansion: {cluster}")
 
     # Check and log the presence of the segment_positions field
     if "segment_positions" not in cluster:
-        print(f"Warning: 'segment_positions' field is missing in cluster {cluster_id}.")
+        logger.warning(f"'segment_positions' field is missing in cluster {cluster_id}.")
     else:
-        print(
+        logger.debug(
             f"'segment_positions' field found in cluster {cluster_id}: {cluster['segment_positions']}"
         )
 
@@ -61,8 +62,8 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
     segment_positions = cluster.get("segment_positions", [])
     segments = data.get("segments", [])
 
-    print(f"Segment positions for cluster {cluster_id}: {segment_positions}")
-    print(f"Total number of segments available: {len(segments)}")
+    logger.debug(f"Segment positions for cluster {cluster_id}: {segment_positions}")
+    logger.debug(f"Total segments available: {len(segments)}")
 
     # Extract the text of the segments at the specified positions
     chunks = []
@@ -72,17 +73,12 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
         )
         if matching_segment:
             chunks.append(matching_segment["text"])
-            print(
-                f"Successfully retrieved segment at position {pos}: {matching_segment['text']}"
-            )
         else:
-            print(f"No matching segment found for position: {pos}")
+            logger.warning(f"No matching segment found for position: {pos}")
 
     if not chunks:
-        print(f"Error: No valid segments found for Cluster ID {cluster_id}.")
+        logger.error(f"No valid segments found for Cluster ID {cluster_id}.")
         return {"error": f"No valid segments found for Cluster ID {cluster_id}."}
-
-    print(f"Extracted text chunks for GPT-4: {chunks}")
 
     # Build the prompt for GPT-4
     prompt = (
@@ -100,7 +96,7 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
     )
     prompt += "\n".join(chunks)
 
-    print(f"Generated GPT-4 prompt: {prompt}")
+    logger.debug(f"Generated GPT-4 prompt length: {len(prompt)} chars")
 
     # GPT-4o call
     response = client.chat.completions.create(
@@ -112,32 +108,25 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
 
     # Ensure response and content exist
     if not response.choices or not response.choices[0].message.content:
-        print("Error: GPT-4 response is empty or malformed.")
+        logger.error("GPT-4 response is empty or malformed.")
         return {"error": "GPT-4 response is empty or malformed."}
 
     raw_bullet_points = response.choices[0].message.content.strip()
-    print(f"Raw GPT-4 response: {raw_bullet_points}")
 
     # Parse the bullet points from the response
     bullet_points = [
         point.strip() for point in raw_bullet_points.split("\n") if point.strip()
     ]
 
-    print(f"Parsed bullet points: {bullet_points}")
+    logger.info(f"Generated {len(bullet_points)} bullet points for cluster {cluster_id}")
 
     # Update cluster metadata
     cluster["bullet_points"] = bullet_points
-
-    print(f"Updated cluster data: {cluster}")
-    print(f"Saving updated data to file: {processed_file}")
 
     # Save updated data back to the file
     with open(processed_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-    print(
-        "Backend Response:",
-        {"message": "Cluster expanded successfully.", "cluster": cluster},
-    )
+    logger.info(f"Cluster {cluster_id} expanded successfully")
 
     return {"message": "Cluster expanded successfully.", "cluster": cluster}

@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import torch
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
@@ -8,6 +9,8 @@ from sklearn.cluster import KMeans
 import statistics
 from typing import List, Dict, Any, cast, Optional, Tuple
 from .generate_cluster_heading import generate_cluster_headings
+
+logger = logging.getLogger(__name__)
 
 # Handle NLTK stopwords with graceful fallback
 try:
@@ -18,11 +21,11 @@ try:
     try:
         stopwords.words("english")
     except LookupError:
-        print("Downloading NLTK stopwords corpus...")
+        logger.info("Downloading NLTK stopwords corpus...")
         nltk.download("stopwords", quiet=True)
     NLTK_AVAILABLE = True
 except ImportError:
-    print("Warning: NLTK not available, using sklearn's built-in stopwords")
+    logger.warning("NLTK not available, using sklearn's built-in stopwords")
     NLTK_AVAILABLE = False
 
 PROCESSED_DIR = "processed"  # Folder to save processed JSON files
@@ -39,9 +42,7 @@ def get_stopwords():
         try:
             return stopwords.words("english")
         except LookupError:
-            print(
-                "Warning: NLTK stopwords not available, using sklearn's built-in stopwords"
-            )
+            logger.warning("NLTK stopwords not available, using sklearn's built-in stopwords")
             return "english"
     else:
         return "english"
@@ -66,7 +67,7 @@ def pre_cluster_with_kmeans(
     """
     # Check if we have enough chunks to split
     if len(chunks) < min_cluster_size * 2:
-        print(
+        logger.info(
             f"Not enough chunks ({len(chunks)}) for k-means pre-clustering. Need at least {min_cluster_size * 2}."
         )
         return [chunks]
@@ -74,14 +75,15 @@ def pre_cluster_with_kmeans(
     # Check if we have enough total words
     total_words = sum(len(chunk["text"].split()) for chunk in chunks)
     if total_words < min_words_per_cluster * 2:
-        print(
+        logger.info(
             f"Not enough words ({total_words}) for k-means pre-clustering. Need at least {min_words_per_cluster * 2}."
         )
         return [chunks]
 
-    print(
-        f"\nPerforming k-means pre-clustering on {len(chunks)} chunks..."
-    )  # Extract texts for vectorization
+    logger.info(
+        f"Performing k-means pre-clustering on {len(chunks)} chunks..."
+    )
+    # Extract texts for vectorization
     texts = [chunk["text"] for chunk in chunks]
 
     # Use TF-IDF vectorization for k-means
@@ -116,9 +118,9 @@ def pre_cluster_with_kmeans(
         cluster_0_words = sum(len(chunk["text"].split()) for chunk in cluster_0)
         cluster_1_words = sum(len(chunk["text"].split()) for chunk in cluster_1)
 
-        print(f"K-means clustering results:")
-        print(f"  Cluster 0: {len(cluster_0)} chunks, {cluster_0_words} words")
-        print(f"  Cluster 1: {len(cluster_1)} chunks, {cluster_1_words} words")
+        logger.info(f"K-means clustering results:")
+        logger.info(f"  Cluster 0: {len(cluster_0)} chunks, {cluster_0_words} words")
+        logger.info(f"  Cluster 1: {len(cluster_1)} chunks, {cluster_1_words} words")
 
         # Check if both clusters meet minimum requirements
         if (
@@ -128,18 +130,14 @@ def pre_cluster_with_kmeans(
             and cluster_1_words >= min_words_per_cluster
         ):
 
-            print(
-                "Both clusters meet minimum requirements. Proceeding with split clustering."
-            )
+            logger.info("Both clusters meet minimum requirements. Proceeding with split clustering.")
             return [cluster_0, cluster_1]
         else:
-            print(
-                "One or both clusters don't meet minimum requirements. Using single cluster."
-            )
+            logger.info("One or both clusters don't meet minimum requirements. Using single cluster.")
             return [chunks]
 
     except Exception as e:
-        print(f"K-means clustering failed: {e}. Using single cluster.")
+        logger.error(f"K-means clustering failed: {e}. Using single cluster.")
         return [chunks]
 
 
@@ -156,8 +154,8 @@ def process_cluster_with_bertopic(
     Returns:
         Tuple of (topic_map, noise_chunks, all_chunks)
     """
-    print(f"\n--- Processing Cluster {cluster_id} ---")
-    print(f"Chunks in cluster: {len(cluster_chunks)}")
+    logger.info(f"Processing Cluster {cluster_id}")
+    logger.info(f"Chunks in cluster: {len(cluster_chunks)}")
 
     # Configure vectorizer
     stopword_list = get_stopwords()
@@ -166,7 +164,7 @@ def process_cluster_with_bertopic(
     # Calculate dynamic min_topic_size based on cluster size
     # Aim for ~1/5 of chunks, with min=2 and max=10
     dynamic_min_topic_size = max(2, min(10, len(cluster_chunks) // 5))
-    print(
+    logger.info(
         f"Using min_topic_size: {dynamic_min_topic_size} (based on {len(cluster_chunks)} chunks)"
     )
 
@@ -202,7 +200,7 @@ def process_cluster_with_bertopic(
 
     except ValueError as e:
         if "max_df corresponds to < documents than min_df" in str(e):
-            print(f"Falling back to lenient parameters for cluster {cluster_id}...")
+            logger.info(f"Falling back to lenient parameters for cluster {cluster_id}...")
             # Fall back to lenient parameters
             vectorizer_model = CountVectorizer(
                 stop_words=stopword_list,
@@ -246,10 +244,10 @@ def process_cluster_with_bertopic(
             topic_map.setdefault(adjusted_topic_id, []).append(
                 chunk
             )  # Print topic assignment stats for this cluster
-    print(f"Cluster {cluster_id} topic assignment stats:")
-    print(f"  Number of topics found: {len(topic_map)}")
-    print(f"  Number of noise chunks: {len(noise_chunks)}")
-    print(
+    logger.info(f"Cluster {cluster_id} topic assignment stats:")
+    logger.info(f"  Number of topics found: {len(topic_map)}")
+    logger.info(f"  Number of noise chunks: {len(noise_chunks)}")
+    logger.info(
         f"  Number of chunks assigned to topics: {sum(len(chunks) for chunks in topic_map.values())}"
     )
 
@@ -271,10 +269,7 @@ def _print_initial_statistics(chunks: List[Dict[str, str]]) -> int:
         Total word count across all chunks
     """
     total_words = sum(len(chunk["text"].split()) for chunk in chunks)
-    print(f"\nInitial stats:")
-    print(f"Number of chunks: {len(chunks)}")
-    print(f"Total words: {total_words}")
-    print(f"Average words per chunk: {total_words/len(chunks):.1f}")
+    logger.info(f"Initial stats: {len(chunks)} chunks, {total_words} total words, {total_words/len(chunks):.1f} avg words/chunk")
     return total_words
 
 
@@ -312,18 +307,17 @@ def _process_clusters_with_bertopic(
             ]
         )
         cluster_topic_counts.append(cluster_topics)
-        print(f"📊 Group {cluster_idx} → Generated {cluster_topics} topics")
+        logger.info(f"Group {cluster_idx} -> Generated {cluster_topics} topics")
 
         all_topic_maps.update(topic_map)
         all_noise_chunks.extend(noise_chunks)
         all_topic_models.append((topic_model, cluster_idx))
 
     # Print detailed clustering summary
-    print(f"\n🎯 Clustering Summary:")
-    print(f"K-means groups: {len(clusters)}")
+    logger.info(f"Clustering Summary: {len(clusters)} k-means groups")
     for i, count in enumerate(cluster_topic_counts):
-        print(f"  Group {i}: {count} topics")
-    print(f"Total topics across all groups: {sum(cluster_topic_counts)}")
+        logger.info(f"  Group {i}: {count} topics")
+    logger.info(f"Total topics across all groups: {sum(cluster_topic_counts)}")
 
     return all_topic_maps, all_noise_chunks, all_topic_models
 
@@ -348,11 +342,7 @@ def _print_overall_results(
     total_noise = len(all_noise_chunks)
     total_assigned = sum(len(chunks) for chunks in all_topic_maps.values())
 
-    print(f"\n=== Overall Results ===")
-    print(f"Total clusters processed: {len(clusters)}")
-    print(f"Total topics found: {total_topics}")
-    print(f"Total noise chunks: {total_noise}")
-    print(f"Total chunks assigned to topics: {total_assigned}")
+    logger.info(f"Overall Results: {len(clusters)} clusters, {total_topics} topics, {total_noise} noise, {total_assigned} assigned")
 
     # Print word counts for noise vs topic chunks
     noise_words = sum(len(chunk["text"].split()) for chunk in all_noise_chunks)
@@ -361,9 +351,7 @@ def _print_overall_results(
         for chunks in all_topic_maps.values()
         for chunk in chunks
     )
-    print(f"Words in noise chunks: {noise_words}")
-    print(f"Words in topic chunks: {topic_words}")
-    print(f"Total words processed: {noise_words + topic_words}")
+    logger.info(f"Words: {noise_words} noise, {topic_words} topic, {noise_words + topic_words} total")
 
     return noise_words, topic_words
 
@@ -434,12 +422,11 @@ def _calculate_topic_statistics(
         }
 
     # Print topic statistics
-    print("\nTopic statistics:")
     for tid, stats in topic_stats.items():
-        print(f"Topic {tid}:")
-        print(f"  Number of chunks: {stats['num_chunks']}")
-        print(f"  Word count range: {stats['min_size']} - {stats['max_size']}")
-        print(f"  Average words per chunk: {stats['mean_size']}")
+        logger.info(
+            f"Topic {tid}: {stats['num_chunks']} chunks, "
+            f"words {stats['min_size']}-{stats['max_size']} (avg {stats['mean_size']})"
+        )
 
     return topic_stats
 
@@ -542,12 +529,11 @@ def _save_processed_data(
     Returns:
         Dictionary containing the saved data structure
     """
-    print(f"\nSaving processed data:")
-    print(f"Creating processed directory at: {PROCESSED_DIR}")
+    logger.info(f"Saving processed data to {PROCESSED_DIR}")
     os.makedirs(PROCESSED_DIR, exist_ok=True)
     base_name = os.path.splitext(filename)[0]
     save_path = os.path.join(PROCESSED_DIR, f"{base_name}_processed.json")
-    print(f"Saving processed data to: {save_path}")
+    logger.info(f"Save path: {save_path}")
 
     # Prepare data for saving - collect all chunks from topics and noise
     all_segments = []
@@ -560,10 +546,9 @@ def _save_processed_data(
     all_segments.sort(key=lambda x: x["position"])
 
     segments_word_count = sum(len(seg["text"].split()) for seg in all_segments)
-    print(f"\nJSON saving stats:")
-    print(f"Number of segments being saved: {len(all_segments)}")
-    print(f"Total words in segments: {segments_word_count}")
-    print(f"Expected total words: {topic_words + noise_words}")
+    logger.info(
+        f"Saving {len(all_segments)} segments, {segments_word_count} words (expected {topic_words + noise_words})"
+    )
 
     clusters = []
     for i, tid in enumerate(ordered_topic_ids):
@@ -631,26 +616,25 @@ def _save_processed_data(
 
     with open(save_path, "w", encoding="utf-8") as f:
         json.dump(save_data, f, ensure_ascii=False, indent=2)
-    print(f"Successfully saved processed data to: {save_path}")
-    print(f"JSON file size: {os.path.getsize(save_path) / 1024:.1f} KB")
+    logger.info(f"Saved {os.path.getsize(save_path) / 1024:.1f} KB to {save_path}")
 
     # Attempt to remove original transcript if it exists
     transcript_path = os.path.join("output", f"{base_name}_transcription.txt")
     try:
         if os.path.exists(transcript_path):
             os.remove(transcript_path)
-            print(f"Deleted original transcript: {transcript_path}")
+            logger.info(f"Deleted original transcript: {transcript_path}")
     except Exception as e:
-        print(f"Warning: Failed to delete original transcript: {e}")
+        logger.warning(f"Failed to delete original transcript: {e}")
 
     # Attempt to remove the corresponding _chunks.json file after saving _processed.json
     chunks_path = os.path.join(PROCESSED_DIR, f"{base_name}_chunks.json")
     try:
         if os.path.exists(chunks_path):
             os.remove(chunks_path)
-            print(f"Deleted chunk file: {chunks_path}")
+            logger.info(f"Deleted chunk file: {chunks_path}")
     except Exception as e:
-        print(f"Warning: Failed to delete chunk file: {e}")
+        logger.warning(f"Failed to delete chunk file: {e}")
 
     return save_data
 
@@ -672,7 +656,7 @@ def process_with_bertopic(
     """
     # Check if chunks is empty
     if not chunks:
-        print("Error: No chunks provided to process_with_bertopic")
+        logger.error("No chunks provided to process_with_bertopic")
         return {"num_chunks": 0, "num_topics": 0, "total_tokens_used": 0, "topics": {}}
 
     # Step 1: Print initial statistics
@@ -681,11 +665,10 @@ def process_with_bertopic(
     # Step 2: Pre-cluster with k-means
     clusters = pre_cluster_with_kmeans(chunks)
 
-    print(f"\n🔬 K-Means Clustering Results:")
-    print(f"Number of k-means groups created: {len(clusters)}")
+    logger.info(f"K-Means Clustering Results: {len(clusters)} groups")
     for i, cluster in enumerate(clusters):
         cluster_words = sum(len(chunk["text"].split()) for chunk in cluster)
-        print(f"  Group {i}: {len(cluster)} chunks, {cluster_words} words")
+        logger.info(f"  Group {i}: {len(cluster)} chunks, {cluster_words} words")
 
     # Step 3: Process each cluster with BERTopic
     all_topic_maps, all_noise_chunks, all_topic_models = (
@@ -776,7 +759,7 @@ def redistribute_large_topics(
         Updated topic_map with redistributed chunks.
     """
     if len(topic_map) < 2:
-        print(
+        logger.info(
             f"Cluster {cluster_id}: Only {len(topic_map)} topics, skipping redistribution"
         )
         return topic_map
@@ -795,14 +778,15 @@ def redistribute_large_topics(
     }
 
     if not large_topics:
-        print(
+        logger.info(
             f"Cluster {cluster_id}: No topics exceed {max_topic_percentage*100}% threshold, skipping redistribution"
         )
         return topic_map
 
-    print(
+    logger.info(
         f"Cluster {cluster_id}: Found {len(large_topics)} large topics requiring redistribution"
-    )  # Import necessary libraries for similarity calculation
+    )
+    # Import necessary libraries for similarity calculation
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
     import numpy as np
@@ -851,7 +835,7 @@ def redistribute_large_topics(
         for large_tid, large_chunks in large_topics.items():
             # Calculate how many chunks to redistribute
             excess_chunks = len(large_chunks) - max_chunks_per_topic
-            print(
+            logger.info(
                 f"  Topic {large_tid}: {len(large_chunks)} chunks, redistributing {excess_chunks}"
             )
             # Get vectors for chunks in this large topic
@@ -905,26 +889,26 @@ def redistribute_large_topics(
                 # Add chunk to the most similar topic
                 if best_topic:
                     redistributed_map[best_topic].append(chunk)
-                    print(
+                    logger.debug(
                         f"    Moved chunk to topic {best_topic} (similarity: {best_similarity:.3f})"
                     )
 
         # Print redistribution summary
-        print(f"Cluster {cluster_id} redistribution summary:")
+        logger.info(f"Cluster {cluster_id} redistribution summary:")
         for tid, chunks in redistributed_map.items():
             original_count = len(topic_map[tid])
             new_count = len(chunks)
             change = new_count - original_count
             change_str = f"+{change}" if change > 0 else str(change)
-            print(
-                f"  Topic {tid}: {original_count} → {new_count} chunks ({change_str})"
+            logger.info(
+                f"  Topic {tid}: {original_count} -> {new_count} chunks ({change_str})"
             )
 
         return redistributed_map
 
     except Exception as e:
-        print(f"Cluster {cluster_id}: Error during redistribution: {e}")
-        print("Returning original topic map")
+        logger.error(f"Cluster {cluster_id}: Error during redistribution: {e}")
+        logger.info("Returning original topic map")
         return topic_map
 
 
@@ -995,14 +979,14 @@ def order_topics_chronologically(
         all_topic_maps.keys(), key=lambda tid: topic_min_positions[tid]
     )
 
-    print(f"\n📍 Topic chronological ordering:")
+    logger.info("Topic chronological ordering:")
     for i, tid in enumerate(ordered_topic_ids):
         min_pos = topic_min_positions[tid]
         chunk_count = len(all_topic_maps[tid])
         if min_pos == float("inf"):
-            print(f"  {i+1}. Topic {tid}: No valid positions, {chunk_count} chunks")
+            logger.info(f"  {i+1}. Topic {tid}: No valid positions, {chunk_count} chunks")
         else:
-            print(
+            logger.info(
                 f"  {i+1}. Topic {tid}: Starting at position {min_pos}, {chunk_count} chunks"
             )
 

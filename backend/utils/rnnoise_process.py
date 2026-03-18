@@ -1,4 +1,5 @@
 import os
+import logging
 import subprocess
 import uuid
 import shlex
@@ -6,6 +7,8 @@ from pathlib import Path
 import multiprocessing
 import time
 from typing import List, Tuple
+
+logger = logging.getLogger(__name__)
 
 # Use local model file instead of system path
 # Get the directory where this script is located, then go up one level to backend/
@@ -46,32 +49,33 @@ def cleanup_old_files():
             try:
                 os.remove(file_path)
                 total_size -= size_mb
-                print(f"Cleaned up old file: {file_path}")
+                logger.info(f"Cleaned up old file: {file_path}")
             except Exception as e:
-                print(f"Error cleaning up {file_path}: {e}")
+                logger.warning(f"Error cleaning up {file_path}: {e}")
 
     except Exception as e:
-        print(f"Error during cleanup: {e}")
+        logger.warning(f"Error during cleanup: {e}")
 
 
 def denoise_with_rnnoise(input_path: str) -> str:
     # Verify model file exists
     if not model_path.exists():
-        print(
-            f"Error: RNNoise model file not found at {model_path}. Expected a file with '.rnnn' extension."
+        logger.error(
+            f"RNNoise model file not found at {model_path}. Expected a file with '.rnnn' extension."
         )
-        return ""  # Verify input file exists and is readable
+        return ""
+    # Verify input file exists and is readable
     input_path_obj = Path(input_path)
     if not input_path_obj.exists():
-        print(f"Error: Input file not found at {input_path}")
+        logger.error(f"Input file not found at {input_path}")
         return ""
 
     try:
         with open(input_path, "rb"):
             pass
     except Exception as e:
-        print(
-            f"Error: Input file is not readable or accessible: {input_path}. Exception: {e}"
+        logger.error(
+            f"Input file is not readable or accessible: {input_path}. Exception: {e}"
         )
         return ""
 
@@ -83,10 +87,11 @@ def denoise_with_rnnoise(input_path: str) -> str:
         test_file.touch()
         test_file.unlink()  # Clean up the test file
     except Exception as e:
-        print(
-            f"Error: Cannot create or write to output directory {RNNOISE_OUTPUT_DIR}: {e}"
+        logger.error(
+            f"Cannot create or write to output directory {RNNOISE_OUTPUT_DIR}: {e}"
         )
-        return ""  # Generate output filename
+        return ""
+    # Generate output filename
     base_name = Path(input_path).stem
     run_id = str(uuid.uuid4()).replace(
         "-", ""
@@ -116,8 +121,7 @@ def denoise_with_rnnoise(input_path: str) -> str:
         output_path,
     ]
     # Print command with proper shell escaping for debugging
-    print("Running FFmpeg command:")
-    print(" ".join(shlex.quote(str(arg)) for arg in cmd))
+    logger.debug("Running FFmpeg command: %s", " ".join(shlex.quote(str(arg)) for arg in cmd))
 
     try:
         # Run FFmpeg at normal priority for better compatibility
@@ -128,87 +132,32 @@ def denoise_with_rnnoise(input_path: str) -> str:
             text=True,
         )
 
-        print("FFmpeg stdout:", result.stdout)
-        print("FFmpeg stderr:", result.stderr)
+        logger.debug("FFmpeg stdout: %s", result.stdout)
+        logger.debug("FFmpeg stderr: %s", result.stderr)
 
         # Verify output file was created and has content (atomic check to avoid race conditions)
         try:
             if os.path.getsize(output_path) == 0:
-                print("Error: Output file was created but is empty")
+                logger.error("Output file was created but is empty")
                 return ""
         except FileNotFoundError:
-            print("Error: Output file was not created")
+            logger.error("Output file was not created")
             return ""
         except PermissionError:
-            print("Error: Cannot access output file (permission denied)")
+            logger.error("Cannot access output file (permission denied)")
             return ""  # Clean up old files if needed
         cleanup_old_files()
 
         return output_path
 
     except subprocess.CalledProcessError as e:
-        print("RNNoise processing failed!")
-        print("Return code:", e.returncode)
-        print("Command:", " ".join(shlex.quote(str(arg)) for arg in e.cmd))
-        print("FFmpeg stdout:", e.stdout)
-        print("FFmpeg stderr:", e.stderr)
-
-        # Provide diagnostic information and troubleshooting guidance
-        stderr_lower = e.stderr.lower() if e.stderr else ""
-
-        print("\n--- TROUBLESHOOTING GUIDANCE ---")
-
-        if "not recognized" in stderr_lower or "command not found" in stderr_lower:
-            print("❌ CAUSE: FFmpeg is not installed or not in PATH")
-            print("🔧 SOLUTION:")
-            print("   1. Download FFmpeg from https://ffmpeg.org/download.html")
-            print("   2. Add FFmpeg to your system PATH")
-            print("   3. Restart your terminal/application")
-            print("   4. Test with: ffmpeg -version")
-
-        elif "could not load model" in stderr_lower or "no such file" in stderr_lower:
-            print("❌ CAUSE: RNNoise model file issue")
-            print("🔧 SOLUTION:")
-            print(f"   1. Verify model file exists: {model_path}")
-            print("   2. Check file permissions")
-            print("   3. Re-download the model if corrupted")
-
-        elif "moov atom not found" in stderr_lower or "invalid data" in stderr_lower:
-            print("❌ CAUSE: Audio file is corrupted or unsupported format")
-            print("🔧 SOLUTION:")
-            print("   1. Try a different audio file")
-            print("   2. Supported formats: WAV, MP3, M4A, FLAC")
-            print("   3. Convert file to WAV format first")
-
-        elif "permission denied" in stderr_lower or "access denied" in stderr_lower:
-            print("❌ CAUSE: File permission issue")
-            print("🔧 SOLUTION:")
-            print("   1. Check file is not in use by another application")
-            print("   2. Verify write permissions to output directory")
-            print("   3. Run with administrator privileges if needed")
-
-        elif "no space left" in stderr_lower or "disk full" in stderr_lower:
-            print("❌ CAUSE: Insufficient disk space")
-            print("🔧 SOLUTION:")
-            print("   1. Free up disk space")
-            print("   2. Choose a different output directory")
-            print("   3. Clean up old files in rnnoise_output/")
-
-        else:
-            print("❌ CAUSE: Unknown FFmpeg error")
-            print("🔧 SOLUTION:")
-            print("   1. Check the FFmpeg stderr output above for clues")
-            print("   2. Try with a simpler audio file (short WAV)")
-            print("   3. Verify FFmpeg installation: ffmpeg -version")
-            print("   4. Check system resources (RAM, CPU)")
-
-        print(
-            "📚 For more help, check FFmpeg documentation: https://ffmpeg.org/documentation.html"
+        logger.error(
+            "RNNoise processing failed! Return code: %s, stderr: %s",
+            e.returncode,
+            e.stderr,
         )
-        print("=" * 60)
-
         return ""
 
     except Exception as e:
-        print("Unexpected error:", e)
+        logger.error("Unexpected error: %s", e)
         return ""

@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -8,6 +9,8 @@ from typing import List, Dict, Tuple
 from .openai_client import get_openai_client
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 embedding_model = SentenceTransformer(
     "all-MiniLM-L6-v2",
     device="cpu",
@@ -97,7 +100,7 @@ def generate_cluster_headings(
 
     # Ensure response and content exist
     if not response.choices or not response.choices[0].message.content:
-        print("Warning: GPT response is empty or malformed.")
+        logger.warning("GPT response is empty or malformed.")
         return ([{"concept": "", "heading": "", "summary": ""}], token_count)
 
     raw_content = response.choices[0].message.content.strip()

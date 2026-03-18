@@ -1,9 +1,12 @@
+import logging
 import tiktoken
 from typing import Optional
 from dotenv import load_dotenv
 from .openai_client import get_openai_client
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 client = get_openai_client()
 encoding = tiktoken.encoding_for_model("gpt-4o-mini")
@@ -135,8 +138,8 @@ def expand_bullet_point(
 
             if total_tokens + chunk_tokens > MAX_PROMPT_TOKENS:
                 chunks_omitted = len(topic_chunks) - chunks_added
-                print(
-                    f"[WARNING] Token limit reached. Added {chunks_added}/{len(topic_chunks)} chunks, omitted {chunks_omitted} chunks"
+                logger.warning(
+                    f"Token limit reached. Added {chunks_added}/{len(topic_chunks)} chunks, omitted {chunks_omitted} chunks"
                 )
                 if chunks_omitted > 0:
                     prompt += f"\n[Note: {chunks_omitted} additional chunks were omitted due to token limit constraints]\n\n"
@@ -148,21 +151,21 @@ def expand_bullet_point(
 
         prompt += instructions
 
-        print(
-            f"[EXPAND] Expanding bullet point (Layer {layer}): {bullet_point[:50]}..."
+        logger.info(
+            f"Expanding bullet point (Layer {layer}): {bullet_point[:50]}..."
         )
         if other_bullets and len(other_bullets) > 0:
-            print(
-                f"[CONTEXT] Using {len(other_bullets)} other bullets for anti-duplication context"
+            logger.debug(
+                f"Using {len(other_bullets)} other bullets for anti-duplication context"
             )
-        print(
-            f"[CHUNKS] Using {chunks_added}/{len(topic_chunks)} chunks for context (topic: {topic_heading})"
+        logger.info(
+            f"Using {chunks_added}/{len(topic_chunks)} chunks for context (topic: {topic_heading})"
         )
         if chunks_omitted > 0:
-            print(
-                f"[TOKEN] Token management: {chunks_omitted} chunks omitted to stay within {MAX_PROMPT_TOKENS:,} token limit"
+            logger.info(
+                f"Token management: {chunks_omitted} chunks omitted to stay within {MAX_PROMPT_TOKENS:,} token limit"
             )
-        print(f"[TOKENS] Estimated prompt tokens: {total_tokens:,}")
+        logger.debug(f"Estimated prompt tokens: {total_tokens:,}")
 
         # Log chunk statistics for verification
         if chunks_added > 0:
@@ -170,15 +173,12 @@ def expand_bullet_point(
             used_chunks = topic_chunks[:chunks_added]
             total_words = sum(len(chunk.split()) for chunk in used_chunks)
             avg_words = total_words / len(used_chunks)
-            print(
-                f"[CHUNKS] Chunk statistics: {total_words} total words, avg {avg_words:.1f} words per chunk"
+            logger.debug(
+                f"Chunk statistics: {total_words} total words, avg {avg_words:.1f} words per chunk"
             )
-            print(f"[PREVIEW] First chunk preview: {used_chunks[0][:100]}...")
-            if len(used_chunks) > 1:
-                print(f"[PREVIEW] Last chunk preview: {used_chunks[-1][:100]}...")
         else:
-            print(
-                "[WARNING] Warning: No chunks could be added due to token constraints!"
+            logger.warning(
+                "No chunks could be added due to token constraints!"
             )
 
         # GPT-4o call
@@ -191,13 +191,10 @@ def expand_bullet_point(
 
         # Ensure response and content exist
         if not response.choices or not response.choices[0].message.content:
-            print("Error: GPT-4o response is empty or malformed.")
+            logger.error("GPT-4o response is empty or malformed.")
             return {"error": "GPT-4o response is empty or malformed."}
 
         expanded_content = response.choices[0].message.content.strip()
-
-        # Log the raw response for debugging
-        print(f"[DEBUG] Raw GPT response:\n{expanded_content}\n")
 
         # Parse the bullet points from the response
         expanded_bullets = [
@@ -206,11 +203,8 @@ def expand_bullet_point(
             if point.strip() and point.strip().startswith("-")
         ]
 
-        print(
-            f"[SUCCESS] Successfully expanded bullet point (Layer {layer}) with {len(expanded_bullets)} sub-bullets using {len(topic_chunks)} chunks"
-        )
-        print(
-            f"[BULLETS] Generated sub-bullets: {[bullet[:30] + '...' for bullet in expanded_bullets]}"
+        logger.info(
+            f"Expanded bullet point (Layer {layer}) with {len(expanded_bullets)} sub-bullets"
         )
 
         return {
@@ -222,5 +216,5 @@ def expand_bullet_point(
         }
 
     except Exception as e:
-        print(f"Error expanding bullet point: {e}")
+        logger.error(f"Error expanding bullet point: {e}")
         return {"error": f"Failed to expand bullet point: {str(e)}"}
