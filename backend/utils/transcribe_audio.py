@@ -1,4 +1,5 @@
 import os
+import logging
 import shutil
 import whisper
 import threading
@@ -10,6 +11,8 @@ import torch
 from .clean_text import clean_chunk_text
 from .rnnoise_process import denoise_with_rnnoise
 from .preprocess_audio import preprocess_audio
+
+logger = logging.getLogger(__name__)
 
 TEMP_CHUNKS_DIR = "temp_chunks"
 
@@ -54,18 +57,18 @@ def prepare_audio_for_whisper(audio_path: str) -> Tuple[str, str]:
         RuntimeError: If preprocessing fails
     """
     try:  # Step 1: Denoise with RNNoise
-        print("Step 1/2: Denoising audio with RNNoise...")
+        logger.info("Step 1/2: Denoising audio with RNNoise...")
         denoised_path = denoise_with_rnnoise(audio_path)
         if not os.path.exists(denoised_path):
-            print(
-                "Warning: Denoising failed or returned invalid output, proceeding with original audio"
+            logger.warning(
+                "Denoising failed or returned invalid output, proceeding with original audio"
             )
             denoised_path = audio_path  # Verify we have a valid audio file to work with
         if not os.path.exists(denoised_path):
             raise RuntimeError(f"No valid audio file available: {denoised_path}")
 
         # Step 2: Preprocess for Whisper
-        print("Step 2/2: Preprocessing audio for Whisper...")
+        logger.info("Step 2/2: Preprocessing audio for Whisper...")
         # Create unique filename to prevent race conditions in concurrent processing
         _ensure_temp_dir()  # Ensure directory exists lazily
         unique_id = str(uuid.uuid4()).replace("-", "")[:12]
@@ -98,10 +101,10 @@ def prepare_audio_for_whisper(audio_path: str) -> Tuple[str, str]:
                 )
             elif file_size < min_meaningful_size:
                 # Allow small files but warn - they might still be processable
-                print(
-                    f"Warning: Preprocessed file is small ({file_size} bytes). "
+                logger.warning(
+                    f"Preprocessed file is small ({file_size} bytes). "
                     f"Audio duration may be very short and transcription quality could be affected."
-                )  # Validate it's actually a readable audio file by checking WAV header
+                )
             try:
                 with open(preprocessed_path, "rb") as f:
                     header = f.read(12)
@@ -124,8 +127,8 @@ def prepare_audio_for_whisper(audio_path: str) -> Tuple[str, str]:
                 try:
                     os.remove(preprocessed_path)
                 except Exception as cleanup_error:
-                    print(
-                        f"Warning: Failed to cleanup invalid preprocessed file {preprocessed_path}: {cleanup_error}"
+                    logger.warning(
+                        f"Failed to cleanup invalid preprocessed file {preprocessed_path}: {cleanup_error}"
                     )
             raise RuntimeError(f"Preprocessing failed: {str(e)}")
 
@@ -157,9 +160,9 @@ def transcribe_audio_in_chunks(
     """
     try:
         # Apply the full audio processing pipeline
-        print("Starting audio processing pipeline...")
+        logger.info("Starting audio processing pipeline...")
         processed_path, denoised_path = prepare_audio_for_whisper(audio_path)
-        print("Audio processing completed successfully")
+        logger.info("Audio processing completed successfully")
 
         # Load the processed audio
         audio = AudioSegment.from_file(processed_path)
@@ -168,22 +171,22 @@ def transcribe_audio_in_chunks(
         # Determine best device and compute type
         device = get_device()
         compute_type = get_compute_type(device)
-        print(f"Using device: {device} with compute type: {compute_type}")
+        logger.info(f"Using device: {device} with compute type: {compute_type}")
 
         # Initialize model with optimized settings
-        print(f"Loading Whisper model ({model_size})...")
+        logger.info(f"Loading Whisper model ({model_size})...")
         model = WhisperModel(
             model_size,
             compute_type=compute_type,
             device=device,
             download_root="./models",  # Cache models locally
         )
-        print("Model loaded successfully")
+        logger.info("Model loaded successfully")
 
         total_chunks = (duration_ms + chunk_ms - 1) // chunk_ms
         completed_chunks = 0
         lock = threading.Lock()  # Prepare chunks with overlap for better context
-        print(f"Preparing {total_chunks} chunks for transcription...")
+        logger.info(f"Preparing {total_chunks} chunks for transcription...")
         _ensure_temp_dir()  # Ensure directory exists lazily
         chunk_paths = []
         for i in range(total_chunks):
@@ -195,7 +198,7 @@ def transcribe_audio_in_chunks(
                 chunk_filename, format="wav"
             )  # Export as WAV since it's already processed
             chunk_paths.append((i, chunk_filename))
-        print("Chunk preparation completed")
+        logger.info("Chunk preparation completed")
 
         if progress_callback:
             progress_callback(0, total_chunks)
@@ -222,14 +225,14 @@ def transcribe_audio_in_chunks(
 
                 with lock:
                     completed_chunks += 1
-                    print(
+                    logger.debug(
                         f"Progress: {completed_chunks}/{total_chunks} chunks completed"
                     )
                     if progress_callback:
                         progress_callback(completed_chunks, total_chunks)
                 return idx, cleaned_text
             except Exception as e:
-                print(f"Error in chunk {idx}: {e}")
+                logger.error(f"Error in chunk {idx}: {e}")
                 with lock:
                     failed_chunks.append((idx, chunk_path))
                 return idx, None
@@ -243,7 +246,7 @@ def transcribe_audio_in_chunks(
             max_workers = min(
                 4, cpu_count
             )  # Limit GPU workers to prevent memory issues
-        print(f"Using {max_workers} workers for transcription")
+        logger.info(f"Using {max_workers} workers for transcription")
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -258,8 +261,8 @@ def transcribe_audio_in_chunks(
 
         # Retry failed chunks with more conservative settings
         if failed_chunks:
-            print(
-                f"\nRetrying {len(failed_chunks)} failed chunks with conservative settings..."
+            logger.warning(
+                f"Retrying {len(failed_chunks)} failed chunks with conservative settings..."
             )
             # Reuse the same model but with different settings
             model = WhisperModel(
@@ -279,15 +282,15 @@ def transcribe_audio_in_chunks(
                     raw_text = " ".join(segment.text for segment in segments)
                     cleaned_result = clean_chunk_text(raw_text)
                     transcript_chunks[idx] = cleaned_result["cleaned_text"]
-                    print(f"Successfully retried chunk {idx}")
+                    logger.info(f"Successfully retried chunk {idx}")
                 except Exception as e:
-                    print(f"Failed to retry chunk {idx}: {e}")
+                    logger.error(f"Failed to retry chunk {idx}: {e}")
                     transcript_chunks = [
                         None
                     ] * total_chunks  # Ensure this is a list, not a tuple
 
         # Cleanup
-        print("\nCleaning up temporary files...")
+        logger.info("Cleaning up temporary files...")
         shutil.rmtree(TEMP_CHUNKS_DIR, ignore_errors=True)
 
         # Clean up processed file if it was created
@@ -295,16 +298,16 @@ def transcribe_audio_in_chunks(
             try:
                 os.remove(processed_path)
             except Exception as e:
-                print(f"Warning: Failed to remove processed file {processed_path}: {e}")
+                logger.warning(f"Failed to remove processed file {processed_path}: {e}")
 
         # Join chunks and do final cleanup to handle any cross-chunk issues
-        print("Performing final text cleanup...")
+        logger.info("Performing final text cleanup...")
         if progress_callback:
             # Ensure the frontend gets a final 100% progress update
             progress_callback(total_chunks, total_chunks)
         final_text = " ".join([t or "" for t in transcript_chunks]).strip()
         final_cleaned = clean_chunk_text(final_text)
-        print("Transcription completed successfully")
+        logger.info("Transcription completed successfully")
         return final_cleaned["cleaned_text"], denoised_path
 
     except Exception as e:  # Cleanup on error
@@ -313,7 +316,7 @@ def transcribe_audio_in_chunks(
             try:
                 os.remove(processed_path)
             except Exception as cleanup_error:
-                print(
-                    f"Warning: Failed to cleanup processed file {processed_path}: {cleanup_error}"
+                logger.warning(
+                    f"Failed to cleanup processed file {processed_path}: {cleanup_error}"
                 )
         raise RuntimeError(f"Transcription failed: {str(e)}")

@@ -1,8 +1,11 @@
 import os
+import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Singleton pattern to cache the client instance
 _client_instance = None
@@ -27,7 +30,7 @@ def get_openai_client():
                 "OPENAI_API_KEY is not set in the environment variables."
             )
         _client_instance = OpenAI(api_key=api_key)
-        print("[OpenAI] Client initialized successfully")
+        logger.info("OpenAI client initialized successfully")
 
     return _client_instance
 

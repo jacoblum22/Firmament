@@ -1,10 +1,13 @@
 import re
+import logging
 from typing import List, Tuple
 import nltk
 from nltk.tokenize import sent_tokenize
 from difflib import SequenceMatcher
 import string
 from concurrent.futures import ThreadPoolExecutor
+
+logger = logging.getLogger(__name__)
 
 # Download required NLTK data
 nltk.download("punkt", quiet=True)
@@ -489,7 +492,7 @@ def remove_filler_words(text: str) -> str:
             try:
                 cleaned_sentences = list(executor.map(clean_sentence, sentences))
             except Exception as e:
-                print(f"Error during sentence processing: {e}")
+                logger.error(f"Error during sentence processing: {e}")
                 cleaned_sentences = []
     else:
         cleaned_sentences = [clean_sentence(sentence) for sentence in sentences]
