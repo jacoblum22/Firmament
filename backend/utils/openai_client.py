@@ -12,8 +12,12 @@ _default_client = None
 
 # LLM provider configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # "openai" or "ollama"
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")  # Custom base URL (e.g., http://localhost:11434/v1)
-LLM_DEFAULT_MODEL = os.getenv("LLM_DEFAULT_MODEL", "")  # Override model name for all calls
+LLM_BASE_URL = os.getenv(
+    "LLM_BASE_URL", ""
+)  # Custom base URL (e.g., http://localhost:11434/v1)
+LLM_DEFAULT_MODEL = os.getenv(
+    "LLM_DEFAULT_MODEL", ""
+)  # Override model name for all calls
 
 # Ollama defaults
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
@@ -87,7 +91,8 @@ def get_llm_status() -> dict:
     return {
         "provider": LLM_PROVIDER,
         "base_url": _resolve_base_url() or "https://api.openai.com/v1",
-        "default_model": LLM_DEFAULT_MODEL or ("llama3.1" if LLM_PROVIDER == "ollama" else ""),
+        "default_model": LLM_DEFAULT_MODEL
+        or ("llama3.1" if LLM_PROVIDER == "ollama" else ""),
         "has_server_key": bool(env_key),
         "requires_user_key": LLM_PROVIDER == "openai" and not env_key,
     }

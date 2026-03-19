@@ -42,7 +42,9 @@ def get_stopwords():
         try:
             return stopwords.words("english")
         except LookupError:
-            logger.warning("NLTK stopwords not available, using sklearn's built-in stopwords")
+            logger.warning(
+                "NLTK stopwords not available, using sklearn's built-in stopwords"
+            )
             return "english"
     else:
         return "english"
@@ -80,9 +82,7 @@ def pre_cluster_with_kmeans(
         )
         return [chunks]
 
-    logger.info(
-        f"Performing k-means pre-clustering on {len(chunks)} chunks..."
-    )
+    logger.info(f"Performing k-means pre-clustering on {len(chunks)} chunks...")
     # Extract texts for vectorization
     texts = [chunk["text"] for chunk in chunks]
 
@@ -130,10 +130,14 @@ def pre_cluster_with_kmeans(
             and cluster_1_words >= min_words_per_cluster
         ):
 
-            logger.info("Both clusters meet minimum requirements. Proceeding with split clustering.")
+            logger.info(
+                "Both clusters meet minimum requirements. Proceeding with split clustering."
+            )
             return [cluster_0, cluster_1]
         else:
-            logger.info("One or both clusters don't meet minimum requirements. Using single cluster.")
+            logger.info(
+                "One or both clusters don't meet minimum requirements. Using single cluster."
+            )
             return [chunks]
 
     except Exception as e:
@@ -200,7 +204,9 @@ def process_cluster_with_bertopic(
 
     except ValueError as e:
         if "max_df corresponds to < documents than min_df" in str(e):
-            logger.info(f"Falling back to lenient parameters for cluster {cluster_id}...")
+            logger.info(
+                f"Falling back to lenient parameters for cluster {cluster_id}..."
+            )
             # Fall back to lenient parameters
             vectorizer_model = CountVectorizer(
                 stop_words=stopword_list,
@@ -269,7 +275,9 @@ def _print_initial_statistics(chunks: List[Dict[str, str]]) -> int:
         Total word count across all chunks
     """
     total_words = sum(len(chunk["text"].split()) for chunk in chunks)
-    logger.info(f"Initial stats: {len(chunks)} chunks, {total_words} total words, {total_words/len(chunks):.1f} avg words/chunk")
+    logger.info(
+        f"Initial stats: {len(chunks)} chunks, {total_words} total words, {total_words/len(chunks):.1f} avg words/chunk"
+    )
     return total_words
 
 
@@ -342,7 +350,9 @@ def _print_overall_results(
     total_noise = len(all_noise_chunks)
     total_assigned = sum(len(chunks) for chunks in all_topic_maps.values())
 
-    logger.info(f"Overall Results: {len(clusters)} clusters, {total_topics} topics, {total_noise} noise, {total_assigned} assigned")
+    logger.info(
+        f"Overall Results: {len(clusters)} clusters, {total_topics} topics, {total_noise} noise, {total_assigned} assigned"
+    )
 
     # Print word counts for noise vs topic chunks
     noise_words = sum(len(chunk["text"].split()) for chunk in all_noise_chunks)
@@ -351,7 +361,9 @@ def _print_overall_results(
         for chunks in all_topic_maps.values()
         for chunk in chunks
     )
-    logger.info(f"Words: {noise_words} noise, {topic_words} topic, {noise_words + topic_words} total")
+    logger.info(
+        f"Words: {noise_words} noise, {topic_words} topic, {noise_words + topic_words} total"
+    )
 
     return noise_words, topic_words
 
@@ -642,7 +654,9 @@ def _save_processed_data(
 
 
 def process_with_bertopic(
-    chunks: List[Dict[str, str]], filename: Optional[str] = None, api_key: str | None = None
+    chunks: List[Dict[str, str]],
+    filename: Optional[str] = None,
+    api_key: str | None = None,
 ) -> Dict[str, Any]:
     """
     Process chunks using BERTopic to generate topics and analyze them.
@@ -985,7 +999,9 @@ def order_topics_chronologically(
         min_pos = topic_min_positions[tid]
         chunk_count = len(all_topic_maps[tid])
         if min_pos == float("inf"):
-            logger.info(f"  {i+1}. Topic {tid}: No valid positions, {chunk_count} chunks")
+            logger.info(
+                f"  {i+1}. Topic {tid}: No valid positions, {chunk_count} chunks"
+            )
         else:
             logger.info(
                 f"  {i+1}. Topic {tid}: Starting at position {min_pos}, {chunk_count} chunks"

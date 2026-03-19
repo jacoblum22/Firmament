@@ -165,7 +165,9 @@ def validate_max_age_days(max_age_days: int) -> int:
     return max_age_days
 
 
-def get_llm_api_key(x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key")) -> Optional[str]:
+def get_llm_api_key(
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key")
+) -> Optional[str]:
     """Extract the user-provided OpenAI API key from the request header."""
     return x_openai_key.strip() if x_openai_key else None
 
@@ -1064,7 +1066,9 @@ def process_chunks(data: dict):
 
 
 @router.post("/generate-headings")
-def generate_headings(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
+def generate_headings(
+    data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)
+):
     full_filename = data.get("filename")
     if not full_filename:
         return {"error": "Filename is required."}
@@ -1238,7 +1242,10 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
         return ErrorMessages.get_user_friendly_error(
             "invalid_request",
             "Missing filename or cluster_id",
-            {"operation": "cluster expansion", "required_fields": ["filename", "cluster_id"]}
+            {
+                "operation": "cluster expansion",
+                "required_fields": ["filename", "cluster_id"],
+            },
         )
 
     # Validate and convert cluster_id to int if possible
@@ -1248,7 +1255,11 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
         return ErrorMessages.get_user_friendly_error(
             "invalid_request",
             f"Invalid cluster_id format: {cluster_id}",
-            {"operation": "cluster expansion", "expected_type": "integer", "received_value": str(cluster_id)}
+            {
+                "operation": "cluster expansion",
+                "expected_type": "integer",
+                "received_value": str(cluster_id),
+            },
         )
 
     # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
@@ -1262,7 +1273,9 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
 
 
 @router.post("/expand-bullet-point")
-def expand_bullet_point_endpoint(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
+def expand_bullet_point_endpoint(
+    data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)
+):
     """
     Expand a bullet point with additional detail and context.
 
@@ -1301,7 +1314,11 @@ def expand_bullet_point_endpoint(data: dict, user_api_key: Optional[str] = Depen
         from utils.expand_bullet_point import expand_bullet_point
 
         result = expand_bullet_point(
-            bullet_point, chunks, topic_heading, layer, other_bullets,
+            bullet_point,
+            chunks,
+            topic_heading,
+            layer,
+            other_bullets,
             api_key=user_api_key,
         )
         logger.info("Expansion completed successfully")
@@ -1368,6 +1385,7 @@ def expand_bullet_point_endpoint(data: dict, user_api_key: Optional[str] = Depen
 def llm_status():
     """Return LLM provider configuration and whether a user key is needed."""
     from utils.openai_client import get_llm_status
+
     return get_llm_status()
 
 

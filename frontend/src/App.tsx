@@ -695,6 +695,12 @@ function App() {
               subExpansions: {}
             };
           }
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error("Failed to expand sub-bullet point:", error);
+    }
   };
 
   // Function to generate a consistent bullet key (must match backend logic)
