@@ -38,7 +38,8 @@ export const SettingsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> =
   };
 
   const providerLabel = llmStatus?.provider === 'ollama' ? 'Ollama (Local)' : 'OpenAI';
-  const needsKey = llmStatus?.requires_user_key ?? true;
+  const serverHasKey = llmStatus?.has_server_key ?? false;
+  const storedKey = localStorage.getItem(STORAGE_KEY);
 
   return (
     <AnimatePresence>
@@ -82,7 +83,7 @@ export const SettingsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> =
                 borderRadius: '8px',
               }}>
                 <div>Provider: <span style={{ color: '#f59e0b' }}>{providerLabel}</span></div>
-                {llmStatus.has_server_key && (
+                {serverHasKey && (
                   <div style={{ marginTop: '4px', color: 'rgba(34, 197, 94, 0.9)' }}>
                     Server has a default API key configured
                   </div>
@@ -90,77 +91,71 @@ export const SettingsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> =
               </div>
             )}
 
-            {needsKey && (
-              <>
-                <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '6px' }}>
-                  OpenAI API Key
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
+            <label style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '6px' }}>
+              {serverHasKey ? 'Override API Key (optional)' : 'OpenAI API Key'}
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={serverHasKey ? 'Leave blank to use server key' : 'sk-...'}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: '13px',
+                background: 'rgba(255,255,255,0.08)',
+                border: `1px solid ${storedKey ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                borderRadius: '8px',
+                color: '#fff',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+              {storedKey
+                ? 'Browser key active — overrides server key. Sent only with AI requests, never stored on server.'
+                : 'Stored in your browser only. Sent with AI requests — never stored on the server.'}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSave}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                }}
+              >
+                {saved ? 'Saved!' : 'Save'}
+              </motion.button>
+              {storedKey && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleClear}
                   style={{
-                    width: '100%',
                     padding: '8px 12px',
                     fontSize: '13px',
+                    fontWeight: 600,
                     background: 'rgba(255,255,255,0.08)',
+                    color: 'rgba(255,255,255,0.7)',
                     border: '1px solid rgba(255,255,255,0.15)',
                     borderRadius: '8px',
-                    color: '#fff',
-                    outline: 'none',
-                    boxSizing: 'border-box',
+                    cursor: 'pointer',
                   }}
-                />
-                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
-                  Stored in your browser. Sent only with AI requests — never stored on the server.
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleSave}
-                    style={{
-                      flex: 1,
-                      padding: '8px',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {saved ? 'Saved!' : 'Save'}
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleClear}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      background: 'rgba(255,255,255,0.08)',
-                      color: 'rgba(255,255,255,0.7)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Clear
-                  </motion.button>
-                </div>
-              </>
-            )}
-
-            {!needsKey && (
-              <div style={{ fontSize: '12px', color: 'rgba(34, 197, 94, 0.9)' }}>
-                No API key needed — {providerLabel} is configured on the server.
-              </div>
-            )}
+                >
+                  Clear
+                </motion.button>
+              )}
+            </div>
           </motion.div>
         </>
       )}
