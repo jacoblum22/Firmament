@@ -37,6 +37,7 @@ export const AuthHeader: React.FC = () => {
                 cursor: 'pointer',
                 color: 'rgba(255,255,255,0.7)',
                 transition: 'all 0.2s',
+                padding: 0,
               }}
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">

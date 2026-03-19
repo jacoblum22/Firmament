@@ -113,7 +113,7 @@ export const SettingsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> =
                   }}
                 />
                 <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
-                  Stored locally in your browser. Never sent to our server.
+                  Stored in your browser. Sent only with AI requests — never stored on the server.
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
