@@ -121,7 +121,9 @@ def denoise_with_rnnoise(input_path: str) -> str:
         output_path,
     ]
     # Print command with proper shell escaping for debugging
-    logger.debug("Running FFmpeg command: %s", " ".join(shlex.quote(str(arg)) for arg in cmd))
+    logger.debug(
+        "Running FFmpeg command: %s", " ".join(shlex.quote(str(arg)) for arg in cmd)
+    )
 
     try:
         # Run FFmpeg at normal priority for better compatibility

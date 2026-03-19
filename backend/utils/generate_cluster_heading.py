@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 from typing import List, Dict, Tuple
-from .openai_client import get_openai_client
+from .openai_client import get_openai_client, get_default_model
 
 load_dotenv()
 
@@ -18,11 +18,10 @@ embedding_model = SentenceTransformer(
 )
 encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 
-client = get_openai_client()
-
 
 def generate_cluster_headings(
     clusters: List[List[str]],
+    api_key: str | None = None,
 ) -> Tuple[List[Dict[str, str]], int]:
     """
     Generate headings for multiple clusters in a single prompt to ensure global context and cohesion.
@@ -91,8 +90,9 @@ def generate_cluster_headings(
     token_count = len(encoding.encode(prompt))
 
     # GPT call
+    client = get_openai_client(api_key)
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=get_default_model("gpt-4o-mini"),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=1000,  # Increased to accommodate longer responses for multiple headings

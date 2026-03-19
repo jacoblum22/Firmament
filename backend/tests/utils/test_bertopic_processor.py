@@ -220,6 +220,7 @@ try:
         get_stopwords,
         redistribute_large_topics,
     )
+
     _NEW_FEATURES_AVAILABLE = BERTOPIC_AVAILABLE
 except ImportError:
     _NEW_FEATURES_AVAILABLE = False

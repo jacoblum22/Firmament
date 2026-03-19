@@ -7,35 +7,93 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Singleton pattern to cache the client instance
-_client_instance = None
+# Default singleton client (used when no per-request key is provided)
+_default_client = None
+
+# LLM provider configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()  # "openai" or "ollama"
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")  # Custom base URL (e.g., http://localhost:11434/v1)
+LLM_DEFAULT_MODEL = os.getenv("LLM_DEFAULT_MODEL", "")  # Override model name for all calls
+
+# Ollama defaults
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 
 
-def get_openai_client():
+def _resolve_base_url() -> str | None:
+    """Determine the base URL based on provider config."""
+    if LLM_BASE_URL:
+        return LLM_BASE_URL
+    if LLM_PROVIDER == "ollama":
+        return OLLAMA_BASE_URL
+    return None  # Use OpenAI default
+
+
+def get_openai_client(api_key: str | None = None) -> OpenAI:
     """
-    Initialize and return the OpenAI client using singleton pattern.
+    Get an OpenAI-compatible client.
+
+    Args:
+        api_key: Optional API key from user request. If provided, creates a
+                 fresh client with this key (not cached). If None, uses the
+                 server-configured default.
 
     Returns:
-        OpenAI: The OpenAI client instance
+        OpenAI client instance
 
     Raises:
-        EnvironmentError: If OPENAI_API_KEY is not set in environment variables
+        EnvironmentError: If no API key is available (for OpenAI provider)
     """
-    global _client_instance
+    base_url = _resolve_base_url()
 
-    if _client_instance is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
+    # Per-request client with user-provided key
+    if api_key:
+        return OpenAI(api_key=api_key, base_url=base_url)
+
+    # Ollama doesn't need an API key
+    if LLM_PROVIDER == "ollama":
+        return OpenAI(api_key="ollama", base_url=base_url)
+
+    # Default singleton client
+    global _default_client
+    if _default_client is None:
+        env_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not env_key:
             raise EnvironmentError(
-                "OPENAI_API_KEY is not set in the environment variables."
+                "No API key available. Either set OPENAI_API_KEY in the server "
+                "environment, or pass your API key via the X-OpenAI-Key header."
             )
-        _client_instance = OpenAI(api_key=api_key)
-        logger.info("OpenAI client initialized successfully")
+        _default_client = OpenAI(api_key=env_key, base_url=base_url)
+        logger.info("Default OpenAI client initialized")
 
-    return _client_instance
+    return _default_client
+
+
+def get_default_model(intended_model: str) -> str:
+    """Return the model to use, respecting LLM_DEFAULT_MODEL override.
+
+    For Ollama, defaults to 'llama3.1' if no override is set.
+    For OpenAI, uses the intended model from the calling code.
+    """
+    if LLM_DEFAULT_MODEL:
+        return LLM_DEFAULT_MODEL
+    if LLM_PROVIDER == "ollama":
+        return "llama3.1"
+    return intended_model
+
+
+def get_llm_status() -> dict:
+    """Return current LLM provider configuration status."""
+    env_key = os.getenv("OPENAI_API_KEY", "").strip()
+    return {
+        "provider": LLM_PROVIDER,
+        "base_url": _resolve_base_url() or "https://api.openai.com/v1",
+        "default_model": LLM_DEFAULT_MODEL or ("llama3.1" if LLM_PROVIDER == "ollama" else ""),
+        "has_server_key": bool(env_key),
+        "requires_user_key": LLM_PROVIDER == "openai" and not env_key,
+    }
 
 
 def reset_client():
     """Reset the client instance (useful for testing or re-initialization)."""
-    global _client_instance
-    _client_instance = None
+    global _default_client
+    _default_client = None

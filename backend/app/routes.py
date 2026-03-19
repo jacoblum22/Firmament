@@ -165,6 +165,11 @@ def validate_max_age_days(max_age_days: int) -> int:
     return max_age_days
 
 
+def get_llm_api_key(x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key")) -> Optional[str]:
+    """Extract the user-provided OpenAI API key from the request header."""
+    return x_openai_key.strip() if x_openai_key else None
+
+
 router = APIRouter()
 
 
@@ -351,7 +356,9 @@ async def upload_file(
     user_id = None
     if current_user:
         user_id = current_user["user_id"]
-        logger.info(f"[{job_id[:8]}] Authenticated upload for user: {current_user['email']}")
+        logger.info(
+            f"[{job_id[:8]}] Authenticated upload for user: {current_user['email']}"
+        )
     elif settings.is_production:
         raise HTTPException(
             status_code=401,
@@ -360,7 +367,9 @@ async def upload_file(
     else:
         logger.info(f"[{job_id[:8]}] Anonymous upload (development mode)")
 
-    logger.info(f"[{job_id[:8]}] Upload: {file.filename}, Content-Type: {file.content_type}, Size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    logger.info(
+        f"[{job_id[:8]}] Upload: {file.filename}, Content-Type: {file.content_type}, Size: {file.size if hasattr(file, 'size') else 'unknown'}"
+    )
 
     # Read file content NOW, while request is active
     try:
@@ -380,7 +389,9 @@ async def upload_file(
         # Comprehensive file validation
         logger.info(f"[{job_id[:8]}] Starting file validation...")
         extension, safe_filename = FileValidator.validate_upload(file_bytes, filename)
-        logger.info(f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}")
+        logger.info(
+            f"[{job_id[:8]}] File validation passed: {extension}, {safe_filename}"
+        )
     except FileValidationError as e:
         logger.warning(f"[{job_id[:8]}] File validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -537,7 +548,9 @@ async def upload_file(
                 clusters = processed_data.get("clusters", [])
                 meta = processed_data.get("meta", {})
 
-                logger.info(f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}")
+                logger.info(
+                    f"[{job_id[:8]}] Loaded legacy cached JSON: {processed_path}"
+                )
                 logger.info(
                     f"[{job_id[:8]}] Segments: {len(segments)}, Clusters: {len(clusters)}"
                 )
@@ -850,7 +863,9 @@ async def upload_file(
                         temp_manager.cleanup_file(
                             temp_file_path, f"{job_id}_{content_hash}"
                         )
-                        logger.info(f"[{job_id[:8]}] Cleaned up temporary storage on error")
+                        logger.info(
+                            f"[{job_id[:8]}] Cleaned up temporary storage on error"
+                        )
             except Exception as cleanup_error:
                 logger.warning(
                     f"[{job_id[:8]}] Failed to cleanup temporary storage on error: {cleanup_error}"
@@ -870,7 +885,9 @@ async def upload_file(
             try:
                 if "file_location" in locals() and os.path.exists(file_location):
                     os.remove(file_location)
-                    logger.info(f"[{job_id[:8]}] Cleaned up temporary file: {file_location}")
+                    logger.info(
+                        f"[{job_id[:8]}] Cleaned up temporary file: {file_location}"
+                    )
             except Exception as cleanup_error:
                 logger.warning(
                     f"[{job_id[:8]}] Failed to cleanup temporary file: {cleanup_error}"
@@ -941,7 +958,7 @@ def get_bertopic_processor():
         return process_with_bertopic
     except ImportError:
 
-        def process_with_bertopic(chunks, filename=None):
+        def process_with_bertopic(chunks, filename=None, api_key=None):
             return {
                 "topics": {},
                 "num_chunks": len(chunks),
@@ -953,7 +970,7 @@ def get_bertopic_processor():
 
 
 @router.post("/test-bertopic")
-def test_bertopic(data: dict):
+def test_bertopic(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
     text = data.get("text", "")
     full_filename = data.get("filename") or "default"  # Get filename from request
     filename = os.path.splitext(full_filename)[
@@ -973,7 +990,7 @@ def test_bertopic(data: dict):
     )
 
     # Step 2: Process with BERTopic
-    result = process_with_bertopic(chunks, filename)
+    result = process_with_bertopic(chunks, filename, api_key=user_api_key)
 
     # Convert result to match frontend expectations
     return {
@@ -1047,7 +1064,7 @@ def process_chunks(data: dict):
 
 
 @router.post("/generate-headings")
-def generate_headings(data: dict):
+def generate_headings(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
     full_filename = data.get("filename")
     if not full_filename:
         return {"error": "Filename is required."}
@@ -1075,7 +1092,7 @@ def generate_headings(data: dict):
 
     # Run BERTopic
     process_with_bertopic = get_bertopic_processor()
-    result = process_with_bertopic(chunks, filename)
+    result = process_with_bertopic(chunks, filename, api_key=user_api_key)
 
     # Save full result to legacy format
     processed_path = os.path.join("processed", f"{filename}_processed.json")
@@ -1207,16 +1224,13 @@ def generate_headings(data: dict):
 
 
 @router.post("/expand-cluster")
-def expand_cluster(data: dict):
+def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
     """
-    Expand a specific cluster in the processed file for the given filename and cluster ID.
+    Expand a specific cluster by generating bullet points for it.
 
-    Args:
-        data (dict): A dictionary containing 'filename' (str) and 'cluster_id' (str or int).
-
-    Returns:
-        dict:
-            On success, returns a dictionary with expanded cluster information, e.g.:
+    Expects JSON body with 'filename' (str) and 'cluster_id' (str or int).
+    Returns expanded cluster information or an error dict.
+    """
     full_filename = data.get("filename")
     cluster_id = data.get("cluster_id")
 
@@ -1243,29 +1257,12 @@ def expand_cluster(data: dict):
     from utils.expand_cluster import expand_cluster as expand_cluster_util
 
     # Pass only the filename (not the full path) to expand_cluster
-    result = expand_cluster_util(processed_filename, cluster_id)
-    return result
-        - Processed file not found or invalid.
-        - Cluster ID not found in the processed data.
-    """
-    full_filename = data.get("filename")
-    cluster_id = data.get("cluster_id")
-
-    if full_filename is None or cluster_id is None:
-        return {"error": "Filename and cluster ID are required."}
-
-    # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
-    processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
-
-    from utils.expand_cluster import expand_cluster as expand_cluster_util
-
-    # Pass only the filename (not the full path) to expand_cluster
-    result = expand_cluster_util(processed_filename, cluster_id)
+    result = expand_cluster_util(processed_filename, cluster_id, api_key=user_api_key)
     return result
 
 
 @router.post("/expand-bullet-point")
-def expand_bullet_point_endpoint(data: dict):
+def expand_bullet_point_endpoint(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
     """
     Expand a bullet point with additional detail and context.
 
@@ -1304,7 +1301,8 @@ def expand_bullet_point_endpoint(data: dict):
         from utils.expand_bullet_point import expand_bullet_point
 
         result = expand_bullet_point(
-            bullet_point, chunks, topic_heading, layer, other_bullets
+            bullet_point, chunks, topic_heading, layer, other_bullets,
+            api_key=user_api_key,
         )
         logger.info("Expansion completed successfully")
 
@@ -1364,6 +1362,13 @@ def expand_bullet_point_endpoint(data: dict):
         error_msg = f"Failed to expand bullet point: {str(e)}"
         logger.error(error_msg)
         return {"error": error_msg}
+
+
+@router.get("/llm/status")
+def llm_status():
+    """Return LLM provider configuration and whether a user key is needed."""
+    from utils.openai_client import get_llm_status
+    return get_llm_status()
 
 
 # Optional cleanup management endpoints (disabled by default for security)

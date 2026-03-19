@@ -600,7 +600,9 @@ class Settings:
                     f"Error processing UPLOAD_ALLOWED_EXTENSIONS: {e}"
                 )
             else:
-                logger.error(f"️ Warning: Error processing extensions: {e}. Using defaults.")
+                logger.error(
+                    f"️ Warning: Error processing extensions: {e}. Using defaults."
+                )
                 return ["pdf", "mp3", "wav", "txt", "m4a"]
 
     @property
@@ -746,42 +748,39 @@ class Settings:
     def log_file(self) -> Optional[str]:
         return os.getenv("LOG_FILE")
 
-    # OpenAI Configuration
+    # LLM Configuration
+    @property
+    def llm_provider(self) -> str:
+        """LLM provider: 'openai' or 'ollama'"""
+        return os.getenv("LLM_PROVIDER", "openai").lower()
+
     @property
     def openai_api_key(self) -> str:
         api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
-        # In production, OpenAI API key is required
-        if self.is_production and not api_key:
-            raise ConfigurationError(
-                "OPENAI_API_KEY is required in production environment. "
-                "Please set the OPENAI_API_KEY environment variable."
-            )
+        # With BYOK, the server key is optional — users can provide their own
+        if self.llm_provider == "ollama":
+            return ""  # Ollama doesn't need an OpenAI key
 
-        # In development, warn if missing but don't fail
-        if self.is_development and not api_key:
-            logger.warning(
-                "️ Warning: OPENAI_API_KEY is not set. OpenAI features will not work."
+        # In production without BYOK fallback, warn but don't fail
+        # Users can still provide keys via X-OpenAI-Key header
+        if not api_key:
+            logger.info(
+                "OPENAI_API_KEY is not set. Users must provide their own key via X-OpenAI-Key header."
             )
             return ""
 
         # Validate API key format only if key is provided
-        if api_key and len(api_key) > 0:
-            if not api_key.startswith("sk-"):
-                if self.is_production:
-                    raise ConfigurationError(
-                        "Invalid OPENAI_API_KEY format. OpenAI API keys should start with 'sk-'."
-                    )
-                else:
-                    logger.warning(
-                        "️ Warning: OPENAI_API_KEY does not appear to be in the correct format."
-                    )
+        if api_key and not api_key.startswith("sk-"):
+            logger.warning(
+                "OPENAI_API_KEY does not appear to be in the correct format (expected 'sk-' prefix)."
+            )
 
         return api_key
 
     @property
     def openai_model(self) -> str:
-        return os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        return os.getenv("LLM_DEFAULT_MODEL", os.getenv("OPENAI_MODEL", ""))
 
     @property
     def openai_max_tokens(self) -> int:
@@ -1068,7 +1067,9 @@ class Settings:
                 error_message += "\n   • Ensure all CHANGE_ME_ values are replaced with secure values"
             raise ConfigurationError(error_message)
 
-        logger.info(f"Configuration validation passed for {self.environment} environment")
+        logger.info(
+            f"Configuration validation passed for {self.environment} environment"
+        )
 
     def get_config_summary(self) -> dict:
         """Get a summary of current configuration (safe for logging)"""

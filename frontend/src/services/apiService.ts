@@ -128,6 +128,13 @@ export interface ExpandClusterRequest {
   cluster_id: string | number;
 }
 
+export interface LlmStatus {
+  provider: string;
+  has_server_key: boolean;
+  requires_user_key: boolean;
+  base_url: string;
+}
+
 class ApiService {
   private static instance: ApiService;
   private networkUtils: NetworkUtils;
@@ -193,6 +200,23 @@ class ApiService {
         headers: {
           ...options.headers,
           'Authorization': `Bearer ${token}`,
+        },
+      };
+    }
+    return options;
+  }
+
+  /**
+   * Add LLM API key header if one is stored in localStorage
+   */
+  private addLlmKeyHeader(options: RequestInit = {}): RequestInit {
+    const key = localStorage.getItem('firmament_openai_key');
+    if (key) {
+      return {
+        ...options,
+        headers: {
+          ...options.headers,
+          'X-OpenAI-Key': key,
         },
       };
     }
@@ -323,10 +347,10 @@ class ApiService {
    */
   public async generateHeadings(filename: string): Promise<TopicResponse> {
     try {
-      const response = await this.enhancedFetch('generate-headings', {
+      const response = await this.enhancedFetch('generate-headings', this.addLlmKeyHeader({
         method: 'POST',
         body: JSON.stringify({ filename }),
-      }, { timeout: 300000, maxRetries: 1 });
+      }), { timeout: 300000, maxRetries: 1 });
 
       return this.handleResponse<TopicResponse>(response);
     } catch (error) {
@@ -343,10 +367,10 @@ class ApiService {
    */
   public async expandCluster(data: ExpandClusterRequest): Promise<ExpandClusterResponse> {
     try {
-      const response = await this.enhancedFetch('expand-cluster', {
+      const response = await this.enhancedFetch('expand-cluster', this.addLlmKeyHeader({
         method: 'POST',
         body: JSON.stringify(data),
-      });
+      }));
 
       return this.handleResponse<ExpandClusterResponse>(response);
     } catch (error) {
@@ -363,10 +387,10 @@ class ApiService {
    */
   public async expandBulletPoint(data: BulletPointData): Promise<BulletPointExpandResponse> {
     try {
-      const response = await this.enhancedFetch('expand-bullet-point', {
+      const response = await this.enhancedFetch('expand-bullet-point', this.addLlmKeyHeader({
         method: 'POST',
         body: JSON.stringify(data),
-      });
+      }));
 
       return this.handleResponse<BulletPointExpandResponse>(response);
     } catch (error) {
@@ -438,6 +462,14 @@ class ApiService {
    */
   public getNetworkStatus() {
     return this.networkUtils.getHealthStatus();
+  }
+
+  /**
+   * Get LLM provider status
+   */
+  public async getLlmStatus(): Promise<LlmStatus> {
+    const response = await this.enhancedFetch('llm/status', { method: 'GET' });
+    return this.handleResponse<LlmStatus>(response);
   }
 }
 

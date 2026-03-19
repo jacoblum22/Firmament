@@ -2,13 +2,12 @@ import logging
 import tiktoken
 from typing import Optional
 from dotenv import load_dotenv
-from .openai_client import get_openai_client
+from .openai_client import get_openai_client, get_default_model
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-client = get_openai_client()
 encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 
 
@@ -18,6 +17,7 @@ def expand_bullet_point(
     topic_heading: str,
     layer: int = 1,
     other_bullets: Optional[list] = None,
+    api_key: str | None = None,
 ) -> dict:
     """
     Expand a single bullet point by providing more detailed information based on the topic chunks.
@@ -151,9 +151,7 @@ def expand_bullet_point(
 
         prompt += instructions
 
-        logger.info(
-            f"Expanding bullet point (Layer {layer}): {bullet_point[:50]}..."
-        )
+        logger.info(f"Expanding bullet point (Layer {layer}): {bullet_point[:50]}...")
         if other_bullets and len(other_bullets) > 0:
             logger.debug(
                 f"Using {len(other_bullets)} other bullets for anti-duplication context"
@@ -177,13 +175,12 @@ def expand_bullet_point(
                 f"Chunk statistics: {total_words} total words, avg {avg_words:.1f} words per chunk"
             )
         else:
-            logger.warning(
-                "No chunks could be added due to token constraints!"
-            )
+            logger.warning("No chunks could be added due to token constraints!")
 
-        # GPT-4o call
+        # GPT call
+        client = get_openai_client(api_key)
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using mini for faster/cheaper expansion
+            model=get_default_model("gpt-4o-mini"),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=300,  # Reasonable limit for expansion

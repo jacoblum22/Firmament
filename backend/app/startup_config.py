@@ -160,7 +160,9 @@ def configure_torch_for_startup():
         try:
             max_threads = int(os.getenv("TORCH_NUM_THREADS", "4"))
             if max_threads < 1:
-                logger.warning(f"Warning: TORCH_NUM_THREADS must be positive, using default 4")
+                logger.warning(
+                    f"Warning: TORCH_NUM_THREADS must be positive, using default 4"
+                )
                 max_threads = 4
         except ValueError:
             logger.warning(f"Warning: Invalid TORCH_NUM_THREADS value, using default 4")

@@ -2,16 +2,14 @@ import json
 import logging
 import os
 from dotenv import load_dotenv
-from .openai_client import get_openai_client
+from .openai_client import get_openai_client, get_default_model
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-client = get_openai_client()
 
-
-def expand_cluster(filename: str, cluster_id: str) -> dict:
+def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None) -> dict:
     """
     Expand a cluster by generating a bullet point list of important points.
 
@@ -28,9 +26,7 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
     """
     processed_file = os.path.join("processed", filename)
 
-    logger.info(
-        f"Expanding cluster: filename={filename}, cluster_id={cluster_id}"
-    )
+    logger.info(f"Expanding cluster: filename={filename}, cluster_id={cluster_id}")
 
     if not os.path.exists(processed_file):
         logger.error(f"File {filename} not found in processed folder.")
@@ -98,9 +94,10 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
 
     logger.debug(f"Generated GPT-4 prompt length: {len(prompt)} chars")
 
-    # GPT-4o call
+    # GPT call
+    client = get_openai_client(api_key)
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=get_default_model("gpt-4o"),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=500,  # Adjust as needed for bullet points
@@ -118,7 +115,9 @@ def expand_cluster(filename: str, cluster_id: str) -> dict:
         point.strip() for point in raw_bullet_points.split("\n") if point.strip()
     ]
 
-    logger.info(f"Generated {len(bullet_points)} bullet points for cluster {cluster_id}")
+    logger.info(
+        f"Generated {len(bullet_points)} bullet points for cluster {cluster_id}"
+    )
 
     # Update cluster metadata
     cluster["bullet_points"] = bullet_points
