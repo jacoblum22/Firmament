@@ -1,0 +1,72 @@
+# Development & IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Version control
+.git/
+.github/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+pyrightconfig.json
+pytest.ini
+
+# Node
+node_modules/
+frontend/node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+package-lock.json
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Documentation & screenshots (not needed at runtime)
+docs/
+*.md
+LICENSE
+
+# Test data & scripts
+test-data/
+scripts/
+backend/tests/
+
+# Generated artifacts & runtime data
+cache/
+backend/cache/
+backend/models/
+backend/output/
+backend/uploads/
+backend/processed/
+backend/temp_chunks/
+backend/rnnoise_output/
+
+# Large media files
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flac
+*.aac
+*.png
+
+# OS
+.DS_Store
+Thumbs.db
