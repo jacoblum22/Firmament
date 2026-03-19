@@ -499,6 +499,7 @@ async def upload_file(
                     stage="done",
                     result={
                         "filename": file.filename,
+                        "processing_id": content_hash,
                         "filetype": ext,
                         "text": full_text.strip(),
                         "message": "File processed successfully from cache.",
@@ -535,14 +536,22 @@ async def upload_file(
                 # No cache found, need to transcribe/extract text
                 logger.info(f"[{job_id[:8]}] No cache found, processing file...")
 
-            # Define paths for legacy compatibility
-            base_name = (file.filename or "uploaded_file").rsplit(".", 1)[0]
-            output_filename = f"{base_name}_transcription.txt"
+            # Define paths using content_hash to prevent filename collisions between users
+            base_name = (file.filename or "uploaded_file").rsplit(".", 1)[0]  # kept for SecureTempFile prefix
+            output_filename = f"{content_hash}_transcription.txt"
             output_file_location = os.path.join(OUTPUT_DIR, output_filename)
-            processed_path = os.path.join("processed", f"{base_name}_processed.json")
+            # Primary: content-hash-based path (collision-safe)
+            processed_path = os.path.join("processed", f"{content_hash}_processed.json")
+            # Legacy fallback: original filename-based path (for existing local dev files)
+            legacy_processed_path = os.path.join("processed", f"{base_name}_processed.json")
 
-            # Check for legacy filename-based cache if no content cache exists
-            if not cached_transcription and os.path.exists(processed_path):
+            # Check for processed data — prefer hash-based, fall back to legacy filename-based
+            _resolved_processed_path = (
+                processed_path if os.path.exists(processed_path)
+                else legacy_processed_path
+            )
+            if not cached_transcription and os.path.exists(_resolved_processed_path):
+                processed_path = _resolved_processed_path  # use whichever was found
                 with open(processed_path, "r", encoding="utf-8") as f:
                     processed_data = json.load(f)
 
@@ -608,6 +617,7 @@ async def upload_file(
                     stage="done",
                     result={
                         "filename": file.filename,
+                        "processing_id": content_hash,
                         "filetype": ext,
                         "text": full_text.strip(),
                         "message": "Using previously generated topics.",
@@ -635,6 +645,7 @@ async def upload_file(
                     stage="done",
                     result={
                         "filename": file.filename,
+                        "processing_id": content_hash,
                         "filetype": ext,
                         "text": existing_text,
                         "message": "Transcription file already exists. Skipping processing.",
@@ -791,7 +802,7 @@ async def upload_file(
                     return
 
             # Save metadata (avoid storing raw file path in metadata for security)
-            metadata_file = os.path.join(OUTPUT_DIR, f"{base_name}_metadata.json")
+            metadata_file = os.path.join(OUTPUT_DIR, f"{content_hash}_metadata.json")
             metadata = {
                 "content_hash": content_hash,
                 "original_filename": filename,
@@ -839,6 +850,7 @@ async def upload_file(
                 stage="done",
                 result={
                     "filename": file.filename,
+                    "processing_id": content_hash,
                     "filetype": ext,
                     "text": text.strip(),
                     "message": f"{ext.upper()} file processed successfully.",
@@ -1007,7 +1019,9 @@ def test_bertopic(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_
 def process_chunks(data: dict):
     text = data.get("text", "")
     full_filename = data.get("filename", "default")
-    filename = os.path.splitext(full_filename)[0]  # Step 1: Chunking pipeline
+    # Prefer processing_id (content hash) over original filename to avoid collisions
+    processing_id = data.get("processing_id")
+    filename = processing_id or os.path.splitext(full_filename)[0]
 
     # Use lazy-loaded functions
     semantic_segment = get_semantic_segment()
@@ -1070,9 +1084,10 @@ def generate_headings(
     data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)
 ):
     full_filename = data.get("filename")
-    if not full_filename:
-        return {"error": "Filename is required."}
-    filename = os.path.splitext(full_filename)[0]
+    processing_id = data.get("processing_id")
+    if not full_filename and not processing_id:
+        return {"error": "Filename or processing_id is required."}
+    filename = processing_id or os.path.splitext(full_filename)[0]
 
     chunk_file = os.path.join("processed", f"{filename}_chunks.json")
     processed_file = os.path.join("processed", f"{filename}_processed.json")
@@ -1238,13 +1253,13 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
     full_filename = data.get("filename")
     cluster_id = data.get("cluster_id")
 
-    if full_filename is None or cluster_id is None:
+    if (full_filename is None and data.get("processing_id") is None) or cluster_id is None:
         return ErrorMessages.get_user_friendly_error(
             "invalid_request",
-            "Missing filename or cluster_id",
+            "Missing filename/processing_id or cluster_id",
             {
                 "operation": "cluster expansion",
-                "required_fields": ["filename", "cluster_id"],
+                "required_fields": ["filename or processing_id", "cluster_id"],
             },
         )
 
@@ -1263,7 +1278,9 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
         )
 
     # Prepare the filename relative to the 'processed' folder as expected by expand_cluster
-    processed_filename = os.path.splitext(full_filename)[0] + "_processed.json"
+    processing_id = data.get("processing_id")
+    base = processing_id or os.path.splitext(full_filename)[0]
+    processed_filename = base + "_processed.json"
 
     from utils.expand_cluster import expand_cluster as expand_cluster_util
 
@@ -1296,6 +1313,7 @@ def expand_bullet_point_endpoint(
     chunks = data.get("chunks", [])
     topic_heading = data.get("topic_heading", "Unknown Topic")
     filename = data.get("filename")
+    processing_id = data.get("processing_id")
     topic_id = data.get("topic_id")
     layer = data.get("layer", 1)  # Default to layer 1 if not specified
     other_bullets = data.get("other_bullets", [])  # Get other bullets in the topic
@@ -1324,11 +1342,11 @@ def expand_bullet_point_endpoint(
         logger.info("Expansion completed successfully")
 
         # Save the expansion to the processed JSON file
-        if filename and topic_id and not result.get("error"):
+        if (filename or processing_id) and topic_id and not result.get("error"):
             try:
                 from utils.save_bullet_expansion import save_bullet_expansion
 
-                base_name = os.path.splitext(filename)[0]
+                base_name = processing_id or os.path.splitext(filename)[0]
                 processed_file = os.path.join(
                     "processed", f"{base_name}_processed.json"
                 )

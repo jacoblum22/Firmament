@@ -302,7 +302,7 @@ function App() {
 
     setError(null);
     try {
-      const data = await apiService.processChunks(response.text, response.filename);
+      const data = await apiService.processChunks(response.text, response.filename, response.processing_id);
       setProcessedChunks({
         num_chunks: data.num_chunks,
         total_words: data.total_words,
@@ -325,7 +325,7 @@ function App() {
     setError(null);
 
     try {
-      const data = await apiService.generateHeadings(response.filename);
+      const data = await apiService.generateHeadings(response.filename, response.processing_id);
       setTopics(data);
       // Load saved expansions when topics are loaded
       loadSavedExpansions(data);
@@ -609,6 +609,7 @@ function App() {
       const data = await apiService.expandCluster({
         filename: response.filename,
         cluster_id: clusterId,
+        processing_id: response?.processing_id,
       });
       const clusterData = data as { cluster?: { bullet_points?: string[] } };
       // Update the specific topic with the expanded cluster data
@@ -641,6 +642,7 @@ function App() {
         chunks: topicChunks,
         topic_heading: topicHeading,
         filename: response?.filename || '',
+        processing_id: response?.processing_id,
         topic_id: topicId,
         layer: 1,
       });
@@ -677,6 +679,7 @@ function App() {
         chunks: topicChunks,
         topic_heading: topicHeading,
         filename: response?.filename || '',
+        processing_id: response?.processing_id,
         topic_id: topicId,
         parent_bullet: parentBulletKey,
         layer: depth + 1,

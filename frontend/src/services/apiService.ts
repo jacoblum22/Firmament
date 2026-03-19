@@ -24,6 +24,7 @@ export interface UserInfo {
 export interface UploadResponse {
   job_id: string;
   filename: string;
+  processing_id?: string;
   filetype: string;
   message: string;
   text?: string;
@@ -100,6 +101,7 @@ export interface BulletPointData {
   chunks: string[];
   topic_heading: string;
   filename: string;
+  processing_id?: string;
   topic_id: string;
   layer?: number;
   other_bullets?: string[];
@@ -126,6 +128,7 @@ export interface ProgressData {
 export interface ExpandClusterRequest {
   filename: string;
   cluster_id: string | number;
+  processing_id?: string;
 }
 
 export interface LlmStatus {
@@ -328,12 +331,13 @@ class ApiService {
    */
   public async processChunks(
     text: string,
-    filename: string
+    filename: string,
+    processingId?: string
   ): Promise<ProcessChunksResponse> {
     try {
       const response = await this.enhancedFetch('process-chunks', {
         method: 'POST',
-        body: JSON.stringify({ text, filename }),
+        body: JSON.stringify({ text, filename, processing_id: processingId }),
       }, { timeout: 300000, maxRetries: 1 });
 
       return this.handleResponse<ProcessChunksResponse>(response);
@@ -349,11 +353,11 @@ class ApiService {
   /**
    * Generate topic headings
    */
-  public async generateHeadings(filename: string): Promise<TopicResponse> {
+  public async generateHeadings(filename: string, processingId?: string): Promise<TopicResponse> {
     try {
       const response = await this.enhancedFetch('generate-headings', this.addLlmKeyHeader({
         method: 'POST',
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify({ filename, processing_id: processingId }),
       }), { timeout: 300000, maxRetries: 1 });
 
       return this.handleResponse<TopicResponse>(response);
