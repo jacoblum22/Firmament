@@ -95,9 +95,11 @@ const SIZE_CONFIG: Record<ButtonSize, {
 const getSizeConfig = (size: ButtonSize, className?: string) => {
   // Explicit warning for deprecated usage
   if (className?.includes('text-xs') && size === 'default') {
-    console.warn(
-      'Using className for size detection is deprecated. Use the size prop instead.'
-    );
+    if (import.meta.env.DEV) {
+      console.warn(
+        'Using className for size detection is deprecated. Use the size prop instead.'
+      );
+    }
     return SIZE_CONFIG.small;
   }
   return SIZE_CONFIG[size];
