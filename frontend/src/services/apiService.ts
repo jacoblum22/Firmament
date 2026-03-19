@@ -183,6 +183,10 @@ class ApiService {
         errorData = { error: errorText || `HTTP ${response.status}: ${response.statusText}` };
       }
 
+      if (response.status === 402) {
+        throw new Error('No API key configured. Please add your OpenAI API key via the settings (⚙) in the top-right corner.');
+      }
+
       throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
     }
 

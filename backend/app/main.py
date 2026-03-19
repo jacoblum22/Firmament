@@ -87,6 +87,7 @@ app.add_middleware(
         "Origin",
         "Cache-Control",
         "Pragma",
+        "X-OpenAI-Key",
     ],
     expose_headers=["*"],
     max_age=settings.cors_max_age,
@@ -134,6 +135,20 @@ elif settings.is_development:
     )
 
 app.include_router(router)
+
+
+@app.exception_handler(EnvironmentError)
+async def env_error_handler(request: Request, exc: EnvironmentError):
+    """Return 402 when no LLM API key is configured or provided."""
+    return JSONResponse(
+        status_code=402,
+        content={
+            "error": "API key required",
+            "detail": str(exc),
+            "code": "api_key_required",
+        },
+    )
+
 
 # Global background task storage
 background_tasks = []
