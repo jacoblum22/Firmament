@@ -42,6 +42,11 @@ tests/
     ├── test_rnnoise_process.py  # RNNoise processing tests
     ├── test_semantic_segmentation.py # Semantic segmentation tests
     └── test_transcribe_audio.py # Audio transcription tests
+└── manual/                     # Manual QA & diagnostic scripts (not run by pytest)
+    ├── debug_config.py          # Production config inspection
+    ├── frontend_upload_probe.py # Upload request diagnostics
+    ├── manual_upload_test.py    # Manual upload validation
+    └── quick_test.py            # Setup smoke test
 ```
 
 ## Running Tests

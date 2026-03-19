@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 # Add backend/ to Python path so we can import backend tests utilities.
-backend_dir = Path(__file__).resolve().parent.parent / "backend"
+# backend/tests/manual/ -> backend/
+backend_dir = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from tests.utils.test_file_generators import TestFileGenerator
