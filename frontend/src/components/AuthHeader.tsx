@@ -1,4 +1,4 @@
-import React, { useState, useImperativeHandle, forwardRef } from 'react';
+import { useState, useImperativeHandle, forwardRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { UserProfile } from './UserProfile';

@@ -139,7 +139,7 @@ const buttonStyle: React.CSSProperties = {
  */
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
-  const authHeaderRef = React.useRef<AuthHeaderHandle>(null);
+  const authHeaderRef = useRef<AuthHeaderHandle>(null);
   const [, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<UploadResponse | null>(null);
   const [topics, setTopics] = useState<TopicResponse | null>(null);
@@ -174,8 +174,7 @@ function App() {
   // Memoize the getAllTopicChunks function to prevent recreating it on every render
   const memoizedGetAllTopicChunks = useCallback((
     topicData: TopicResponse['topics'][string], 
-    allSegments?: Array<{ position: string; text: string }>,
-    topicId?: string
+    allSegments?: Array<{ position: string; text: string }>
   ): string[] => {
     if (!topicData.segment_positions || !allSegments) {
       return topicData.examples || [];
@@ -832,7 +831,7 @@ function App() {
         color: "#ddd",
         listStyleType: "disc"
       }}>
-        {bulletPoints.map((point, idx) => {
+        {bulletPoints.map((point) => {
           // Remove markdown list formatting (-, *, +) from the beginning of bullet points
           // since we're using HTML list styling
           const cleanedPoint = point.replace(/^[-*+]\s*/, '').trim();
