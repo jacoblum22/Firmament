@@ -88,6 +88,8 @@ app.add_middleware(
         "Cache-Control",
         "Pragma",
         "X-OpenAI-Key",
+        "X-LLM-Base-URL",
+        "X-LLM-Model",
     ],
     expose_headers=["*"],
     max_age=settings.cors_max_age,

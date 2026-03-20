@@ -371,6 +371,8 @@ def _print_overall_results(
 def _generate_topic_headings(
     all_topic_maps: Dict[str, List[Dict[str, str]]],
     api_key: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
 ) -> Tuple[List[str], List[List[Dict[str, str]]], List[Dict[str, str]], int]:
     """
     Generate topic headings and organize topic data.
@@ -389,6 +391,8 @@ def _generate_topic_headings(
     headings_data, total_tokens = generate_cluster_headings(
         [[chunk["text"] for chunk in cluster] for cluster in topic_chunks_list],
         api_key=api_key,
+        base_url_override=base_url_override,
+        model_override=model_override,
     )
 
     # Parse concepts and headings from the response
@@ -657,6 +661,8 @@ def process_with_bertopic(
     chunks: List[Dict[str, str]],
     filename: Optional[str] = None,
     api_key: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
 ) -> Dict[str, Any]:
     """
     Process chunks using BERTopic to generate topics and analyze them.
@@ -698,7 +704,7 @@ def process_with_bertopic(
 
     # Step 5: Generate topic headings and organize data
     ordered_topic_ids, topic_chunks_list, cluster_info, total_tokens = (
-        _generate_topic_headings(all_topic_maps, api_key=api_key)
+        _generate_topic_headings(all_topic_maps, api_key=api_key, base_url_override=base_url_override, model_override=model_override)
     )
 
     # Step 6: Calculate topic statistics

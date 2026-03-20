@@ -9,7 +9,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None) -> dict:
+def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None, base_url_override: str | None = None, model_override: str | None = None) -> dict:
     """
     Expand a cluster by generating a bullet point list of important points.
 
@@ -95,9 +95,9 @@ def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None) -
     logger.debug(f"Generated GPT-4 prompt length: {len(prompt)} chars")
 
     # GPT call
-    client = get_openai_client(api_key)
+    client = get_openai_client(api_key, base_url_override=base_url_override)
     response = client.chat.completions.create(
-        model=get_default_model("gpt-4o"),
+        model=get_default_model("gpt-4o", model_override=model_override),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=500,  # Adjust as needed for bullet points

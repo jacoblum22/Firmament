@@ -34,7 +34,8 @@ import config from './config';
 import { BRAND } from './constants';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
-import { AuthHeader } from './components/AuthHeader';
+import { AuthHeader, AuthHeaderHandle } from './components/AuthHeader';
+import { ApiKeyBanner } from './components/ApiKeyBanner';
 import { GoogleSignInButton } from './components/GoogleSignInButton';
 import { useNetworkStatus } from './hooks/useNetworkStatus';
 import { useAuth } from './contexts/AuthContext';
@@ -138,6 +139,7 @@ const buttonStyle: React.CSSProperties = {
  */
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
+  const authHeaderRef = React.useRef<AuthHeaderHandle>(null);
   const [, setFile] = useState<File | null>(null);
   const [response, setResponse] = useState<UploadResponse | null>(null);
   const [topics, setTopics] = useState<TopicResponse | null>(null);
@@ -994,7 +996,8 @@ function App() {
         // Show main app when authenticated
         <>
           <ConnectionStatus />
-          <AuthHeader />
+          <AuthHeader ref={authHeaderRef} />
+          <ApiKeyBanner onOpenSettings={() => authHeaderRef.current?.openSettings()} />
           
           <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
             <div className="label fade-in" style={{ animationDelay: "0.2s", fontSize: "2rem", marginBottom: "0rem" }}>

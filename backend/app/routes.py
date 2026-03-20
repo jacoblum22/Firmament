@@ -166,10 +166,16 @@ def validate_max_age_days(max_age_days: int) -> int:
 
 
 def get_llm_api_key(
-    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key")
-) -> Optional[str]:
-    """Extract the user-provided OpenAI API key from the request header."""
-    return x_openai_key.strip() if x_openai_key else None
+    x_openai_key: Optional[str] = Header(None, alias="X-OpenAI-Key"),
+    x_llm_base_url: Optional[str] = Header(None, alias="X-LLM-Base-URL"),
+    x_llm_model: Optional[str] = Header(None, alias="X-LLM-Model"),
+) -> dict:
+    """Extract user-provided LLM overrides from request headers."""
+    return {
+        "api_key": x_openai_key.strip() if x_openai_key else None,
+        "base_url": x_llm_base_url.strip() if x_llm_base_url else None,
+        "model": x_llm_model.strip() if x_llm_model else None,
+    }
 
 
 router = APIRouter()
@@ -984,7 +990,7 @@ def get_bertopic_processor():
 
 
 @router.post("/test-bertopic")
-def test_bertopic(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
+def test_bertopic(data: dict, llm_overrides: dict = Depends(get_llm_api_key)):
     text = data.get("text", "")
     full_filename = data.get("filename") or "default"  # Get filename from request
     filename = os.path.splitext(full_filename)[
@@ -1004,7 +1010,12 @@ def test_bertopic(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_
     )
 
     # Step 2: Process with BERTopic
-    result = process_with_bertopic(chunks, filename, api_key=user_api_key)
+    result = process_with_bertopic(
+        chunks, filename,
+        api_key=llm_overrides.get("api_key"),
+        base_url_override=llm_overrides.get("base_url"),
+        model_override=llm_overrides.get("model"),
+    )
 
     # Convert result to match frontend expectations
     return {
@@ -1081,7 +1092,7 @@ def process_chunks(data: dict):
 
 @router.post("/generate-headings")
 def generate_headings(
-    data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)
+    data: dict, llm_overrides: dict = Depends(get_llm_api_key)
 ):
     full_filename = data.get("filename")
     processing_id = data.get("processing_id")
@@ -1111,7 +1122,12 @@ def generate_headings(
 
     # Run BERTopic
     process_with_bertopic = get_bertopic_processor()
-    result = process_with_bertopic(chunks, filename, api_key=user_api_key)
+    result = process_with_bertopic(
+        chunks, filename,
+        api_key=llm_overrides.get("api_key"),
+        base_url_override=llm_overrides.get("base_url"),
+        model_override=llm_overrides.get("model"),
+    )
 
     # Save full result to legacy format
     processed_path = os.path.join("processed", f"{filename}_processed.json")
@@ -1243,7 +1259,7 @@ def generate_headings(
 
 
 @router.post("/expand-cluster")
-def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)):
+def expand_cluster(data: dict, llm_overrides: dict = Depends(get_llm_api_key)):
     """
     Expand a specific cluster by generating bullet points for it.
 
@@ -1285,13 +1301,18 @@ def expand_cluster(data: dict, user_api_key: Optional[str] = Depends(get_llm_api
     from utils.expand_cluster import expand_cluster as expand_cluster_util
 
     # Pass only the filename (not the full path) to expand_cluster
-    result = expand_cluster_util(processed_filename, cluster_id, api_key=user_api_key)
+    result = expand_cluster_util(
+        processed_filename, cluster_id,
+        api_key=llm_overrides.get("api_key"),
+        base_url_override=llm_overrides.get("base_url"),
+        model_override=llm_overrides.get("model"),
+    )
     return result
 
 
 @router.post("/expand-bullet-point")
 def expand_bullet_point_endpoint(
-    data: dict, user_api_key: Optional[str] = Depends(get_llm_api_key)
+    data: dict, llm_overrides: dict = Depends(get_llm_api_key)
 ):
     """
     Expand a bullet point with additional detail and context.
@@ -1337,7 +1358,9 @@ def expand_bullet_point_endpoint(
             topic_heading,
             layer,
             other_bullets,
-            api_key=user_api_key,
+            api_key=llm_overrides.get("api_key"),
+            base_url_override=llm_overrides.get("base_url"),
+            model_override=llm_overrides.get("model"),
         )
         logger.info("Expansion completed successfully")
 

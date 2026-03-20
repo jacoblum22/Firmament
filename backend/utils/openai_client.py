@@ -32,7 +32,7 @@ def _resolve_base_url() -> str | None:
     return None  # Use OpenAI default
 
 
-def get_openai_client(api_key: str | None = None) -> OpenAI:
+def get_openai_client(api_key: str | None = None, base_url_override: str | None = None) -> OpenAI:
     """
     Get an OpenAI-compatible client.
 
@@ -40,6 +40,8 @@ def get_openai_client(api_key: str | None = None) -> OpenAI:
         api_key: Optional API key from user request. If provided, creates a
                  fresh client with this key (not cached). If None, uses the
                  server-configured default.
+        base_url_override: Optional base URL override from user request header.
+                          Takes precedence over server-configured LLM_BASE_URL.
 
     Returns:
         OpenAI client instance
@@ -47,7 +49,7 @@ def get_openai_client(api_key: str | None = None) -> OpenAI:
     Raises:
         EnvironmentError: If no API key is available (for OpenAI provider)
     """
-    base_url = _resolve_base_url()
+    base_url = base_url_override or _resolve_base_url()
 
     # Per-request client with user-provided key
     if api_key:
@@ -72,12 +74,15 @@ def get_openai_client(api_key: str | None = None) -> OpenAI:
     return _default_client
 
 
-def get_default_model(intended_model: str) -> str:
-    """Return the model to use, respecting LLM_DEFAULT_MODEL override.
+def get_default_model(intended_model: str, model_override: str | None = None) -> str:
+    """Return the model to use, respecting overrides.
 
+    Priority: per-request model_override > LLM_DEFAULT_MODEL env > provider default.
     For Ollama, defaults to 'llama3.1' if no override is set.
     For OpenAI, uses the intended model from the calling code.
     """
+    if model_override:
+        return model_override
     if LLM_DEFAULT_MODEL:
         return LLM_DEFAULT_MODEL
     if LLM_PROVIDER == "ollama":

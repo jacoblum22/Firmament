@@ -22,6 +22,8 @@ encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 def generate_cluster_headings(
     clusters: List[List[str]],
     api_key: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
 ) -> Tuple[List[Dict[str, str]], int]:
     """
     Generate headings for multiple clusters in a single prompt to ensure global context and cohesion.
@@ -90,9 +92,9 @@ def generate_cluster_headings(
     token_count = len(encoding.encode(prompt))
 
     # GPT call
-    client = get_openai_client(api_key)
+    client = get_openai_client(api_key, base_url_override=base_url_override)
     response = client.chat.completions.create(
-        model=get_default_model("gpt-4o-mini"),
+        model=get_default_model("gpt-4o-mini", model_override=model_override),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
         max_tokens=1000,  # Increased to accommodate longer responses for multiple headings

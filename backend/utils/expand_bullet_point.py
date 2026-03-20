@@ -18,6 +18,8 @@ def expand_bullet_point(
     layer: int = 1,
     other_bullets: Optional[list] = None,
     api_key: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
 ) -> dict:
     """
     Expand a single bullet point by providing more detailed information based on the topic chunks.
@@ -178,9 +180,9 @@ def expand_bullet_point(
             logger.warning("No chunks could be added due to token constraints!")
 
         # GPT call
-        client = get_openai_client(api_key)
+        client = get_openai_client(api_key, base_url_override=base_url_override)
         response = client.chat.completions.create(
-            model=get_default_model("gpt-4o-mini"),
+            model=get_default_model("gpt-4o-mini", model_override=model_override),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=300,  # Reasonable limit for expansion

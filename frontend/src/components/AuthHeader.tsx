@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useImperativeHandle, forwardRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import { UserProfile } from './UserProfile';
 import { SettingsPanel } from './SettingsPanel';
 
-export const AuthHeader: React.FC = () => {
+export interface AuthHeaderHandle {
+  openSettings: () => void;
+}
+
+export const AuthHeader = forwardRef<AuthHeaderHandle>((_, ref) => {
   const { isAuthenticated, isLoading } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    openSettings: () => setSettingsOpen(true),
+  }));
 
   return (
     <div style={{
@@ -62,4 +70,4 @@ export const AuthHeader: React.FC = () => {
       </div>
     </div>
   );
-};
+});

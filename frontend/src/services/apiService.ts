@@ -214,20 +214,26 @@ class ApiService {
   }
 
   /**
-   * Add LLM API key header if one is stored in localStorage
+   * Add LLM override headers if stored in localStorage
    */
   private addLlmKeyHeader(options: RequestInit = {}): RequestInit {
     const key = localStorage.getItem('firmament_openai_key');
-    if (key) {
-      return {
-        ...options,
-        headers: {
-          ...options.headers,
-          'X-OpenAI-Key': key,
-        },
-      };
-    }
-    return options;
+    const baseUrl = localStorage.getItem('firmament_llm_base_url');
+    const model = localStorage.getItem('firmament_llm_model');
+    const extraHeaders: Record<string, string> = {};
+    if (key) extraHeaders['X-OpenAI-Key'] = key;
+    if (baseUrl) extraHeaders['X-LLM-Base-URL'] = baseUrl;
+    if (model) extraHeaders['X-LLM-Model'] = model;
+
+    if (Object.keys(extraHeaders).length === 0) return options;
+
+    return {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...extraHeaders,
+      },
+    };
   }
 
   /**
