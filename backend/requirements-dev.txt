@@ -12,6 +12,7 @@ black==25.1.0
 flake8==7.1.1
 mypy==1.14.0
 pre-commit==4.1.0
+bandit==1.9.4  # Python security linting (also enables Bandit in Desloppify Python scans)
 # Agent harness: mechanical + triaged fix loop (run scans per subtree; state in .desloppify/)
 desloppify[full]==0.9.15
 
