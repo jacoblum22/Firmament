@@ -137,7 +137,12 @@ class Settings:
         Development: Binds to localhost (127.0.0.1) for security
         Production: Binds to all interfaces (0.0.0.0) for accessibility
         """
-        return os.getenv("HOST", "127.0.0.1" if self.is_development else "0.0.0.0")
+        if self.is_development:
+            default_host = "127.0.0.1"
+        else:
+            # Production: listen on all interfaces (Docker/K8s); override with HOST env.
+            default_host = "0.0.0.0"  # nosec B104
+        return os.getenv("HOST", default_host)
 
     @property
     def port(self) -> int:
@@ -238,9 +243,15 @@ class Settings:
                     "Please set the JWT_SECRET environment variable to a secure random string."
                 )
             else:
-                # Development fallback with warning
-                logger.warning("JWT_SECRET is not set. Using development default.")
-                return "dev-jwt-secret-change-in-production"
+                # Development: require JWT_SECRET but allow generation of a random one
+                import secrets
+
+                dev_secret = secrets.token_urlsafe(32)
+                logger.warning(
+                    "JWT_SECRET is not set. Generated a random development secret. "
+                    "Set JWT_SECRET in your .env file for persistent sessions across restarts."
+                )
+                return dev_secret
 
         # Check for placeholder values that should be replaced
         placeholder_patterns = [
@@ -271,6 +282,34 @@ class Settings:
             )
 
         return jwt_secret
+
+    @property
+    def token_expiry_hours(self) -> int:
+        """Get JWT token expiration in hours (default: 7 days)."""
+        max_expiry_hours = 720
+        value = os.getenv("TOKEN_EXPIRY_HOURS", "168")
+        try:
+            hours = int(value)
+        except (TypeError, ValueError):
+            raise ConfigurationError(
+                f"TOKEN_EXPIRY_HOURS must be a valid integer. Received: {value}"
+            )
+
+        if hours <= 0:
+            raise ConfigurationError(
+                f"TOKEN_EXPIRY_HOURS must be greater than 0. Received: {hours}"
+            )
+
+        if hours > max_expiry_hours:
+            logger.warning(
+                "TOKEN_EXPIRY_HOURS (%s) exceeds maximum allowed value (%s). Clamping to %s.",
+                hours,
+                max_expiry_hours,
+                max_expiry_hours,
+            )
+            return max_expiry_hours
+
+        return hours
 
     @property
     def secure_headers(self) -> bool:
