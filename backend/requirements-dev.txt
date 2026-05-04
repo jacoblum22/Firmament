@@ -12,6 +12,8 @@ black==24.12.0
 flake8==7.1.1
 mypy==1.14.0
 pre-commit==4.1.0
+# Agent harness: mechanical + triaged fix loop (run scans per subtree; state in .desloppify/)
+desloppify[full]==0.9.15
 
 # Development Tools
 watchdog==6.0.0  # For file watching during development
