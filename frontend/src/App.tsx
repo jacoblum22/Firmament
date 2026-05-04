@@ -1,576 +1,300 @@
-/**
- * Firmament - AI-Powered Study Material Generator
- * 
- * Main application component that orchestrates the entire study material processing workflow.
- * This React application provides a sophisticated interface for uploading documents and audio files,
- * processing them through advanced ML pipelines, and generating interactive study materials.
- * 
- * Key Features:
- * - Drag & drop file upload with real-time validation
- * - Live progress tracking via Server-Sent Events
- * - Interactive topic expansion with nested bullet points
- * - 3D animations and particle effects for engaging UX
- * - Comprehensive error handling with user-friendly messages
- * - Google OAuth authentication with JWT token management
- * - Responsive design with accessibility considerations
- * 
- * Architecture:
- * - React 19+ with TypeScript for type safety
- * - Framer Motion for smooth animations and transitions
- * - Custom hooks for network status and authentication
- * - Service layer for API communication
- * - Context-based state management for user authentication
- * 
- * @author Firmament Development Team
- * @version 2.0.0
- */
-
-import { useState, useEffect, useRef, useCallback } from "react";
-import "./App.css";
-import VanillaTilt from "vanilla-tilt";
-import { motion, AnimatePresence, useAnimation } from "framer-motion";
-import ReactMarkdown from 'react-markdown';
-import config from './config';
+import { useEffect, useRef, useState } from 'react';
+import './App.css';
+import VanillaTilt from 'vanilla-tilt';
+import { motion, useAnimation } from 'framer-motion';
 import { BRAND } from './constants';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { ConnectionScreen } from './components/ConnectionScreen';
 import { AuthHeader, AuthHeaderHandle } from './components/AuthHeader';
 import { ApiKeyBanner } from './components/ApiKeyBanner';
-import { GoogleSignInButton } from './components/GoogleSignInButton';
-import { useNetworkStatus } from './hooks/useNetworkStatus';
-import { useAuth } from './contexts/AuthContext';
+import { SignInScreen } from './components/SignInScreen';
 import ErrorDisplay from './components/ErrorDisplay';
-import apiService, { 
-  TopicResponse, 
-  UploadResponse, 
-  BulletPointExpandResponse as ExpandedBulletResult 
-} from './services/apiService';
+import { UploadZone } from './components/UploadZone';
+import ProcessingProgress from './components/ProcessingProgress';
+import TranscriptDisplay from './components/TranscriptDisplay';
+import TopicResults from './components/TopicResults';
+import ActionButtons from './components/ActionButtons';
+import ExportButtons from './components/ExportButtons';
+import SuccessToast from './components/SuccessToast';
+import EmptyState from './components/EmptyState';
+import { useNetworkStatus } from './hooks/useNetworkStatus';
+import { useUploadPipeline } from './hooks/useUploadPipeline';
+import { useTopicPersistence } from './hooks/useTopicPersistence';
+import { copyToClipboard, downloadMarkdown, exportAsMarkdown } from './utils/exportTopics';
+import { useAuth } from './contexts/AuthContext';
 
-/** 
- * Color palette for dynamic UI accents
- * Used for drag-over states and interactive elements
- */
-const ACCENT_HUES = [185, 315, 35]; // cyan, pink, peach
-
-/**
- * Configuration constants for file upload validation
- * Centralized to ensure consistency across UI and validation logic
- * This configuration is used throughout the app for file validation and UI displays
- * 
- * Security considerations:
- * - File size limits prevent DoS attacks and memory exhaustion
- * - Extension validation prevents malicious file uploads
- * - MIME type checking provides additional security layer
- */
-const FILE_VALIDATION = {
-  /** Maximum file size in megabytes - balances usability with server resources */
-  MAX_SIZE_MB: 100,
-  /** Maximum file size in bytes (computed from MB) - used for precise validation */
-  MAX_SIZE_BYTES: 100 * 1024 * 1024,
-  /** Allowed file extensions (must include leading dot) - whitelist approach for security */
-  ALLOWED_EXTENSIONS: ['.pdf', '.mp3', '.wav', '.txt', '.m4a'] as const,
-  /** 
-   * Corresponding MIME types for additional validation if needed in future
-   * Maps to: PDF documents, MP3 audio, WAV audio, plain text, M4A audio
-   * Note: MIME types can be spoofed, so we rely primarily on extension validation
-   */
-  ALLOWED_MIME_TYPES: [
-    'application/pdf',      // .pdf - Adobe Portable Document Format
-    'audio/mpeg',          // .mp3 - MPEG Audio Layer III
-    'audio/wav',           // .wav - Waveform Audio File Format
-    'audio/wave',          // .wav (alternative MIME type)
-    'text/plain',          // .txt - Plain text files
-    'audio/mp4',           // .m4a - MPEG-4 Audio
-    'audio/x-m4a'          // .m4a (alternative MIME type)
-  ] as const
-} as const;
-
-/**
- * Type definition for nested bullet point expansions
- * Supports unlimited depth of expansion hierarchy for comprehensive study materials
- * Each expansion can contain sub-expansions, creating a tree-like structure
- */
-type NestedExpansions = {
-  [bulletKey: string]: {
-    expansion: ExpandedBulletResult;
-    subExpansions?: NestedExpansions;
-  };
-};
-
-/**
- * Type definition for individual bullet point expansion data
- * Contains the AI-generated expansion and optional nested sub-expansions
- */
-type BulletExpansion = {
-  expansion: ExpandedBulletResult;
-  subExpansions?: NestedExpansions;
-};
-
-/**
- * Shared button styling for consistent UI elements
- * Used across various interactive components
- */
 const buttonStyle: React.CSSProperties = {
-  marginLeft: "1rem",
-  padding: "0.5rem 1rem",
-  color: "white",
-  border: "none",
-  cursor: "pointer",
+  marginLeft: '1rem',
+  padding: '0.5rem 1rem',
+  color: 'white',
+  border: 'none',
+  cursor: 'pointer',
 };
 
-/**
- * Main Application Component
- * 
- * This is the core component that manages the entire application state and workflow.
- * It handles user authentication, file processing, topic generation, and interactive
- * content expansion through a sophisticated state management system.
- * 
- * State Management Strategy:
- * - Uses React hooks for local component state
- * - Leverages context for authentication state
- * - Implements custom hooks for network connectivity
- * - Manages complex async operations with useEffect and useCallback
- * 
- * Performance Optimizations:
- * - Memoized callbacks to prevent unnecessary re-renders
- * - Optimized particle system using Web Workers
- * - Progressive loading of content and animations
- * - Efficient re-rendering through proper dependency arrays
- */
 function App() {
+  const [copyFeedbackVisible, setCopyFeedbackVisible] = useState(false);
+  const [successToastVisible, setSuccessToastVisible] = useState(false);
+  const [expandingBulletKey, setExpandingBulletKey] = useState<string | null>(null);
+  const [isCopyExporting, setIsCopyExporting] = useState(false);
+  const [isDownloadExporting, setIsDownloadExporting] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
+  const { isBackendReachable, isInitializing, forceHealthCheck } = useNetworkStatus();
   const authHeaderRef = useRef<AuthHeaderHandle>(null);
-  const [, setFile] = useState<File | null>(null);
-  const [response, setResponse] = useState<UploadResponse | null>(null);
-  const [topics, setTopics] = useState<TopicResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [, setJobId] = useState<string | null>(null);
-  type JobStatus =
-    | { stage: "uploading" | "preprocessing" | "saving_output" }
-    | { stage: "transcribing"; current: number; total: number }
-    | { stage: "done"; result: UploadResponse }
-    | { stage: "error"; error: string };
-  const [status, setStatus] = useState<JobStatus | null>(null);
-  const [, setLoading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [generatingHeadings, setGeneratingHeadings] = useState(false);
-  const [activeHue, setActiveHue] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
-  const [showProgressBar, setShowProgressBar] = useState(false);
-  const [allowUnmount, setAllowUnmount] = useState(false);
-  const [progressBarExited, setProgressBarExited] = useState(false);
-  const [processedChunks, setProcessedChunks] = useState<{
-    num_chunks: number;
-    total_words: number;
-  } | null>(null);
-  const [expandedBullets, setExpandedBullets] = useState<NestedExpansions>({});
+  const canvasTransferred = useRef(false);
+  const particleWorkerRef = useRef<Worker | null>(null);
+  const coreControls = useAnimation();
+  const glowControls = useAnimation();
+  const {
+    topics: persistedTopics,
+    setTopics: setPersistedTopics,
+    expandedBullets: persistedExpandedBullets,
+    setExpandedBullets: setPersistedExpandedBullets,
+    lastSavedAt,
+  } = useTopicPersistence();
 
-  // Network status for connection handling
-  const { isBackendReachable, isInitializing, forceHealthCheck } = useNetworkStatus();
+  const {
+    response,
+    setResponse,
+    topics: pipelineTopics,
+    setTopics: setPipelineTopics,
+    error,
+    setError,
+    successMessage,
+    setSuccessMessage,
+    status,
+    dragOver,
+    setDragOver,
+    segmenting,
+    generatingHeadings,
+    activeHue,
+    setActiveHue,
+    showProgressBar,
+    setShowProgressBar,
+    allowUnmount,
+    setAllowUnmount,
+    progressBarExited,
+    setProgressBarExited,
+    processedChunks,
+    setFile,
+    expandedBullets: pipelineExpandedBullets,
+    setExpandedBullets: setPipelineExpandedBullets,
+    handleFileChange,
+    handleProcessChunks,
+    handleGenerateHeadings,
+    handleDrop,
+    cancelProcessing,
+    handleExpandCluster,
+    handleExpandBulletPoint,
+    handleExpandSubBulletPoint,
+    generateBulletKey,
+  } = useUploadPipeline();
 
-  // Memoize the getAllTopicChunks function to prevent recreating it on every render
-  const memoizedGetAllTopicChunks = useCallback((
-    topicData: TopicResponse['topics'][string], 
-    allSegments?: Array<{ position: string; text: string }>
-  ): string[] => {
-    if (!topicData.segment_positions || !allSegments) {
-      return topicData.examples || [];
+  const topics = pipelineTopics ?? persistedTopics;
+  const expandedBullets = Object.keys(pipelineExpandedBullets).length
+    ? pipelineExpandedBullets
+    : persistedExpandedBullets;
+  const hasTopics = Boolean(topics && Object.keys(topics.topics).length > 0);
+  const isProcessingActive =
+    status?.stage === 'uploading' || status?.stage === 'transcribing';
+  const showEmptyState = !hasTopics && !isProcessingActive && !generatingHeadings;
+  const displayTagline = `${BRAND.TAGLINE}.`;
+  const hasInitializedToastTrackingRef = useRef(false);
+  const previousHasTopicsRef = useRef(hasTopics);
+  const previousStageRef = useRef(status?.stage);
+  const previousGeneratingHeadingsRef = useRef(generatingHeadings);
+
+  const isFinishing = status?.stage === 'done' && showProgressBar && !allowUnmount;
+  const canShowTranscript = response && (!showProgressBar || progressBarExited);
+
+  useEffect(() => {
+    setPersistedTopics(pipelineTopics);
+  }, [pipelineTopics, setPersistedTopics]);
+
+  useEffect(() => {
+    setPersistedExpandedBullets(pipelineExpandedBullets);
+  }, [pipelineExpandedBullets, setPersistedExpandedBullets]);
+
+  useEffect(() => {
+    if (!pipelineTopics && persistedTopics) {
+      setPipelineTopics(persistedTopics);
     }
-    
-    const segmentMap = new Map<string, string>();
-    allSegments.forEach(segment => {
-      segmentMap.set(segment.position, segment.text);
-    });
-    
-    return topicData.segment_positions
-      .map((position: string) => segmentMap.get(position))
-      .filter((chunk: string | undefined): chunk is string => Boolean(chunk));
-  }, []);
+  }, [pipelineTopics, persistedTopics, setPipelineTopics]);
 
-  /**
-   * Utility function to safely extract and normalize file extension
-   * Handles edge cases like:
-   * - Files without extensions
-   * - Hidden files (starting with .)
-   * - Files ending with . 
-   * - Invalid filenames
-   * @param filename - The filename to extract extension from
-   * @returns Normalized extension with leading dot (e.g., ".pdf") or empty string if invalid
-   */
-  const getFileExtension = (filename: string): string => {
-    if (!filename || typeof filename !== 'string') {
-      return '';
+  useEffect(() => {
+    const pipelineExpandedCount = Object.keys(pipelineExpandedBullets).length;
+    const persistedExpandedCount = Object.keys(persistedExpandedBullets).length;
+
+    if (pipelineExpandedCount === 0 && persistedExpandedCount > 0) {
+      setPipelineExpandedBullets(persistedExpandedBullets);
     }
-    
-    // Handle filenames without extensions
-    const lastDotIndex = filename.lastIndexOf('.');
-    if (lastDotIndex === -1 || lastDotIndex === 0 || lastDotIndex === filename.length - 1) {
-      return '';
-    }
-    
-    // Extract extension and normalize (lowercase, include dot)
-    const extension = filename.slice(lastDotIndex).toLowerCase().trim();
-    
-    // Validate extension format (should start with dot and have at least one character after)
-    if (!extension.startsWith('.') || extension.length < 2) {
-      return '';
-    }
-    
-    return extension;
-  };
+  }, [pipelineExpandedBullets, persistedExpandedBullets, setPipelineExpandedBullets]);
 
-  // File validation utility
-  const validateFile = (file: File): string | null => {
-    // Check if file object is valid
-    if (!file || !(file instanceof File)) {
-      return JSON.stringify({
-        error: 'Invalid file selection',
-        details: 'The file could not be read properly.',
-        user_action: 'Please try selecting the file again.',
-        error_code: 'invalid_file'
-      });
-    }
+  useEffect(() => {
+    if (!copyFeedbackVisible) return;
 
-    // Check file size
-    if (file.size > FILE_VALIDATION.MAX_SIZE_BYTES) {
-      const maxMB = FILE_VALIDATION.MAX_SIZE_MB;
-      const actualMB = (file.size / (1024 * 1024)).toFixed(1);
-      return JSON.stringify({
-        error: `File too large for upload`,
-        details: `Your file is ${actualMB}MB, but the maximum allowed size is ${maxMB}MB.`,
-        user_action: "Try compressing your file or uploading a smaller version.",
-        error_code: "file_too_large"
-      });
-    }
+    const timerId = window.setTimeout(() => {
+      setCopyFeedbackVisible(false);
+    }, 1400);
 
-    // Check if file is empty
-    if (file.size === 0) {
-      return JSON.stringify({
-        error: "File is empty",
-        details: "The selected file contains no data.",
-        user_action: "Please select a different file that contains content.",
-        error_code: "empty_file"
-      });
-    }
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [copyFeedbackVisible]);
 
-    // Extract and validate file extension
-    const fileExtension = getFileExtension(file.name);
-    if (!fileExtension) {
-      return JSON.stringify({
-        error: "Unable to determine file type",
-        details: "Your file doesn't have a recognizable extension.",
-        user_action: `Please rename your file to include a valid extension: ${FILE_VALIDATION.ALLOWED_EXTENSIONS.join(', ')}`,
-        error_code: "missing_extension",
-        supported_formats: FILE_VALIDATION.ALLOWED_EXTENSIONS
-      });
-    }
+  useEffect(() => {
+    if (!successToastVisible) return;
 
-    if (!(FILE_VALIDATION.ALLOWED_EXTENSIONS as readonly string[]).includes(fileExtension)) {
-      return JSON.stringify({
-        error: `Unsupported file type: ${fileExtension}`,
-        details: "This file format isn't supported by our system.",
-        user_action: "Please convert your file to a supported format and try again.",
-        error_code: "unsupported_format",
-        supported_formats: FILE_VALIDATION.ALLOWED_EXTENSIONS
-      });
-    }
+    const autoDismissTimer = window.setTimeout(() => {
+      setSuccessToastVisible(false);
+    }, 3000);
 
-    return null; // No errors
-  };
+    return () => {
+      window.clearTimeout(autoDismissTimer);
+    };
+  }, [successToastVisible]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const selectedFile = e.target.files[0];
-      
-      // Validate the selected file
-      const validationError = validateFile(selectedFile);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
-
-      setFile(selectedFile);
-      setResponse(null);
-      setTopics(null);
-    }
-  };
-
-  const handleProcessChunks = async () => {
-    if (!response?.text || !response.filename) return;
-
-    setError(null);
-    try {
-      const data = await apiService.processChunks(response.text, response.filename, response.processing_id);
-      setProcessedChunks({
-        num_chunks: data.num_chunks,
-        total_words: data.total_words,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "We couldn't process your file chunks. Please try again.";
-      setError(JSON.stringify({
-        error: "Processing failed",
-        details: errorMessage,
-        user_action: "Please try uploading your file again.",
-        error_code: "chunk_processing_failed"
-      }));
-    }
-  };
-
-  const handleGenerateHeadings = async () => {
-    if (!response?.filename || !processedChunks) return;
-
-    setGeneratingHeadings(true);
-    setError(null);
-
-    try {
-      const data = await apiService.generateHeadings(response.filename, response.processing_id);
-      setTopics(data);
-      // Load saved expansions when topics are loaded
-      loadSavedExpansions(data);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "We couldn't generate topics for your content.";
-      setError(JSON.stringify({
-        error: "Topic generation failed",
-        details: errorMessage,
-        user_action: "Please ensure your file contains enough text content and try again.",
-        error_code: "topic_generation_failed"
-      }));
-    } finally {
-      setGeneratingHeadings(false);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-
-    const droppedFiles = e.dataTransfer.files;
-    if (droppedFiles.length === 0) return;
-
-    if (droppedFiles.length > 1) {
-      setError(JSON.stringify({
-        error: "Multiple files detected",
-        details: "You can only upload one file at a time.",
-        user_action: "Please select just one file and try again.",
-        error_code: "multiple_files"
-      }));
+  useEffect(() => {
+    if (!hasInitializedToastTrackingRef.current) {
+      hasInitializedToastTrackingRef.current = true;
+      previousHasTopicsRef.current = hasTopics;
+      previousStageRef.current = status?.stage;
+      previousGeneratingHeadingsRef.current = generatingHeadings;
       return;
     }
 
-    if (droppedFiles && droppedFiles.length > 0) {
-      const file = droppedFiles[0];
+    const topicsBecameAvailable = !previousHasTopicsRef.current && hasTopics;
+    const stageCompletedNow = previousStageRef.current !== 'done' && status?.stage === 'done' && hasTopics;
+    const headingsFinishedNow = previousGeneratingHeadingsRef.current && !generatingHeadings && hasTopics;
 
-      // Validate the dropped file
-      const validationError = validateFile(file);
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
+    if (topicsBecameAvailable || stageCompletedNow || headingsFinishedNow) {
+      setSuccessToastVisible(true);
+    }
 
-      setFile(file);
-      setResponse(null);
-      setTopics(null);
+    previousHasTopicsRef.current = hasTopics;
+    previousStageRef.current = status?.stage;
+    previousGeneratingHeadingsRef.current = generatingHeadings;
+  }, [hasTopics, status?.stage, generatingHeadings]);
 
-      // Immediately upload the file
-      setLoading(true);
-      setError(null);
+  const handleCopyAsMarkdown = async () => {
+    if (isCopyExporting) {
+      return;
+    }
 
-      try {
-        const data = await apiService.uploadFile(file);
-        setJobId(data.job_id);
+    setIsCopyExporting(true);
 
-        const evt = new EventSource(
-          config.getApiUrl(`progress/${data.job_id}`)
-        );
-        evt.onmessage = (event) => {
-          const parsed = JSON.parse(event.data);
-          setStatus(parsed);
+    const markdown = exportAsMarkdown(topics, expandedBullets);
+    const copied = await copyToClipboard(markdown);
 
-          // Handle server errors
-          if (parsed.stage === "error") {
-            const serverError = parsed.error || "An error occurred during processing";
-            setError(JSON.stringify({
-              error: "Processing failed",
-              details: serverError,
-              user_action: "Please try uploading your file again.",
-              error_code: "server_processing_error"
-            }));
-          }
+    if (copied) {
+      setCopyFeedbackVisible(true);
+    }
 
-          // Once done, set final result into response state
-          if (parsed.stage === "done" && parsed.result) {
-            setResponse(parsed.result);
-            if (parsed.result.topics) {
-              const topicsData = { ...parsed.result, topics: parsed.result.topics };
-              setTopics(topicsData);
-              // Load saved expansions when topics are loaded from upload
-              loadSavedExpansions(topicsData);
-              
-              // If topics are already loaded (from processed files), simulate processed chunks state
-              // so the "Generate Topics with AI" button becomes available
-              if (parsed.result?.segments && Array.isArray(parsed.result.segments)) {
-                const segments = parsed.result.segments;
-                
-                // Early return if segments array is empty
-                if (segments.length === 0) {
-                  return;
-                }
-                
-                const totalWords = segments.reduce((sum: number, segment: { text?: string }) => {
-                  // Use optional chaining and early return for better readability
-                  const text = segment?.text;
-                  if (!text || typeof text !== 'string') {
-                    return sum;
-                  }
-                  
-                  // Split on any whitespace and filter out empty strings
-                  const words = text.split(/\s+/).filter(word => word.length > 0);
-                  return sum + words.length;
-                }, 0);
-                
-                setProcessedChunks({
-                  num_chunks: segments.length,
-                  total_words: totalWords,
-                });
-              }
-            }
-          }
+    window.setTimeout(() => {
+      setIsCopyExporting(false);
+    }, 450);
+  };
 
-          // Auto-close when finished
-          if (["done", "error"].includes(parsed.stage)) {
-            evt.close();
-          }
-        };
-        evt.onerror = () => {
-          evt.close();
-          setError(JSON.stringify({
-            error: "Connection lost",
-            details: "We lost connection to the server while processing your file.",
-            user_action: "Please check your internet connection and try uploading again.",
-            error_code: "connection_lost"
-          }));
-        };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Upload failed";
-        setError(JSON.stringify({
-          error: "Upload failed",
-          details: errorMessage,
-          user_action: "Please check your internet connection and try again.",
-          error_code: "upload_failed"
-        }));
-      } finally {
-        setLoading(false);
-      }
+  const handleDownloadMarkdown = () => {
+    if (isDownloadExporting) {
+      return;
+    }
+
+    setIsDownloadExporting(true);
+    const markdown = exportAsMarkdown(topics, expandedBullets);
+    downloadMarkdown(markdown);
+
+    window.setTimeout(() => {
+      setIsDownloadExporting(false);
+    }, 450);
+  };
+
+  const handleExpandBulletPointWithLoading = async (bulletPoint: string, topicId: string) => {
+    const bulletKey = `${topicId}_${generateBulletKey(bulletPoint)}`;
+    setExpandingBulletKey(bulletKey);
+
+    try {
+      await handleExpandBulletPoint(bulletPoint, topicId);
+    } finally {
+      setExpandingBulletKey(null);
     }
   };
 
-  const isFinishing =
-    status?.stage === "done" && showProgressBar && !allowUnmount;
+  const handleExpandSubBulletPointWithLoading = async (
+    subBullet: string,
+    topicId: string,
+    parentBulletKey: string,
+    depth?: number
+  ) => {
+    const subBulletKey = `${parentBulletKey}_sub_${subBullet.slice(0, 30)}`;
+    setExpandingBulletKey(subBulletKey);
 
-  const canShowTranscript = response && (!showProgressBar || progressBarExited);
+    try {
+      await handleExpandSubBulletPoint(subBullet, topicId, parentBulletKey, depth);
+    } finally {
+      setExpandingBulletKey(null);
+    }
+  };
 
-  const coreControls = useAnimation();
-  const glowControls = useAnimation();
-
-  const canvasTransferred = useRef(false);
-  const particleWorkerRef = useRef<Worker | null>(null);
   useEffect(() => {
-    const canvas = canvasRef.current;
+    let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+    let collapseTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Only show progress bar when there's an actual transcription process
-    if (status?.stage === "transcribing") {
+    if (status?.stage === 'transcribing') {
       setShowProgressBar(true);
       setAllowUnmount(false);
       setProgressBarExited(false);
-      
-      if (typeof status.current === "number" && typeof status.total === "number") {
+
+      if (typeof status.current === 'number' && typeof status.total === 'number') {
         const progress = (status.current / status.total) * 100;
-
-        coreControls.start({
-          width: `${Math.max(progress, 2)}%`,
-          opacity: 1,
-          transition: { duration: 0.4, ease: "easeOut" },
-        });
-
-        glowControls.start({
-          width: `${Math.max(progress, 2)}%`,
-          opacity: 1,
-          transition: { duration: 0.4, ease: "easeOut" },
-        });
+        coreControls.start({ width: `${Math.max(progress, 2)}%`, opacity: 1, transition: { duration: 0.4, ease: 'easeOut' } });
+        glowControls.start({ width: `${Math.max(progress, 2)}%`, opacity: 1, transition: { duration: 0.4, ease: 'easeOut' } });
       }
     } else {
-      // Hide progress bar when no real process is running
       setShowProgressBar(false);
       setAllowUnmount(true);
       setProgressBarExited(true);
     }
 
-    if (status?.stage === "done") {
-      coreControls.start({
-        width: "100%",
-        opacity: 1,
-        transition: { duration: 0.2 },
-      });
-      glowControls.start({
-        width: "100%",
-        opacity: 1,
-        transition: { duration: 0.2 },
-      });
+    if (status?.stage === 'done') {
+      coreControls.start({ width: '100%', opacity: 1, transition: { duration: 0.2 } });
+      glowControls.start({ width: '100%', opacity: 1, transition: { duration: 0.2 } });
 
-      // Wait for fade-out before hiding
-      setTimeout(() => {
-        // ✅ Step 2: fade the bar out
-        coreControls.start({
-          opacity: 0,
-          transition: { duration: 0.6 },
-        });
-        glowControls.start({
-          opacity: 0,
-          transition: { duration: 0.6 },
-        });
+      fadeTimer = setTimeout(() => {
+        coreControls.start({ opacity: 0, transition: { duration: 0.6 } });
+        glowControls.start({ opacity: 0, transition: { duration: 0.6 } });
 
-        // ✅ Step 3: after fade finishes, collapse the container
-        setTimeout(() => {
+        collapseTimer = setTimeout(() => {
           setAllowUnmount(true);
           setShowProgressBar(false);
-        }, 600); // wait for bar fade-out to finish
+        }, 600);
       }, 2000);
     }
 
-    // Canvas and particle system initialization
-    if (!canvas || typeof OffscreenCanvas === "undefined") return;
+    return () => {
+      if (fadeTimer) clearTimeout(fadeTimer);
+      if (collapseTimer) clearTimeout(collapseTimer);
+    };
+  }, [status, coreControls, glowControls, setAllowUnmount, setProgressBarExited, setShowProgressBar]);
 
-    if (canvasTransferred.current) return; // 🔐 prevent second transfer
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof OffscreenCanvas === 'undefined') return;
+    if (canvasTransferred.current) return;
     canvasTransferred.current = true;
 
     try {
       const dpr = window.devicePixelRatio || 1;
       const width = window.innerWidth * dpr;
       const height = window.innerHeight * dpr;
-
-      // ✅ Define the variables you're about to use
       const offscreen = canvas.transferControlToOffscreen();
-      const worker = new Worker(
-        new URL("./workers/particleWorker.ts", import.meta.url),
-        {
-          type: "module",
-        }
-      );
+      const worker = new Worker(new URL('./workers/particleWorker.ts', import.meta.url), { type: 'module' });
       particleWorkerRef.current = worker;
-
-      worker.postMessage(
-        {
-          canvas: offscreen,
-          width,
-          height,
-          dpr,
-        },
-        [offscreen] // transfer ownership
-      );
+      worker.postMessage({ canvas: offscreen, width, height, dpr }, [offscreen]);
     } catch (err) {
-      console.warn("OffscreenCanvas already transferred or failed:", err);
+      console.warn('OffscreenCanvas already transferred or failed:', err);
     }
 
     if (dropZoneRef.current) {
@@ -582,1103 +306,162 @@ function App() {
         reverse: false,
       });
     }
-  }, [status, coreControls, glowControls]);
+  }, []);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
-
     const handleScroll = () => {
       const newScrollY = window.scrollY;
       const dy = newScrollY - lastScrollY;
       lastScrollY = newScrollY;
-
-      particleWorkerRef.current?.postMessage({
-        type: "scroll",
-        dy,
-      });
+      particleWorkerRef.current?.postMessage({ type: 'scroll', dy });
     };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []); // ✅ empty deps: attach once, don't re-run
-
-  const handleExpandCluster = async (clusterId: string) => {
-    if (!response?.filename) return;
-
-    setError(null);
-    try {
-      const data = await apiService.expandCluster({
-        filename: response.filename,
-        cluster_id: clusterId,
-        processing_id: response?.processing_id,
-      });
-      const clusterData = data as { cluster?: { bullet_points?: string[] } };
-      // Update the specific topic with the expanded cluster data
-      setTopics((prevTopics) => {
-        if (!prevTopics) return prevTopics;
-
-        const updatedTopics = { ...prevTopics.topics };
-        updatedTopics[clusterId] = {
-          ...updatedTopics[clusterId],
-          bullet_points: clusterData.cluster?.bullet_points,
-        };
-
-        return { ...prevTopics, topics: updatedTopics };
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to expand cluster.");
-    }
-  };
-
-  const handleExpandBulletPoint = async (bulletPoint: string, topicId: string) => {
-    if (!topics || !topics.topics[topicId]) return;
-
-    const topic = topics.topics[topicId];
-    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId) || topic.examples || [];
-    const topicHeading = topic.heading;
-
-    try {
-      const data = await apiService.expandBulletPoint({
-        bullet_point: bulletPoint,
-        chunks: topicChunks,
-        topic_heading: topicHeading,
-        filename: response?.filename || '',
-        processing_id: response?.processing_id,
-        topic_id: topicId,
-        layer: 1,
-      });
-
-      if (!data.error) {
-        const bulletKey = `${topicId}_${generateBulletKey(bulletPoint)}`;
-        setExpandedBullets(prev => ({
-          ...prev,
-          [bulletKey]: { expansion: data, subExpansions: {} }
-        }));
-      }
-    } catch (error) {
-      console.error("Failed to expand bullet point:", error);
-    }
-  };
-
-  const handleExpandSubBulletPoint = async (
-    subBullet: string, 
-    topicId: string, 
-    parentBulletKey: string,
-    depth: number = 1
-  ) => {
-    if (depth >= 2) return;
-
-    const topic = topics?.topics[topicId];
-    if (!topic) return;
-
-    const topicChunks = memoizedGetAllTopicChunks(topic, topics?.segments, topicId) || topic.examples || [];
-    const topicHeading = topic.heading || `Topic ${topicId}`;
-
-    try {
-      const data = await apiService.expandBulletPoint({
-        bullet_point: subBullet,
-        chunks: topicChunks,
-        topic_heading: topicHeading,
-        filename: response?.filename || '',
-        processing_id: response?.processing_id,
-        topic_id: topicId,
-        parent_bullet: parentBulletKey,
-        layer: depth + 1,
-      });
-
-      if (!data.error) {
-        const subBulletKey = `${parentBulletKey}_sub_${subBullet.slice(0, 30)}`;
-        setExpandedBullets(prev => {
-          const updated = { ...prev };
-          if (updated[parentBulletKey]) {
-            if (!updated[parentBulletKey].subExpansions) {
-              updated[parentBulletKey].subExpansions = {};
-            }
-            updated[parentBulletKey].subExpansions![subBulletKey] = {
-              expansion: data,
-              subExpansions: {}
-            };
-          }
-          return updated;
-        });
-      }
-    } catch (error) {
-      console.error("Failed to expand sub-bullet point:", error);
-    }
-  };
-
-  // Function to generate a consistent bullet key (must match backend logic)
-  const generateBulletKey = (bulletPoint: string): string => {
-    // Remove markdown formatting and limit length (match backend logic)
-    const cleanBullet = bulletPoint.replace(/^[-*+]\s*/, '').trim();
-    return cleanBullet.slice(0, 80); // Use first 80 chars as key
-  };
-  
-  // Function to load saved bullet point expansions
-  const loadSavedExpansions = (topicsData: TopicResponse) => {
-    const newExpandedBullets: Record<string, BulletExpansion> = {};
-    
-    Object.entries(topicsData.topics).forEach(([topicId, topic]) => {
-      const bulletExpansions = topic.bullet_expansions;
-      if (bulletExpansions) {
-        
-        Object.entries(bulletExpansions).forEach(([bulletKey, expansionData]) => {
-          const originalBullet = expansionData.original_bullet || bulletKey;
-          const frontendKey = `${topicId}_${generateBulletKey(originalBullet)}`;
-          
-          // Load the main expansion
-          newExpandedBullets[frontendKey] = {
-            expansion: {
-              original_bullet: originalBullet,
-              expanded_bullets: expansionData.expanded_bullets || [],
-              topic_heading: expansionData.topic_heading || '',
-              chunks_used: expansionData.chunks_used || 0,
-              layer: expansionData.layer || 1
-            },
-            subExpansions: {}
-          };
-          
-          // Load layer 2 sub-expansions if they exist
-          if (expansionData.sub_expansions) {
-            
-            Object.entries(expansionData.sub_expansions).forEach(([subKey, subExpansionData]) => {
-              const originalSubBullet = subExpansionData.original_bullet || subKey;
-              const subFrontendKey = `${frontendKey}_sub_${originalSubBullet.slice(0, 30)}`;
-              
-              if (!newExpandedBullets[frontendKey].subExpansions) {
-                newExpandedBullets[frontendKey].subExpansions = {};
-              }
-              
-              newExpandedBullets[frontendKey].subExpansions![subFrontendKey] = {
-                expansion: {
-                  original_bullet: originalSubBullet,
-                  expanded_bullets: subExpansionData.expanded_bullets || [],
-                  topic_heading: subExpansionData.topic_heading || '',
-                  chunks_used: subExpansionData.chunks_used || 0,
-                  layer: subExpansionData.layer || 2
-                },
-                subExpansions: {}
-              };
-            });
-          }
-        });
-      }
-    });
-    
-    setExpandedBullets(newExpandedBullets);
-  };
-
-  const renderSubBullets = (
-    subBullets: string[], 
-    parentBulletKey: string, 
-    topicId: string, 
-    subExpansions: NestedExpansions = {},
-    depth: number = 1
-  ) => {
-    return (
-      <ul style={{
-        margin: "0.5rem 0 0 0",
-        paddingLeft: "1.5rem",
-        listStyleType: depth === 1 ? "circle" : "square",
-        color: "#ddd"
-      }}>
-        {subBullets.map((subBullet: string) => {
-          const cleanedSubBullet = subBullet.replace(/^[-*+]\s*/, '').trim();
-          const subBulletKey = `${parentBulletKey}_sub_${subBullet.slice(0, 30)}`;
-          const subExpansion = subExpansions[subBulletKey];
-          
-          return (
-            <li 
-              key={subBulletKey}
-              style={{ 
-                marginBottom: "0.5rem",
-                fontSize: "inherit",
-                lineHeight: "inherit",
-                cursor: depth < 2 ? "pointer" : "default", // Only clickable if under depth limit
-                opacity: depth < 2 ? 1 : 0.8 // Slightly fade out non-clickable items
-              }}
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent parent click
-                if (depth < 2) {
-                  handleExpandSubBulletPoint(subBullet, topicId, parentBulletKey, depth);
-                }
-              }}
-            >
-              <div>
-                <ReactMarkdown>{cleanedSubBullet}</ReactMarkdown>
-                {subExpansion && subExpansion.expansion.expanded_bullets && (
-                  renderSubBullets(
-                    subExpansion.expansion.expanded_bullets,
-                    subBulletKey,
-                    topicId,
-                    subExpansion.subExpansions || {},
-                    depth + 1
-                  )
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  };
-
-  const renderBulletPoints = (bulletPoints: string[], topicId: string) => {
-    return (
-      <ul style={{ 
-        margin: "0.5rem 0 0 0", 
-        paddingLeft: "1.5rem",
-        color: "#ddd",
-        listStyleType: "disc"
-      }}>
-        {bulletPoints.map((point) => {
-          // Remove markdown list formatting (-, *, +) from the beginning of bullet points
-          // since we're using HTML list styling
-          const cleanedPoint = point.replace(/^[-*+]\s*/, '').trim();
-          const bulletKey = `${topicId}_${generateBulletKey(point)}`;
-          const isExpanded = expandedBullets[bulletKey];
-          
-          return (
-            <li 
-              key={bulletKey} 
-              style={{ marginBottom: "0.5rem", cursor: "pointer" }}
-              onClick={() => {
-                handleExpandBulletPoint(point, topicId);
-              }}
-            >
-              <div>
-                <ReactMarkdown>{cleanedPoint}</ReactMarkdown>
-                {isExpanded && isExpanded.expansion.expanded_bullets && (
-                  renderSubBullets(
-                    isExpanded.expansion.expanded_bullets,
-                    bulletKey,
-                    topicId,
-                    isExpanded.subExpansions || {},
-                    1
-                  )
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    );
-  };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <>
-      {/* Single canvas for particle system - works for both connection screen and main UI */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          zIndex: -1,
-          pointerEvents: "none",
-        }}
-      ></canvas>
-      
-      {(isInitializing || !isBackendReachable) ? (
-        <ConnectionScreen 
+      <canvas ref={canvasRef} style={{ position: 'fixed', top: 0, left: 0, zIndex: -1, pointerEvents: 'none' }}></canvas>
+
+      {isInitializing || !isBackendReachable ? (
+        <ConnectionScreen
           isInitializing={isInitializing}
           isBackendReachable={isBackendReachable}
           forceHealthCheck={forceHealthCheck}
         />
       ) : !isAuthenticated ? (
-        // Show sign-in screen when not authenticated
         <>
           <ConnectionStatus />
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            minHeight: '70vh',
-            padding: '2rem',
-            fontFamily: '"Outfit", sans-serif',
-            textAlign: 'center',
-            marginTop: '-3rem'
-          }}>
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-            >
-              <div 
-                className="label"
-                style={{
-                  fontSize: '4.5rem',
-                  marginBottom: '-1rem',
-                  color: '#ffffff',
-                  fontWeight: '700',
-                  letterSpacing: '-0.02em'
-                }}
-              >
-                {BRAND.NAME}
-              </div>
-              <div
-                className="glow-text"
-                data-text="Smarter Studying Starts Here."
-                style={{ 
-                  fontSize: '2.5rem',
-                  marginBottom: '2rem',
-                  color: 'rgba(255, 255, 255, 0.9)',
-                  fontWeight: '500',
-                  letterSpacing: '-0.01em'
-                }}
-              >
-                Smarter Studying Starts Here.
-              </div>
-              <p style={{ 
-                fontSize: '1.2rem',
-                color: '#ffffff',
-                marginBottom: '3rem',
-                maxWidth: '600px',
-                lineHeight: '1.7',
-                fontWeight: '400'
-              }}>
-                Upload your study materials and let AI help you create comprehensive study guides, 
-                summarize topics, and expand on key concepts.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: 'fit-content' }}>
-                  <GoogleSignInButton 
-                    size="large"
-                    disabled={isLoading}
-                    onSuccess={() => {
-                      setSuccessMessage(`Successfully signed in! Welcome to ${BRAND.NAME}.`);
-                      setError(null); // Clear any previous errors
-                      // Clear success message after 5 seconds
-                      setTimeout(() => setSuccessMessage(null), 5000);
-                    }}
-                    onError={(error) => {
-                      console.error('Sign-in error:', error);
-                      setSuccessMessage(null); // Clear any success messages
-                      setError(JSON.stringify({
-                        title: "Sign-in Failed",
-                        details: error.message || "Failed to sign in with Google. Please try again.",
-                        action: "Please check your internet connection and try again."
-                      }));
-                    }}
-                  />
-                </div>
-              </div>
-              
-              {/* Success Message Display */}
-              {successMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  style={{
-                    marginTop: "1.5rem",
-                    padding: "1rem 1.5rem",
-                    backgroundColor: "rgba(34, 197, 94, 0.1)",
-                    border: "1px solid rgba(34, 197, 94, 0.3)",
-                    borderRadius: "12px",
-                    color: "rgb(34, 197, 94)",
-                    textAlign: "center",
-                    fontFamily: '"Outfit", sans-serif',
-                    fontSize: "0.95rem",
-                    fontWeight: "500",
-                    backdropFilter: "blur(8px)"
-                  }}
-                >
-                  ✅ {successMessage}
-                </motion.div>
-              )}
-            </motion.div>
-          </div>
+          <SignInScreen
+            isLoading={isLoading}
+            successMessage={successMessage}
+            setSuccessMessage={setSuccessMessage}
+            setError={setError}
+          />
         </>
       ) : (
-        // Show main app when authenticated
         <>
           <ConnectionStatus />
           <AuthHeader ref={authHeaderRef} />
           <ApiKeyBanner onOpenSettings={() => authHeaderRef.current?.openSettings()} />
-          
-          <div style={{ padding: "2rem", fontFamily: '"Outfit", sans-serif' }}>
-            <div className="label fade-in" style={{ animationDelay: "0.2s", fontSize: "2rem", marginBottom: "0rem" }}>
+
+          <div style={{ padding: '2rem', fontFamily: '"Outfit", sans-serif' }}>
+            <div className="label fade-in" style={{ animationDelay: '0.2s', fontSize: '2rem', marginBottom: '0rem' }}>
               {BRAND.NAME}
             </div>
-            <div
-              className="glow-text fade-in"
-              data-text="Smarter Studying Starts Here."
-              style={{ animationDelay: "0.4s", marginBottom: "-1rem" }}
-            >
-              Smarter Studying Starts Here.
+            <div className="glow-text fade-in" data-text={displayTagline} style={{ animationDelay: '0.4s', marginBottom: '-1rem' }}>
+              {displayTagline}
             </div>
 
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept={FILE_VALIDATION.ALLOWED_EXTENSIONS.join(',')}
-              style={{ display: "none" }}
+            {hasTopics && lastSavedAt && (
+              <div style={{ marginTop: '1.25rem', marginBottom: '0.5rem', fontSize: '0.85rem', color: 'rgba(255,255,255,0.65)' }}>
+                Last saved: {new Date(lastSavedAt).toLocaleString()}
+              </div>
+            )}
+
+            {showEmptyState && (
+              <EmptyState message="Upload a lecture recording, PDF, or text file to generate study notes." />
+            )}
+
+            <UploadZone
+              fileInputRef={fileInputRef}
+              dropZoneRef={dropZoneRef}
+              dragOver={dragOver}
+              activeHue={activeHue}
+              setDragOver={setDragOver}
+              setActiveHue={setActiveHue}
+              handleDrop={handleDrop}
+              handleFileChange={handleFileChange}
+              onExplode={() => particleWorkerRef.current?.postMessage({ type: 'explode' })}
             />
 
-            <div
-              ref={dropZoneRef}
-              className={`drop-zone ${dragOver ? "drag-over" : ""}`}
-              style={{
-                marginTop: "4rem",
-                ...(dragOver &&
-                  activeHue !== null &&
-                  ({
-                    "--accent-hue": `${activeHue}`,
-                  } as React.CSSProperties)),
-                borderColor:
-                  dragOver && activeHue !== null
-                    ? `hsl(${activeHue}, 100%, 60%)`
-                    : undefined,
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                
-                // Only update state if not already in drag state
-                if (!dragOver) {
-                  setDragOver(true);
-                  
-                  // Assign a random hue only on first drag entry
-                  const randomHue =
-                    ACCENT_HUES[Math.floor(Math.random() * ACCENT_HUES.length)];
-                  setActiveHue(randomHue);
-                  
-                  // Apply transform only once
-                  if (dropZoneRef.current) {
-                    dropZoneRef.current.style.transform =
-                      "rotateX(3deg) rotateY(0deg) scale(1.03)";
-                  }
-                }
-              }}
-              onDragLeave={() => {
-                setDragOver(false);
-                setActiveHue(null); // Reset for next hover
-
-                if (dropZoneRef.current) {
-                  dropZoneRef.current.style.transform = "";
-                }
-
-              }}
-              onDrop={(e) => {
-                setDragOver(false);
-                setActiveHue(null); // Reset for next hover
-                if (dropZoneRef.current) {
-                  dropZoneRef.current.style.transform = "";
-                }
-
-                particleWorkerRef.current?.postMessage({ type: "explode" });
-                handleDrop(e);
-              }}
-            >
-              <div className="drop-zone-content">
-                <div style={{
-                  fontSize: "3rem",
-                  marginBottom: "1.5rem",
-                  opacity: dragOver ? 1 : 0.7,
-                  transition: "all 0.3s ease",
-                  transform: dragOver ? "scale(1.1)" : "scale(1)"
-                }}>
-                  {dragOver ? "📂" : "📁"}
-                </div>
-                
-                <h3 style={{
-                  margin: "0 0 1rem 0",
-                  fontSize: "1.4rem",
-                  fontWeight: "600",
-                  color: "#fff",
-                  opacity: dragOver ? 1 : 0.9,
-                  transition: "opacity 0.3s ease"
-                }}>
-                  {dragOver ? "Drop your file here!" : "Upload Your Study Material"}
-                </h3>
-                
-                <p style={{
-                  margin: "0 0 1.5rem 0",
-                  fontSize: "1rem",
-                  color: "#ccc",
-                  lineHeight: "1.5",
-                  opacity: dragOver ? 0.8 : 0.7,
-                  transition: "opacity 0.3s ease"
-                }}>
-                  {dragOver 
-                    ? "Release to start processing..." 
-                    : "Drag & drop your file here or click to browse"
-                  }
-                </p>
-                
-                <div style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "0.5rem",
-                  justifyContent: "center",
-                  marginBottom: "1rem"
-                }}>
-                  {FILE_VALIDATION.ALLOWED_EXTENSIONS.map((ext) => (
-                    <span key={ext} style={{
-                      background: "rgba(255, 255, 255, 0.1)",
-                      color: "#ddd",
-                      padding: "0.3rem 0.8rem",
-                      borderRadius: "20px",
-                      fontSize: "0.8rem",
-                      fontWeight: "500",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
-                      opacity: dragOver ? 0.6 : 0.8,
-                      transition: "opacity 0.3s ease"
-                    }}>
-                      {ext}
-                    </span>
-                  ))}
-                </div>
-                
-                <div style={{
-                  fontSize: "0.85rem",
-                  color: "#999",
-                  opacity: dragOver ? 0.6 : 0.8,
-                  transition: "opacity 0.3s ease"
-                }}>
-                  💡 Supports PDFs, audio files, and text documents
-                </div>
-              </div>
-            </div>
-
-            <ErrorDisplay 
-              error={error} 
+            <ErrorDisplay
+              error={error}
               onDismiss={() => setError(null)}
               className="mb-4"
               actionButton={
-                error?.includes("upload") ? {
-                  label: "Try Again",
-                  action: () => {
-                    setError(null);
-                    setFile(null);
-                    setResponse(null);
-                  }
-                } : undefined
+                error?.includes('upload')
+                  ? {
+                      label: 'Try Again',
+                      action: () => {
+                        setError(null);
+                        setFile(null);
+                        setResponse(null);
+                      },
+                    }
+                  : undefined
               }
             />
 
-            <AnimatePresence
-              onExitComplete={() => {
-                setProgressBarExited(true);
-              }}
-            >
-              {showProgressBar && (
-                <motion.div
-                  key="progress"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={
-                    allowUnmount
-                      ? { opacity: 0, height: 0, transition: { duration: 0.4 } }
-                      : {} // prevents auto exit until we say so
-                  }
-                  transition={{ duration: 0.4 }}
-                  style={{
-                    overflow: "hidden", // Needed for smooth height animation
-                    marginTop: "1rem",
-                    paddingBottom: "60px", // 🔧 Give extra space for enhanced glow
-                    paddingLeft: "30px", // ✅ Balanced horizontal space for wider bar
-                    paddingRight: "30px", // ✅ Balanced horizontal space for wider bar
-                  }}
-                >
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.4 }}
-                  >
-                    {status?.stage === "uploading"
-                      ? "Uploading file..."
-                      : status?.stage === "preprocessing"
-                      ? "Preprocessing audio..."
-                      : status?.stage === "transcribing" &&
-                        typeof status.current === "number" &&
-                        typeof status.total === "number"
-                      ? `Transcribing chunk ${status.current} of ${status.total}…`
-                      : status?.stage === "saving_output"
-                      ? "Saving output..."
-                      : isFinishing
-                      ? "Finishing up…"
-                      : "Beginning transcription…"}
-                  </motion.p>
+            <ProcessingProgress
+              status={status}
+              showProgressBar={showProgressBar}
+              progressBarExited={progressBarExited}
+              allowUnmount={allowUnmount}
+              isFinishing={isFinishing}
+              coreControls={coreControls}
+              glowControls={glowControls}
+              onExitComplete={() => setProgressBarExited(true)}
+            />
 
-                  {/* Enhanced wrapper to allow glow overflow */}
-                  <div
-                    style={{
-                      position: "relative",
-                      overflow: "visible", // ✅ Let glow extend outside
-                      padding: "20px clamp(20px, 5vw, 40px)", // ✅ Responsive padding that scales with viewport
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      width: "100%", // ✅ Ensure full width for centering
-                      boxSizing: "border-box", // ✅ Include padding in width calculation
-                    }}
-                  >
-                    <div className="neon-progress-wrapper">
-                      <motion.div
-                        className="neon-progress-core"
-                        initial={{ width: "0%", opacity: 0 }}
-                        animate={coreControls}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        style={{ position: "absolute", left: 0, top: 0 }}
-                      />
-                      <motion.div
-                        className="neon-progress-glow"
-                        initial={{ width: "0%", opacity: 0 }}
-                        animate={glowControls}
-                        transition={{ duration: 0.6, ease: "easeOut" }}
-                        style={{ position: "absolute", left: 0, top: 0 }}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {canShowTranscript && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                style={{ 
-                  marginTop: "3rem",
-                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%)",
-                  borderRadius: "16px",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  padding: "2rem",
-                  backdropFilter: "blur(10px)"
-                }}
-              >
-                {/* File Info Header */}
-                <div style={{ 
-                  marginBottom: "2rem",
-                  background: "rgba(0, 0, 0, 0.3)",
-                  borderRadius: "12px",
-                  padding: "1.5rem",
-                  border: "1px solid rgba(255, 255, 255, 0.1)"
-                }}>
-                  <div style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "1rem",
-                    marginBottom: "1rem"
-                  }}>
-                    <div style={{
-                      width: "40px",
-                      height: "40px",
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "1.2rem"
-                    }}>
-                      📄
-                    </div>
-                    <div>
-                      <h3 style={{ 
-                        margin: 0, 
-                        color: "#fff",
-                        fontSize: "1.2rem",
-                        fontWeight: "600"
-                      }}>
-                        File Successfully Processed
-                      </h3>
-                      <p style={{ 
-                        margin: "0.2rem 0 0 0", 
-                        color: "#999",
-                        fontSize: "0.9rem"
-                      }}>
-                        Ready for analysis and topic extraction
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div style={{ 
-                    display: "grid", 
-                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                    gap: "1rem"
-                  }}>
-                    <div style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: "0.5rem",
-                      color: "#ccc"
-                    }}>
-                      <span style={{ fontSize: "0.9rem" }}>📁</span>
-                      <div>
-                        <div style={{ fontSize: "0.8rem", color: "#999" }}>Filename</div>
-                        <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filename}</div>
-                      </div>
-                    </div>
-                    
-                    <div style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: "0.5rem",
-                      color: "#ccc"
-                    }}>
-                      <span style={{ fontSize: "0.9rem" }}>🏷️</span>
-                      <div>
-                        <div style={{ fontSize: "0.8rem", color: "#999" }}>File Type</div>
-                        <div style={{ fontSize: "0.95rem", fontWeight: "500" }}>{response.filetype}</div>
-                      </div>
-                    </div>
-                    
-                    <div style={{ 
-                      display: "flex", 
-                      alignItems: "center", 
-                      gap: "0.5rem",
-                      color: "#ccc"
-                    }}>
-                      <span style={{ fontSize: "0.9rem" }}>✅</span>
-                      <div>
-                        <div style={{ fontSize: "0.8rem", color: "#999" }}>Status</div>
-                        <div style={{ fontSize: "0.95rem", fontWeight: "500", color: "#4ade80" }}>{response.message}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transcript Display */}
-                <div style={{ marginBottom: "1rem" }}>
-                  <div style={{
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "0.75rem",
-                    marginBottom: "1rem"
-                  }}>
-                    <h2 style={{ 
-                      margin: 0, 
-                      fontSize: "1.3rem",
-                      fontWeight: "600",
-                      color: "#fff"
-                    }}>
-                      📄 Extracted Transcript
-                    </h2>
-                    <div style={{
-                      background: "rgba(185, 255, 255, 0.1)",
-                      color: "hsl(185, 100%, 70%)",
-                      padding: "0.3rem 0.8rem",
-                      borderRadius: "20px",
-                      fontSize: "0.8rem",
-                      fontWeight: "500",
-                      border: "1px solid rgba(185, 255, 255, 0.2)"
-                    }}>
-                      {response.text ? `${Math.round(response.text.length / 1000)}k characters` : "0 characters"}
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    background: "rgba(0, 0, 0, 0.4)",
-                    borderRadius: "12px",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    overflow: "hidden"
-                  }}>
-                    <div style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      padding: "0.75rem 1rem",
-                      borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem"
-                    }}>
-                      <div style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#ef4444"
-                      }}></div>
-                      <div style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#f59e0b"
-                      }}></div>
-                      <div style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#10b981"
-                      }}></div>
-                      <span style={{ 
-                        marginLeft: "0.5rem", 
-                        fontSize: "0.8rem", 
-                        color: "#999",
-                        fontFamily: "monospace"
-                      }}>
-                        transcript.txt
-                      </span>
-                    </div>
-                    
-                    <div style={{
-                      maxHeight: "400px",
-                      overflowY: "auto",
-                      padding: "1.5rem",
-                      lineHeight: "1.6"
-                    }}>
-                      <pre style={{
-                        margin: 0,
-                        fontFamily: "'Fira Code', 'Consolas', monospace",
-                        fontSize: "0.9rem",
-                        color: "#e5e5e5",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word"
-                      }}>
-                        {response.text || "No transcript content available"}
-                      </pre>
-                    </div>
-                  </div>
-                  
-                  <div style={{ 
-                    marginTop: "0.75rem",
-                    fontSize: "0.8rem", 
-                    color: "#888",
-                    textAlign: "center"
-                  }}>
-                    💡 This transcript will be segmented and analyzed for key topics below
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {canShowTranscript && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                style={{ 
-                  marginTop: "2rem", 
-                  display: "flex", 
-                  gap: "1rem",
-                  flexWrap: "wrap"
-                }}
-              >
+            {isProcessingActive && (
+              <div style={{ marginTop: '0.9rem', display: 'flex', justifyContent: 'center' }}>
                 <motion.button
-                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handleProcessChunks}
-                  disabled={!!processedChunks}
+                  onClick={cancelProcessing}
                   style={{
-                    ...buttonStyle,
-                    flex: "1",
-                    minWidth: "250px",
-                    padding: "1rem 1.5rem",
-                    fontSize: "1rem",
-                    fontWeight: "600",
-                    background: processedChunks 
-                      ? "linear-gradient(135deg, #10b981, #059669)"
-                      : "linear-gradient(135deg, hsl(185, 100%, 50%), hsl(200, 100%, 60%))",
-                    opacity: processedChunks ? 0.8 : 1,
-                    cursor: processedChunks ? "not-allowed" : "pointer",
-                    position: "relative",
-                    overflow: "hidden"
+                    background: 'transparent',
+                    color: 'rgba(255,255,255,0.86)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: '10px',
+                    padding: '0.5rem 0.9rem',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
                   }}
                 >
-                  <div style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "0.75rem",
-                    justifyContent: "center"
-                  }}>
-                    <span style={{ fontSize: "1.1rem" }}>
-                      {processedChunks ? "✅" : "🔧"}
-                    </span>
-                    <span>
-                      {processedChunks
-                        ? "Transcript Segmented ✔"
-                        : "Segment & Optimize Transcript"}
-                    </span>
-                  </div>
-                  {!processedChunks && (
-                    <div style={{
-                      position: "absolute",
-                      top: 0,
-                      left: "-100%",
-                      width: "100%",
-                      height: "100%",
-                      background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                      animation: "shimmer 2s infinite"
-                    }} />
-                  )}
+                  Cancel
                 </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleGenerateHeadings}
-                  disabled={!processedChunks || generatingHeadings}
-                  style={{
-                    ...buttonStyle,
-                    flex: "1",
-                    minWidth: "250px",
-                    padding: "1rem 1.5rem",
-                    fontSize: "1rem",
-                    fontWeight: "600",
-                    background: !processedChunks || generatingHeadings 
-                      ? "linear-gradient(135deg, #6b7280, #4b5563)"
-                      : "linear-gradient(135deg, hsl(315, 100%, 60%), hsl(330, 100%, 70%))",
-                    opacity: !processedChunks || generatingHeadings ? 0.6 : 1,
-                    cursor: !processedChunks || generatingHeadings ? "not-allowed" : "pointer",
-                    position: "relative",
-                    overflow: "hidden"
-                  }}
-                >
-                  <div style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "0.75rem",
-                    justifyContent: "center"
-                  }}>
-                    <span style={{ fontSize: "1.1rem" }}>
-                      {generatingHeadings ? "⏳" : "🧠"}
-                    </span>
-                    <span>
-                      {generatingHeadings
-                        ? "Generating Topics..."
-                        : "Generate Topics with AI"}
-                    </span>
-                  </div>
-                  {processedChunks && !generatingHeadings && (
-                    <div style={{
-                      position: "absolute",
-                      top: 0,
-                      left: "-100%",
-                      width: "100%",
-                      height: "100%",
-                      background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                      animation: "shimmer 2s infinite"
-                    }} />
-                  )}
-                </motion.button>
-              </motion.div>
-            )}
-
-            {topics && (
-              <div style={{ marginTop: "2rem" }}>
-                <h2>📊 Generated Topics</h2>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: "2rem" }}
-                >
-                  {Object.entries(topics.topics).map(([topicId, topic]) => (
-                    <div key={topicId} style={{ 
-                      background: "rgba(255, 255, 255, 0.05)", 
-                      padding: "1.5rem", 
-                      borderRadius: "12px",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      textAlign: "left"
-                    }}>
-                      <h3 style={{ 
-                        margin: "0 0 1rem 0", 
-                        color: "#fff",
-                        fontSize: "1.4rem"
-                      }}>
-                        {topic.heading}
-                      </h3>
-                      
-                      {topic.concepts && topic.concepts.length > 0 && (
-                        <div style={{ marginBottom: "1rem" }}>
-                          <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                            Key Concepts:
-                          </strong>
-                          <div style={{ 
-                            display: "flex", 
-                            flexWrap: "wrap", 
-                            gap: "0.5rem", 
-                            marginTop: "0.5rem" 
-                          }}>
-                            {topic.concepts.map((concept, idx) => (
-                              <span key={idx} style={{
-                                background: "rgba(185, 100%, 50%, 0.2)",
-                                color: "hsl(185, 100%, 70%)",
-                                padding: "0.3rem 0.8rem",
-                                borderRadius: "20px",
-                                fontSize: "0.85rem",
-                                border: "1px solid rgba(185, 100%, 50%, 0.3)"
-                              }}>
-                                {concept}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div style={{ 
-                        marginBottom: "1rem",
-                        background: "rgba(255, 255, 255, 0.03)",
-                        padding: "1rem",
-                        borderRadius: "8px",
-                        border: "1px solid rgba(255, 255, 255, 0.1)"
-                      }}>
-                        <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                          Summary:
-                        </strong>
-                        <p style={{ 
-                          margin: "0.5rem 0 0 0", 
-                          color: topic.summary ? "#ddd" : "#888",
-                          lineHeight: "1.5",
-                          fontSize: "0.95rem",
-                          fontStyle: topic.summary ? "normal" : "italic"
-                        }}>
-                          {topic.summary || "Summary not available for this topic."}
-                        </p>
-                      </div>
-                      
-                      <div style={{ 
-                        display: "flex", 
-                        gap: "1rem", 
-                        fontSize: "0.8rem", 
-                        color: "#999" 
-                      }}>
-                        <span>{topic.stats?.num_chunks || 0} chunks</span>
-                        <span>Avg: {Math.round(topic.stats?.mean_size || 0)} words</span>
-                      </div>
-
-                      {/* Expand/Collapse buttons */}
-                      <div style={{ 
-                        marginTop: "1rem", 
-                        display: "flex", 
-                        flexDirection: "column", 
-                        gap: "0.5rem" 
-                      }}>
-                        <button
-                          onClick={() => handleExpandCluster(topicId)}
-                          style={{
-                            ...buttonStyle,
-                            background: "hsl(185, 100%, 50%)",
-                          }}
-                        >
-                          {topic.bullet_points
-                            ? "Regenerate Insights"
-                            : "Expand Cluster for More Insights"}
-                        </button>
-                      </div>
-
-                      {/* Bullet points section */}
-                      {topic.bullet_points && topic.bullet_points.length > 0 && (
-                        <div style={{ 
-                          marginTop: "1rem", 
-                          padding: "1rem", 
-                          background: "rgba(255, 255, 255, 0.04)", 
-                          borderRadius: "8px",
-                          border: "1px solid rgba(255, 255, 255, 0.1)"
-                        }}>
-                          <strong style={{ color: "#ccc", fontSize: "0.9rem" }}>
-                            Key Bullet Points:
-                          </strong>
-                          {renderBulletPoints(topic.bullet_points, topicId)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
+
+            {canShowTranscript && response && <TranscriptDisplay response={response} />}
+
+            {canShowTranscript && (
+              <ActionButtons
+                handleProcessChunks={handleProcessChunks}
+                handleGenerateHeadings={handleGenerateHeadings}
+                processedChunks={processedChunks}
+                segmenting={segmenting}
+                generatingHeadings={generatingHeadings}
+                buttonStyle={buttonStyle}
+              />
+            )}
+
+            <TopicResults
+              topics={topics}
+              expandedBullets={expandedBullets}
+              expandingBulletKey={expandingBulletKey}
+              generateBulletKey={generateBulletKey}
+              handleExpandCluster={handleExpandCluster}
+              handleExpandBulletPoint={handleExpandBulletPointWithLoading}
+              handleExpandSubBulletPoint={handleExpandSubBulletPointWithLoading}
+            />
+
+            {hasTopics && (
+              <ExportButtons
+                handleCopyAsMarkdown={handleCopyAsMarkdown}
+                handleDownloadMarkdown={handleDownloadMarkdown}
+                isCopyExporting={isCopyExporting}
+                isDownloadExporting={isDownloadExporting}
+                copyFeedbackVisible={copyFeedbackVisible}
+              />
+            )}
           </div>
+
+          <SuccessToast visible={successToastVisible} message="Study notes generated successfully!" />
         </>
       )}
     </>
