@@ -79,6 +79,7 @@ rnnoise_output/
 
 # Desloppify (local scan state; do not commit)
 .desloppify/
+scorecard.png
 
 # Misc
 *.db

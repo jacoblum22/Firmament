@@ -11,6 +11,11 @@ function Resolve-Desloppify {
     if ($fromPath) {
         return $fromPath.Source
     }
+    # Canonical backend venv (see backend/start.ps1 — outside OneDrive for large ML wheels)
+    $studymate = 'C:\dev\venvs\studymate-v2\Scripts\desloppify.exe'
+    if (Test-Path $studymate) {
+        return $studymate
+    }
     foreach ($rel in @(
             'backend\.venv\Scripts\desloppify.exe',
             '.venv\Scripts\desloppify.exe'
@@ -21,9 +26,10 @@ function Resolve-Desloppify {
         }
     }
     throw @"
-desloppify not found. Install dev deps in an activated venv, then re-run:
+desloppify not found. Install dev deps, then re-run (recommended venv matches backend/start.ps1):
 
-  pip install -r backend/requirements-dev.txt
+  python -m venv C:\dev\venvs\studymate-v2
+  C:\dev\venvs\studymate-v2\Scripts\pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 "@
 }
 

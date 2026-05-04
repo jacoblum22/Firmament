@@ -8,7 +8,7 @@ pytest-cov==6.0.0
 httpx==0.28.1  # For testing FastAPI endpoints
 
 # Code Quality
-black==24.12.0
+black==25.1.0
 flake8==7.1.1
 mypy==1.14.0
 pre-commit==4.1.0
@@ -22,4 +22,4 @@ jupyter==1.1.1   # For notebooks and exploration
 
 # API Documentation
 mkdocs==1.6.1
-mkdocs-material==9.5.55
+mkdocs-material==9.6.23
