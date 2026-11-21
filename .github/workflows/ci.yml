@@ -47,6 +47,13 @@ jobs:
         working-directory: backend
         run: python docker/setup_nltk_data.py || true
 
+      - name: Create local env files from example
+        working-directory: backend
+        # .env.development / .env.production are gitignored; config tests expect them to exist
+        run: |
+          cp .env.example .env.development
+          cp .env.example .env.production
+
       - name: Run config tests
         working-directory: backend
         run: pytest tests/config/ -v --tb=short
