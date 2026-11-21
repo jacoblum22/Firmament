@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Quick test to verify our setup works
 """
@@ -19,19 +19,19 @@ def test_basic_setup():
         from app.config import Settings
 
         settings = Settings()
-        print(f"âœ“ Config: {settings.environment}")
+        print(f"✓ Config: {settings.environment}")
 
         # Test S3 storage
         from utils.storage.s3_storage import get_storage_manager
 
         storage = get_storage_manager()
-        print(f"âœ“ Storage: {'S3' if storage.use_s3 else 'Local'}")
+        print(f"✓ Storage: {'S3' if storage.use_s3 else 'Local'}")
 
         # Test auth
         from utils.security.auth import get_auth_manager
 
         auth = get_auth_manager()
-        print(f"âœ“ Auth: JWT secret configured")
+        print(f"✓ Auth: JWT secret configured")
 
         # Test hybrid sharing
         content = b"test content"
@@ -43,18 +43,18 @@ def test_basic_setup():
         # Add proper assertions instead of just printing
         assert hash1 == hash2, "Content hash mismatch for identical payloads"
         assert path1 != path2, "Storage path should vary per-user"
-        print("âœ“ Hybrid sharing: Same hash, different paths")
+        print("✓ Hybrid sharing: Same hash, different paths")
 
         return True
     except Exception as e:
-        print(f"âŒ Error: {e}")
+        print(f"❌ Error: {e}")
         return False
 
 
 if __name__ == "__main__":
-    print("ðŸ§ª StudyMate-v2 Quick Setup Test")
+    print("🧪 StudyMate-v2 Quick Setup Test")
     if test_basic_setup():
-        print("ðŸŽ‰ Basic setup is working!")
+        print("🎉 Basic setup is working!")
     else:
-        print("âŒ Setup has issues")
+        print("❌ Setup has issues")
 

@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 # Check for sentence_transformers dependency
 try:

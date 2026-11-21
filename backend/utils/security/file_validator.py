@@ -205,8 +205,9 @@ class FileValidator:
         if not filename:
             return "uploaded_file"
 
-        # Remove path components
-        filename = os.path.basename(filename)
+        # Remove path components (treat backslashes as separators too, so
+        # Windows-style paths are stripped even when running on Linux)
+        filename = os.path.basename(filename.replace("\\", "/"))
 
         # Replace dangerous characters with underscores
         dangerous_chars = ["<", ">", ":", '"', "|", "?", "*", "/", "\\"]

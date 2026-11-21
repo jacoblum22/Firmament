@@ -1,4 +1,4 @@
-﻿"""
+"""
 Integration tests for file upload validation.
 Tests the complete upload endpoint with various file scenarios.
 """
@@ -302,10 +302,10 @@ class TestFileUploadIntegration:
         pdf_content = b"%PDF-1.4\nvalid pdf content"
 
         unicode_names = [
-            "æ–‡æ¡£.pdf",  # Chinese
-            "Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚.pdf",  # Russian
-            "cafÃ©_rÃ©sumÃ©.pdf",  # Accented characters
-            "emoji_ðŸ˜€_file.pdf",  # Emoji
+            "文档.pdf",  # Chinese
+            "документ.pdf",  # Russian
+            "café_résumé.pdf",  # Accented characters
+            "emoji_😀_file.pdf",  # Emoji
         ]
 
         for filename in unicode_names:

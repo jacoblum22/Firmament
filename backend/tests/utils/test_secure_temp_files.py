@@ -1,4 +1,4 @@
-﻿"""
+"""
 Test cases for secure temporary file handling improvements.
 """
 

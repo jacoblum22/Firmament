@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import sys
 import os
 
@@ -77,7 +77,7 @@ class TestIsInformative:
     def test_numbers_and_special_chars(self):
         """Test text with numbers and special characters"""
         text = (
-            "The model achieved 95% accuracy with 1000 samples and Î±=0.01 learning rate"
+            "The model achieved 95% accuracy with 1000 samples and α=0.01 learning rate"
         )
         assert is_informative(text) == True
 
@@ -237,7 +237,7 @@ class TestEdgeCases:
         chunks = [
             {
                 "position": "0:30",
-                "text": "Machine learning algorithms utilize mathematical concepts like Î±, Î², and âˆ‘ symbols.",
+                "text": "Machine learning algorithms utilize mathematical concepts like α, β, and ∑ symbols.",
             }
         ]
 

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test script for the new k-means pre-clustering functionality in BERTopic processor.
 """
@@ -12,13 +12,13 @@ try:
     BERTOPIC_AVAILABLE = True
 except ImportError:
     BERTOPIC_AVAILABLE = False
-    print("âš ï¸  Warning: BERTopic module not available. K-means tests will be skipped.")
+    print("⚠️  Warning: BERTopic module not available. K-means tests will be skipped.")
 
 
 def test_kmeans_clustering():
     """Test k-means pre-clustering functionality with BERTopic processor"""
     if not BERTOPIC_AVAILABLE:
-        print("âš ï¸  Skipping k-means test - BERTopic module not available")
+        print("⚠️  Skipping k-means test - BERTopic module not available")
         return
 
     # Mock the OpenAI client to avoid real API calls during testing
@@ -152,7 +152,7 @@ Summary: This section explores practical applications of AI including computer v
         assert "topics" in result, "Result should contain topics"
         assert result["num_topics"] > 0, "Should generate at least one topic"
 
-        print("âœ… K-means clustering test completed successfully!")
+        print("✅ K-means clustering test completed successfully!")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -286,11 +286,11 @@ def create_background_task(coro, task_name: str = "background_task"):
         """Handle exceptions from background tasks"""
         try:
             task.result()  # This will raise any exception that occurred
-            logger.info(f"âœ… Background task '{task_name}' completed successfully")
+            logger.info(f"✅ Background task '{task_name}' completed successfully")
         except asyncio.CancelledError:
-            logger.info(f"ðŸ”„ Background task '{task_name}' was cancelled")
+            logger.info(f"🔄 Background task '{task_name}' was cancelled")
         except Exception as e:
-            logger.error(f"âŒ Background task '{task_name}' failed: {e}")
+            logger.error(f"❌ Background task '{task_name}' failed: {e}")
         finally:
             # Remove completed/failed task from active tasks
             if task in background_tasks:
@@ -328,7 +328,7 @@ async def startup_event():
         # Start S3 initialization in background - don't await to avoid blocking startup
         # Use helper function for proper exception handling
         create_background_task(init_storage_background(), task_name="S3_initialization")
-        logger.info("ðŸš€ S3 background initialization started")
+        logger.info("🚀 S3 background initialization started")
     except Exception as e:
         logger.error(f"Failed to start S3 background initialization: {e}")
         # Don't fail startup if S3 background init fails

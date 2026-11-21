@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests for the BERTopic processor pipeline.
 
 The processor now lives at utils.nlp.bertopic_processor and has been split

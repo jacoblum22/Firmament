@@ -1,4 +1,4 @@
-﻿"""
+"""
 Test suite for rnnoise_process.py module.
 
 This module tests the audio denoising functionality including:

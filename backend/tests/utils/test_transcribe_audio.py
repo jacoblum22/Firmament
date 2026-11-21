@@ -1,4 +1,4 @@
-﻿"""
+"""
 Test suite for transcribe_audio.py module.
 
 This module tests the audio transcription functionality including:

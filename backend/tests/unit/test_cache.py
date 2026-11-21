@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test script for the content-based caching system with proper assertions.
 """
@@ -173,5 +173,5 @@ if __name__ == "__main__":
     test_processed_cache()
     test_cache_statistics()
     test_cache_error_handling()
-    print("âœ… All cache tests completed successfully!")
+    print("✅ All cache tests completed successfully!")
 

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test S3 connection in production mode
 """
@@ -11,15 +11,15 @@ try:
     from app.config import Settings
     from utils.storage.s3_storage import S3StorageManager
 
-    print("ðŸ§ª Testing S3 Connection in Production Mode")
+    print("🧪 Testing S3 Connection in Production Mode")
     print("=" * 50)
 
     # Load production settings
     settings = Settings()
-    print(f"âœ“ Environment: {settings.environment}")
-    print(f"âœ“ Use S3: {settings.use_s3_storage}")
-    print(f"âœ“ AWS Region: {settings.aws_region}")
-    print(f"âœ“ Bucket: {settings.s3_bucket_name}")
+    print(f"✓ Environment: {settings.environment}")
+    print(f"✓ Use S3: {settings.use_s3_storage}")
+    print(f"✓ AWS Region: {settings.aws_region}")
+    print(f"✓ Bucket: {settings.s3_bucket_name}")
 
     # Test storage manager
     storage = S3StorageManager(settings)
@@ -28,43 +28,43 @@ try:
     test_key = "test/connection-test.txt"
     test_content = b"Hello from StudyMate-v2 production test!"
 
-    print(f"\nðŸ“¤ Testing file upload...")
+    print(f"\n📤 Testing file upload...")
     success = storage.upload_file(test_content, test_key, "text/plain")
     if success:
-        print(f"âœ“ Upload successful")
+        print(f"✓ Upload successful")
     else:
-        print(f"âŒ Upload failed")
+        print(f"❌ Upload failed")
         exit(1)
 
-    print(f"ðŸ” Testing file exists...")
+    print(f"🔍 Testing file exists...")
     exists = storage.file_exists(test_key)
     if exists:
-        print(f"âœ“ File exists")
+        print(f"✓ File exists")
     else:
-        print(f"âŒ File not found")
+        print(f"❌ File not found")
         exit(1)
 
-    print(f"ðŸ“¥ Testing download...")
+    print(f"📥 Testing download...")
     downloaded = storage.download_file(test_key)
     if downloaded == test_content:
-        print(f"âœ“ Download successful and content matches")
+        print(f"✓ Download successful and content matches")
     else:
-        print(f"âŒ Download failed or content mismatch")
+        print(f"❌ Download failed or content mismatch")
         exit(1)
 
-    print(f"ðŸ—‘ï¸ Testing cleanup...")
+    print(f"🗑️ Testing cleanup...")
     deleted = storage.delete_file(test_key)
     if deleted:
-        print(f"âœ“ File deleted successfully")
+        print(f"✓ File deleted successfully")
     else:
-        print(f"âŒ Delete failed")
+        print(f"❌ Delete failed")
         exit(1)
 
-    print(f"\nðŸŽ‰ ALL TESTS PASSED!")
+    print(f"\n🎉 ALL TESTS PASSED!")
     print(f"Your AWS S3 setup is working perfectly!")
 
 except Exception as e:
-    print(f"âŒ Test failed: {e}")
+    print(f"❌ Test failed: {e}")
     import traceback
 
     traceback.print_exc()

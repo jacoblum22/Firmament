@@ -1,4 +1,4 @@
-﻿"""
+"""
 Tests for file validation utilities.
 """
 

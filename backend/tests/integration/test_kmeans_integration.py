@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Integration test with larger dataset to verify k-means pre-clustering triggers.
 """
@@ -11,6 +11,25 @@ try:
     BERTOPIC_AVAILABLE = True
 except ImportError:
     BERTOPIC_AVAILABLE = False
+
+
+@pytest.fixture(autouse=True)
+def stub_cluster_headings(monkeypatch):
+    """Replace the LLM heading call so these tests never hit the OpenAI API."""
+    if not BERTOPIC_AVAILABLE:
+        return
+
+    def fake_generate_cluster_headings(clusters, **kwargs):
+        headings = [
+            {"concept": "test", "heading": f"Topic {i}", "summary": ""}
+            for i in range(len(clusters))
+        ]
+        return headings, 0
+
+    monkeypatch.setattr(
+        "utils.nlp.topic_formatting.generate_cluster_headings",
+        fake_generate_cluster_headings,
+    )
 
 
 @pytest.fixture
@@ -137,7 +156,7 @@ class TestKMeansIntegration:
             print(
                 f"Small dataset result: {result['num_topics']} topics from {len(small_chunks)} chunks"
             )
-            print("âœ… Small dataset processed successfully without k-means clustering")
+            print("✅ Small dataset processed successfully without k-means clustering")
 
         except (ValueError, TypeError) as e:
             # BERTopic can fail with very small/similar datasets - this is expected behavior
@@ -161,7 +180,7 @@ class TestKMeansIntegration:
 
             if is_expected_error:
                 print(
-                    "âœ… Expected BERTopic limitation encountered - this confirms correct behavior"
+                    "✅ Expected BERTopic limitation encountered - this confirms correct behavior"
                 )
                 # This is the expected behavior for small/uniform datasets, so the test passes
                 assert True  # Explicitly pass the test

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Comprehensive test suite for file upload validation.
 This includes both unit tests and integration tests.
 """
@@ -324,9 +324,9 @@ class TestFileUploadValidationSuite:
 
         # Test unicode filenames
         unicode_names = [
-            "æ–‡æ¡£.pdf",  # Chinese
-            "Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚.pdf",  # Russian
-            "cafÃ©.pdf",  # Accented characters
+            "文档.pdf",  # Chinese
+            "документ.pdf",  # Russian
+            "café.pdf",  # Accented characters
         ]
 
         pdf_content = TestFileGenerator.create_valid_pdf(0.1)
