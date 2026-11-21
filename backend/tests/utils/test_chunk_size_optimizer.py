@@ -1,8 +1,8 @@
-import pytest
+﻿import pytest
 
 # Check for sentence_transformers dependency
 try:
-    from utils.chunk_size_optimizer import optimize_chunk_sizes, get_word_count
+    from utils.nlp.chunk_size_optimizer import optimize_chunk_sizes, get_word_count
 
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -84,3 +84,4 @@ def test_optimize_chunk_sizes_split_large_chunk():
     assert len(optimized) > 1
     for c in optimized:
         assert get_word_count(c) <= 4
+

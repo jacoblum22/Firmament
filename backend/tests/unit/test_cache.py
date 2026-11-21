@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Test script for the content-based caching system with proper assertions.
 """
@@ -12,7 +12,7 @@ import shutil
 backend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 sys.path.insert(0, backend_dir)
 
-from utils.content_cache import ContentCache
+from utils.storage.content_cache import ContentCache
 
 
 def test_transcription_cache():
@@ -173,4 +173,5 @@ if __name__ == "__main__":
     test_processed_cache()
     test_cache_statistics()
     test_cache_error_handling()
-    print("✅ All cache tests completed successfully!")
+    print("âœ… All cache tests completed successfully!")
+

@@ -481,6 +481,34 @@ canvas {
   }
 }
 
+@keyframes pulse-bg {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.inline-loading-indicator {
+  display: inline-block;
+  width: 0.72rem;
+  height: 0.72rem;
+  margin-left: 0.5rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.95);
+  vertical-align: middle;
+  animation: inlineSpin 0.7s linear infinite;
+}
+
+@keyframes inlineSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Responsive design for smaller screens */
 @media (max-width: 768px) {
   .neon-progress-wrapper {

@@ -1,5 +1,5 @@
-import unittest
-from utils.content_cache import ContentCache
+﻿import unittest
+from utils.storage.content_cache import ContentCache
 import os
 from datetime import datetime, timedelta
 
@@ -109,3 +109,4 @@ class TestContentCache(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

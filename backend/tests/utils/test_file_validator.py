@@ -1,9 +1,9 @@
-"""
+﻿"""
 Tests for file validation utilities.
 """
 
 import pytest
-from utils.file_validator import FileValidator, FileValidationError
+from utils.security.file_validator import FileValidator, FileValidationError
 
 
 class TestFileValidator:
@@ -227,3 +227,4 @@ class TestFileValidator:
         # Text files: smaller limit
         txt_limit = FileValidator.MAX_FILE_SIZES["txt"]
         assert txt_limit == 10 * 1024 * 1024
+

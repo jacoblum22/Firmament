@@ -6,7 +6,11 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import tiktoken
 from typing import List, Dict, Tuple
-from .openai_client import get_openai_client, get_default_model
+from ..common.openai_client import (
+    call_openai_with_retries,
+    get_openai_client,
+    get_default_model,
+)
 
 load_dotenv()
 
@@ -93,7 +97,8 @@ def generate_cluster_headings(
 
     # GPT call
     client = get_openai_client(api_key, base_url_override=base_url_override)
-    response = client.chat.completions.create(
+    response = call_openai_with_retries(
+        client.chat.completions.create,
         model=get_default_model("gpt-4o-mini", model_override=model_override),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test file generators for creating various file types for testing.
 """
 
@@ -7,7 +7,7 @@ import tempfile
 from typing import Tuple, Dict, Optional
 from pathlib import Path
 import pytest
-from utils.file_validator import FileValidator, FileValidationError
+from utils.security.file_validator import FileValidator, FileValidationError
 
 
 class TestFileGenerator:
@@ -148,7 +148,7 @@ class TestFileGenerator:
         sample_text += "- Bullet points\n"
         sample_text += "- Numbers: 1, 2, 3, 4, 5\n"
         sample_text += "- Special characters: !@#$%^&*()\n"
-        sample_text += "- Unicode: café, résumé, naïve\n\n"
+        sample_text += "- Unicode: cafÃ©, rÃ©sumÃ©, naÃ¯ve\n\n"
 
         # Repeat content to reach target size
         repeat_count = max(1, target_size // len(sample_text.encode()))
@@ -501,3 +501,4 @@ class TestFileGenerators:
 
             # At least half the files should have content
             assert non_empty_files >= len(files) // 2
+

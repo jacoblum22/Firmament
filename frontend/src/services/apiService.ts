@@ -1,5 +1,6 @@
-import NetworkUtils, { NetworkError } from '../utils/networkUtils';
+import NetworkUtils, { isNetworkError } from '../utils/networkUtils';
 import config from '../config';
+import { validateAuthResponse, validateTopicResponse } from '../utils/apiValidation';
 
 // Auth-related interfaces
 export interface AuthResponse {
@@ -172,6 +173,17 @@ class ApiService {
     }, retryOptions);
   }
 
+  /** Map only true network-layer errors; preserve API and validation Error messages. */
+  private rethrowMappedNetworkError(error: unknown, fallback: string): never {
+    if (error instanceof Error && isNetworkError(error)) {
+      throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(error)));
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(fallback);
+  }
+
   /**
    * Handle response and extract JSON with proper error handling
    */
@@ -246,13 +258,10 @@ class ApiService {
         body: JSON.stringify({ token: googleToken }),
       });
 
-      return this.handleResponse<AuthResponse>(response);
+      const data = await this.handleResponse<unknown>(response);
+      return validateAuthResponse(data);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Google sign-in failed. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Google sign-in failed. Please try again.');
     }
   }
 
@@ -267,11 +276,7 @@ class ApiService {
 
       return this.handleResponse<UserInfo>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to get user info. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Failed to get user info. Please try again.');
     }
   }
 
@@ -286,11 +291,7 @@ class ApiService {
 
       return this.handleResponse<{ message: string }>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Sign out failed. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Sign out failed. Please try again.');
     }
   }
 
@@ -324,11 +325,7 @@ class ApiService {
 
       return this.handleResponse<UploadResponse>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Upload failed. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Upload failed. Please try again.');
     }
   }
 
@@ -348,11 +345,7 @@ class ApiService {
 
       return this.handleResponse<ProcessChunksResponse>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to process chunks. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Failed to process chunks. Please try again.');
     }
   }
 
@@ -366,13 +359,10 @@ class ApiService {
         body: JSON.stringify({ filename, processing_id: processingId }),
       }), { timeout: 300000, maxRetries: 1 });
 
-      return this.handleResponse<TopicResponse>(response);
+      const data = await this.handleResponse<unknown>(response);
+      return validateTopicResponse(data) as TopicResponse;
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to generate headings. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Failed to generate headings. Please try again.');
     }
   }
 
@@ -388,11 +378,7 @@ class ApiService {
 
       return this.handleResponse<ExpandClusterResponse>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to expand cluster. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Failed to expand cluster. Please try again.');
     }
   }
 
@@ -408,11 +394,7 @@ class ApiService {
 
       return this.handleResponse<BulletPointExpandResponse>(response);
     } catch (error) {
-      if (error instanceof Error) {
-        const networkError = error as NetworkError;
-        throw new Error(JSON.stringify(this.networkUtils.getErrorMessage(networkError)));
-      }
-      throw new Error('Failed to expand bullet point. Please try again.');
+      this.rethrowMappedNetworkError(error, 'Failed to expand bullet point. Please try again.');
     }
   }
 

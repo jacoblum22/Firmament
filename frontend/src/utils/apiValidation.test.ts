@@ -104,4 +104,15 @@ describe('validateTopicResponse', () => {
     const logged = JSON.stringify(warnSpy.mock.calls);
     expect(logged).not.toContain('nope');
   });
+
+  it('accepts id/title/bullets array topic format', () => {
+    const out = validateTopicResponse({
+      topics: [{ id: 1, title: 'One', bullets: ['a', 'b'] }],
+      num_chunks: 0,
+      num_topics: 1,
+      total_tokens_used: 0,
+    });
+    expect(out.topics['1'].heading).toBe('One');
+    expect(out.topics['1'].examples).toContain('a');
+  });
 });

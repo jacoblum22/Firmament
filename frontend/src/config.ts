@@ -4,11 +4,18 @@ class Config {
   private apiBaseUrl: string;
 
   private constructor() {
-    // Get the API base URL from environment variables
     this.apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    
-    // Remove trailing slash if present
     this.apiBaseUrl = this.apiBaseUrl.replace(/\/$/, '');
+
+    // Warn about missing environment variables in development
+    if (import.meta.env.DEV) {
+      if (!import.meta.env.VITE_API_BASE_URL) {
+        console.warn('[Config] VITE_API_BASE_URL not set, using default: http://localhost:8000');
+      }
+      if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+        console.warn('[Config] VITE_GOOGLE_CLIENT_ID not set - Google Sign-In will not work');
+      }
+    }
   }
 
   public static getInstance(): Config {

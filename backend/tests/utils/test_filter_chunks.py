@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 import sys
 import os
 
@@ -9,7 +9,7 @@ if __name__ == "__main__" or "pytest" in sys.modules:
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
 
-from utils.filter_chunks import is_informative, filter_chunks
+from utils.nlp.filter_chunks import is_informative, filter_chunks
 
 
 class TestIsInformative:
@@ -77,7 +77,7 @@ class TestIsInformative:
     def test_numbers_and_special_chars(self):
         """Test text with numbers and special characters"""
         text = (
-            "The model achieved 95% accuracy with 1000 samples and α=0.01 learning rate"
+            "The model achieved 95% accuracy with 1000 samples and Î±=0.01 learning rate"
         )
         assert is_informative(text) == True
 
@@ -237,7 +237,7 @@ class TestEdgeCases:
         chunks = [
             {
                 "position": "0:30",
-                "text": "Machine learning algorithms utilize mathematical concepts like α, β, and ∑ symbols.",
+                "text": "Machine learning algorithms utilize mathematical concepts like Î±, Î², and âˆ‘ symbols.",
             }
         ]
 
@@ -248,3 +248,4 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+

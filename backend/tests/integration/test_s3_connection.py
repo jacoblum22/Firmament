@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 S3 Connection Test for StudyMate-v2
 
@@ -15,37 +15,37 @@ sys.path.insert(0, str(backend_dir))
 
 try:
     from app.config import Settings
-    from utils.s3_storage import S3StorageManager
+    from utils.storage.s3_storage import S3StorageManager
 except ImportError as e:
-    print(f"❌ Import error: {e}")
+    print(f"âŒ Import error: {e}")
     print("Make sure you're in the backend directory and have installed dependencies.")
     sys.exit(1)
 
 
 def test_s3_connection():
     """Test S3 connection and basic operations"""
-    print("🧪 Testing S3 Connection for StudyMate-v2")
+    print("ðŸ§ª Testing S3 Connection for StudyMate-v2")
     print("=" * 50)
 
     # Initialize settings
     try:
         settings = Settings()
-        print(f"✓ Configuration loaded")
+        print(f"âœ“ Configuration loaded")
         print(f"  - Environment: {settings.environment}")
         print(f"  - Use S3: {settings.use_s3_storage}")
         if settings.use_s3_storage:
             print(f"  - S3 Bucket: {settings.s3_bucket_name}")
             print(f"  - AWS Region: {settings.aws_region}")
     except Exception as e:
-        print(f"❌ Configuration error: {e}")
+        print(f"âŒ Configuration error: {e}")
         return False
 
     # Initialize storage manager
     try:
         storage = S3StorageManager(settings)
-        print(f"✓ Storage manager initialized")
+        print(f"âœ“ Storage manager initialized")
     except Exception as e:
-        print(f"❌ Storage manager initialization failed: {e}")
+        print(f"âŒ Storage manager initialization failed: {e}")
         return False
 
     # Test file upload
@@ -53,67 +53,67 @@ def test_s3_connection():
     test_content = b"Hello from StudyMate-v2! This is a test file."
 
     try:
-        print(f"📤 Testing file upload...")
+        print(f"ðŸ“¤ Testing file upload...")
         success = storage.upload_file(test_content, test_key, "text/plain")
         if success:
-            print(f"✓ File uploaded successfully")
+            print(f"âœ“ File uploaded successfully")
         else:
-            print(f"❌ File upload failed")
+            print(f"âŒ File upload failed")
             return False
     except Exception as e:
-        print(f"❌ Upload test failed: {e}")
+        print(f"âŒ Upload test failed: {e}")
         return False
 
     # Test file exists
     try:
-        print(f"🔍 Testing file existence check...")
+        print(f"ðŸ” Testing file existence check...")
         exists = storage.file_exists(test_key)
         if exists:
-            print(f"✓ File existence check passed")
+            print(f"âœ“ File existence check passed")
         else:
-            print(f"❌ File existence check failed")
+            print(f"âŒ File existence check failed")
             return False
     except Exception as e:
-        print(f"❌ Existence check failed: {e}")
+        print(f"âŒ Existence check failed: {e}")
         return False
 
     # Test file download
     try:
-        print(f"📥 Testing file download...")
+        print(f"ðŸ“¥ Testing file download...")
         downloaded_content = storage.download_file(test_key)
         if downloaded_content == test_content:
-            print(f"✓ File downloaded successfully and content matches")
+            print(f"âœ“ File downloaded successfully and content matches")
         else:
-            print(f"❌ Downloaded content doesn't match original")
+            print(f"âŒ Downloaded content doesn't match original")
             return False
     except Exception as e:
-        print(f"❌ Download test failed: {e}")
+        print(f"âŒ Download test failed: {e}")
         return False
 
     # Test file deletion
     try:
-        print(f"🗑️  Testing file deletion...")
+        print(f"ðŸ—‘ï¸  Testing file deletion...")
         success = storage.delete_file(test_key)
         if success:
-            print(f"✓ File deleted successfully")
+            print(f"âœ“ File deleted successfully")
         else:
-            print(f"❌ File deletion failed")
+            print(f"âŒ File deletion failed")
             return False
     except Exception as e:
-        print(f"❌ Deletion test failed: {e}")
+        print(f"âŒ Deletion test failed: {e}")
         return False
 
     # Final verification
     try:
-        print(f"🔍 Verifying file was deleted...")
+        print(f"ðŸ” Verifying file was deleted...")
         exists = storage.file_exists(test_key)
         if not exists:
-            print(f"✓ File deletion verified")
+            print(f"âœ“ File deletion verified")
         else:
-            print(f"❌ File still exists after deletion")
+            print(f"âŒ File still exists after deletion")
             return False
     except Exception as e:
-        print(f"❌ Final verification failed: {e}")
+        print(f"âŒ Final verification failed: {e}")
         return False
 
     return True
@@ -121,14 +121,14 @@ def test_s3_connection():
 
 def main():
     """Main test function"""
-    print("🔧 StudyMate-v2 S3 Configuration Test")
+    print("ðŸ”§ StudyMate-v2 S3 Configuration Test")
     print("This will test your S3 setup and configuration.")
     print()
 
     # Check if we're using S3 or local storage
     settings = Settings()
     if not settings.use_s3_storage:
-        print("ℹ️  S3 storage is disabled. Testing local storage fallback...")
+        print("â„¹ï¸  S3 storage is disabled. Testing local storage fallback...")
 
     print()
 
@@ -138,7 +138,7 @@ def main():
     print()
     print("=" * 50)
     if success:
-        print("🎉 All tests passed! Your S3 configuration is working correctly.")
+        print("ðŸŽ‰ All tests passed! Your S3 configuration is working correctly.")
         print()
         if settings.use_s3_storage:
             print("Your StudyMate application is ready to use AWS S3 for storage.")
@@ -146,7 +146,7 @@ def main():
             print("Your StudyMate application is ready to use local storage.")
             print("To enable S3, set USE_S3_STORAGE=true in your environment file.")
     else:
-        print("❌ Some tests failed. Please check your configuration.")
+        print("âŒ Some tests failed. Please check your configuration.")
         print()
         if settings.use_s3_storage:
             print("Troubleshooting tips:")
@@ -160,3 +160,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

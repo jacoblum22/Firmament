@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Integration test with larger dataset to verify k-means pre-clustering triggers.
 """
@@ -6,7 +6,7 @@ Integration test with larger dataset to verify k-means pre-clustering triggers.
 import pytest
 
 try:
-    from utils.bertopic_processor import process_with_bertopic
+    from utils.nlp.bertopic_processor import process_with_bertopic
 
     BERTOPIC_AVAILABLE = True
 except ImportError:
@@ -137,7 +137,7 @@ class TestKMeansIntegration:
             print(
                 f"Small dataset result: {result['num_topics']} topics from {len(small_chunks)} chunks"
             )
-            print("✅ Small dataset processed successfully without k-means clustering")
+            print("âœ… Small dataset processed successfully without k-means clustering")
 
         except (ValueError, TypeError) as e:
             # BERTopic can fail with very small/similar datasets - this is expected behavior
@@ -161,7 +161,7 @@ class TestKMeansIntegration:
 
             if is_expected_error:
                 print(
-                    "✅ Expected BERTopic limitation encountered - this confirms correct behavior"
+                    "âœ… Expected BERTopic limitation encountered - this confirms correct behavior"
                 )
                 # This is the expected behavior for small/uniform datasets, so the test passes
                 assert True  # Explicitly pass the test
@@ -172,3 +172,4 @@ class TestKMeansIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

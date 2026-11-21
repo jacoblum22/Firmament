@@ -135,15 +135,44 @@ export const useNetworkStatus = () => {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    const onReachabilityEvent = (event: Event) => {
+      const ce = event as CustomEvent<{ isOnline?: boolean }>;
+      if (typeof ce.detail?.isOnline === 'boolean') {
+        setConnectionState((prev) => ({
+          ...prev,
+          isBackendReachable: ce.detail!.isOnline,
+          isInitializing: false,
+        }));
+      }
+    };
+    window.addEventListener(
+      'firmament-backend-reachability',
+      onReachabilityEvent as EventListener,
+    );
+
+    const recheckWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void checkBackendHealthInternal();
+      }
+    };
+    document.addEventListener('visibilitychange', recheckWhenVisible);
+    window.addEventListener('focus', recheckWhenVisible);
+
     // Initial backend health check
     checkBackendHealthInternal();
 
-    // Set up periodic health checks
-    const healthCheckInterval = setInterval(checkBackendHealthInternal, 30000); // Check every 30 seconds
+    // Periodic checks (was 30s — too stale after stopping the API locally)
+    const healthCheckInterval = setInterval(checkBackendHealthInternal, 30000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener(
+        'firmament-backend-reachability',
+        onReachabilityEvent as EventListener,
+      );
+      document.removeEventListener('visibilitychange', recheckWhenVisible);
+      window.removeEventListener('focus', recheckWhenVisible);
       clearInterval(healthCheckInterval);
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);

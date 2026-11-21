@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y \
 RUN adduser --disabled-password --gecos '' appuser
 
 # Create directories for uploads and logs
-RUN mkdir -p /var/uploads /var/temp /var/log/studymate && \
-    chown -R appuser:appuser /app /var/uploads /var/temp /var/log/studymate
+RUN mkdir -p /var/uploads /var/temp /var/log/firmament && \
+    chown -R appuser:appuser /app /var/uploads /var/temp /var/log/firmament
 
 # Copy requirements first for better layer caching
 COPY --chown=appuser:appuser requirements.txt .

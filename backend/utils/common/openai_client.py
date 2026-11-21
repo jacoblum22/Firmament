@@ -1,11 +1,20 @@
 import os
+import time
 import logging
+from typing import Any, Callable, TypeVar
+
+import openai
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
+
+RETRY_DELAYS_SECONDS = (1, 2, 4)
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+NON_RETRYABLE_STATUS_CODES = {400, 401, 403}
 
 # Default singleton client (used when no per-request key is provided)
 _default_client = None
@@ -32,7 +41,55 @@ def _resolve_base_url() -> str | None:
     return None  # Use OpenAI default
 
 
-def get_openai_client(api_key: str | None = None, base_url_override: str | None = None) -> OpenAI:
+def _is_retryable_openai_error(error: Exception) -> bool:
+    """Return True if the OpenAI error should be retried."""
+    if isinstance(
+        error,
+        (
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.RateLimitError,
+            TimeoutError,
+        ),
+    ):
+        return True
+
+    if isinstance(error, openai.APIStatusError):
+        status_code = getattr(error, "status_code", None)
+        if status_code in NON_RETRYABLE_STATUS_CODES:
+            return False
+        return status_code in RETRYABLE_STATUS_CODES
+
+    return False
+
+
+def call_openai_with_retries(
+    api_call: Callable[..., T], *args: Any, **kwargs: Any
+) -> T:
+    """Execute an OpenAI API call with exponential backoff for transient failures."""
+    max_retries = len(RETRY_DELAYS_SECONDS)
+
+    for attempt in range(max_retries + 1):
+        try:
+            return api_call(*args, **kwargs)
+        except Exception as error:
+            if not _is_retryable_openai_error(error) or attempt >= max_retries:
+                raise
+
+            delay = RETRY_DELAYS_SECONDS[attempt]
+            logger.warning(
+                "OpenAI API call failed; retry %s/%s in %ss. Error: %s",
+                attempt + 1,
+                max_retries,
+                delay,
+                error,
+            )
+            time.sleep(delay)
+
+
+def get_openai_client(
+    api_key: str | None = None, base_url_override: str | None = None
+) -> OpenAI:
     """
     Get an OpenAI-compatible client.
 
@@ -53,11 +110,11 @@ def get_openai_client(api_key: str | None = None, base_url_override: str | None 
 
     # Per-request client with user-provided key
     if api_key:
-        return OpenAI(api_key=api_key, base_url=base_url)
+        return OpenAI(api_key=api_key, base_url=base_url, max_retries=0)
 
     # Ollama doesn't need an API key
     if LLM_PROVIDER == "ollama":
-        return OpenAI(api_key="ollama", base_url=base_url)
+        return OpenAI(api_key="ollama", base_url=base_url, max_retries=0)
 
     # Default singleton client
     global _default_client
@@ -68,7 +125,7 @@ def get_openai_client(api_key: str | None = None, base_url_override: str | None 
                 "No API key available. Either set OPENAI_API_KEY in the server "
                 "environment, or pass your API key via the X-OpenAI-Key header."
             )
-        _default_client = OpenAI(api_key=env_key, base_url=base_url)
+        _default_client = OpenAI(api_key=env_key, base_url=base_url, max_retries=0)
         logger.info("Default OpenAI client initialized")
 
     return _default_client

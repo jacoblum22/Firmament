@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test suite for transcribe_audio.py module.
 
 This module tests the audio transcription functionality including:
@@ -14,14 +14,14 @@ import tempfile
 import shutil
 import uuid
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import patch, MagicMock, mock_open, call, ANY
 import pytest
 
 # Check for torch dependency
 try:
     import torch
     from pydub import AudioSegment
-    from utils.transcribe_audio import (
+    from utils.audio.transcribe_audio import (
         get_device,
         get_compute_type,
         prepare_audio_for_whisper,
@@ -565,6 +565,8 @@ class TestEdgeCases:
                     model_size,
                     compute_type="int8",
                     device="cpu",
+                    cpu_threads=ANY,
+                    num_workers=1,
                     download_root="./models",
                 )
         finally:
@@ -707,3 +709,4 @@ class TestIntegrationScenarios:
         mock_preprocess.assert_called()
         mock_whisper_model.assert_called_once()
         assert mock_model.transcribe.call_count >= 2  # Multiple chunks
+

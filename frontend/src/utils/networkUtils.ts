@@ -6,6 +6,21 @@ export interface NetworkError extends Error {
   isRetryable: boolean;
 }
 
+const NETWORK_ERROR_CODES: NetworkError['code'][] = [
+  'NETWORK_ERROR',
+  'TIMEOUT',
+  'SERVER_ERROR',
+  'CLIENT_ERROR',
+  'UNKNOWN',
+];
+
+/** True when `fetchWithRetry` attached a network error code (vs a plain API/validation Error). */
+export function isNetworkError(error: unknown): error is NetworkError {
+  if (!(error instanceof Error)) return false;
+  const code = (error as Partial<NetworkError>).code;
+  return typeof code === 'string' && (NETWORK_ERROR_CODES as readonly string[]).includes(code);
+}
+
 export interface ErrorDetails {
   error: string;
   details: string;
@@ -104,9 +119,37 @@ class NetworkUtils {
           return response;
         }
 
-        // Handle HTTP errors
-        const error = this.createNetworkError(response.status, `HTTP ${response.status}: ${response.statusText}`);
-        
+        // Handle HTTP errors — surface JSON error bodies from the API when present
+        let httpErrorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorText = await response.text();
+          if (errorText.trim()) {
+            try {
+              const body = JSON.parse(errorText) as {
+                error?: string;
+                message?: string;
+                details?: string;
+              };
+              if (typeof body.error === 'string' && body.error) {
+                httpErrorMessage =
+                  typeof body.details === 'string' && body.details
+                    ? `${body.error} — ${body.details}`
+                    : body.error;
+              } else if (typeof body.message === 'string' && body.message) {
+                httpErrorMessage = body.message;
+              } else {
+                httpErrorMessage = errorText.slice(0, 400);
+              }
+            } catch {
+              httpErrorMessage = errorText.slice(0, 400);
+            }
+          }
+        } catch {
+          /* keep default httpErrorMessage */
+        }
+
+        const error = this.createNetworkError(response.status, httpErrorMessage);
+
         if (attempt === defaultRetryOptions.maxRetries || !shouldRetry(error)) {
           this.updateHealthStatus(false);
           throw error;
@@ -150,12 +193,15 @@ class NetworkUtils {
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
     
     try {
-      const response = await fetch(`${this.baseUrl}/health`, {
+      const url = `${this.baseUrl.replace(/\/$/, '')}/health?_=${Date.now()}`;
+      const response = await fetch(url, {
         method: 'GET',
+        cache: 'no-store',
         headers: {
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache, no-store',
+          Pragma: 'no-cache',
         },
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
@@ -263,6 +309,7 @@ class NetworkUtils {
    * Update health status based on request success/failure
    */
   private updateHealthStatus(isSuccess: boolean): void {
+    const wasOnline = this.healthStatus.isOnline;
     if (isSuccess) {
       this.healthStatus.isOnline = true;
       this.healthStatus.errorCount = Math.max(0, this.healthStatus.errorCount - 1);
@@ -274,6 +321,17 @@ class NetworkUtils {
       }
     }
     this.healthStatus.lastChecked = new Date();
+
+    if (
+      typeof window !== 'undefined' &&
+      wasOnline !== this.healthStatus.isOnline
+    ) {
+      window.dispatchEvent(
+        new CustomEvent<{ isOnline: boolean }>('firmament-backend-reachability', {
+          detail: { isOnline: this.healthStatus.isOnline },
+        }),
+      );
+    }
   }
 
   /**
@@ -313,7 +371,10 @@ class NetworkUtils {
         }
         return {
           error: 'Server error',
-          details: 'The server is experiencing technical difficulties.',
+          details:
+            error.message && !/^HTTP \d{3}:/.test(error.message)
+              ? error.message
+              : 'The server is experiencing technical difficulties.',
           user_action: 'Please try again in a few moments.',
           error_code: 'server_error'
         };

@@ -6,11 +6,37 @@ import time
 import redis
 import json
 import logging
+import uuid
+from contextvars import ContextVar
 from typing import Optional, Tuple
 from functools import lru_cache
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+request_id_ctx_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+
+
+def get_request_id() -> Optional[str]:
+    """Get the current request ID from context, if available."""
+    return request_id_ctx_var.get()
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Attach a unique request ID to state, response headers, and logging context."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+
+        token = request_id_ctx_var.set(request_id)
+        try:
+            response = await call_next(request)
+        finally:
+            request_id_ctx_var.reset(token)
+
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -270,19 +296,27 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-            # Return user-friendly error response
-            error_response = {
-                "error": "Internal server error",
-                "message": "An unexpected error occurred. Please try again later.",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "request_id": getattr(request.state, "request_id", None),
-            }
+            is_production = settings.is_production or not settings.debug
 
-            # In debug mode, include more details
-            if settings.debug:
-                error_response["debug"] = {
-                    "type": type(exc).__name__,
-                    "details": str(exc),
+            if is_production:
+                # Never expose traceback, file paths, DB details, or environment values in production.
+                error_response = {
+                    "error": "Internal server error",
+                    "message": "An internal error occurred. Please try again.",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "request_id": getattr(request.state, "request_id", None),
+                }
+            else:
+                # Development mode keeps rich exception details for debugging.
+                error_response = {
+                    "error": "Internal server error",
+                    "message": "An unexpected error occurred. Please try again later.",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "request_id": getattr(request.state, "request_id", None),
+                    "debug": {
+                        "type": type(exc).__name__,
+                        "details": str(exc),
+                    },
                 }
 
             return JSONResponse(status_code=500, content=error_response)

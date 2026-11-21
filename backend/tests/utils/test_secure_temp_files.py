@@ -1,4 +1,4 @@
-"""
+﻿"""
 Test cases for secure temporary file handling improvements.
 """
 
@@ -7,7 +7,7 @@ import subprocess
 import getpass
 import pytest
 
-from utils.secure_temp_files import (
+from utils.storage.secure_temp_files import (
     SecureTempFile,
     secure_temp_file,
     InMemoryStorage,
@@ -292,3 +292,4 @@ def test_integration_scenario():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+

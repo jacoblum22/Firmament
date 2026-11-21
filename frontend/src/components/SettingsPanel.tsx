@@ -128,12 +128,20 @@ export const SettingsPanel: React.FC<{ isOpen: boolean; onClose: () => void }> =
               AI Provider Settings
             </div>
 
-            {serverHasKey && (
+            {llmStatus && serverHasKey && (
               <div style={{
                 fontSize: '11px', color: 'rgba(34, 197, 94, 0.9)', marginBottom: '10px',
                 padding: '6px 8px', background: 'rgba(34,197,94,0.08)', borderRadius: '6px',
               }}>
-                Server has a default key &mdash; settings below are optional overrides
+                Server has OPENAI_API_KEY set &mdash; fields below are optional overrides (your key wins if saved)
+              </div>
+            )}
+            {llmStatus && llmStatus.requires_user_key && (
+              <div style={{
+                fontSize: '11px', color: 'rgba(251, 191, 36, 0.95)', marginBottom: '10px',
+                padding: '6px 8px', background: 'rgba(251,191,36,0.08)', borderRadius: '6px',
+              }}>
+                No server API key &mdash; add your key below (or set OPENAI_API_KEY on the backend)
               </div>
             )}
 

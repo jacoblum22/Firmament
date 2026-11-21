@@ -1,4 +1,4 @@
-"""
+﻿"""
 Integration tests for file upload validation.
 Tests the complete upload endpoint with various file scenarios.
 """
@@ -302,10 +302,10 @@ class TestFileUploadIntegration:
         pdf_content = b"%PDF-1.4\nvalid pdf content"
 
         unicode_names = [
-            "文档.pdf",  # Chinese
-            "документ.pdf",  # Russian
-            "café_résumé.pdf",  # Accented characters
-            "emoji_😀_file.pdf",  # Emoji
+            "æ–‡æ¡£.pdf",  # Chinese
+            "Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚.pdf",  # Russian
+            "cafÃ©_rÃ©sumÃ©.pdf",  # Accented characters
+            "emoji_ðŸ˜€_file.pdf",  # Emoji
         ]
 
         for filename in unicode_names:
@@ -316,7 +316,7 @@ class TestFileUploadIntegration:
 
     def test_filename_sanitization_security_validation(self):
         """Test filename sanitization security by validating the FileValidator directly"""
-        from utils.file_validator import FileValidator
+        from utils.security.file_validator import FileValidator
 
         # Test cases with expected sanitized output
         sanitization_test_cases = [
@@ -442,3 +442,4 @@ class TestFileUploadErrorHandling:
         response = client.post("/upload", files=files)
         # Should accept the file (content validation is basic)
         assert response.status_code == 200
+

@@ -57,9 +57,32 @@ jobs:
           pytest tests/unit/ -v --tb=short \
             --ignore=tests/unit/test_import.py  # needs full app boot with all ML deps
 
-      - name: Run cache tests
+      - name: Run integration tests
         working-directory: backend
-        run: pytest tests/test_content_cache.py -v --tb=short
+        run: |
+          pytest tests/integration/ -v --tb=short \
+            --ignore=tests/integration/test_s3_production.py \
+            --ignore=tests/integration/test_s3_connection.py
+
+  frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Vitest
+        run: npm run test:frontend
 
   lint:
     name: Lint
@@ -83,3 +106,26 @@ jobs:
             --max-line-length=120 \
             --extend-ignore=E501,W503,E203 \
             --count
+
+  # Validates that backend/docker/Dockerfile still builds (torch + deps install inside image).
+  # Uses GitHub Actions cache for Docker layers so repeat runs are much faster than cold builds.
+  docker-api-image:
+    name: Docker API image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (no registry push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/docker/Dockerfile
+          push: false
+          tags: firmament-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Test Google OAuth configuration
 """
@@ -24,50 +24,51 @@ try:
         raise ImportError(
             "Could not import 'Settings' from 'backend.config'. Ensure the module exists and is in the Python path."
         )
-    from utils.auth import UserAuthManager
+    from utils.security.auth import UserAuthManager
 
-    print("🧪 Testing Google OAuth Configuration")
+    print("ðŸ§ª Testing Google OAuth Configuration")
     print("=" * 50)
 
     settings = Settings()
 
     # Test configuration
-    print(f"✓ Environment: {settings.environment}")
+    print(f"âœ“ Environment: {settings.environment}")
     print(
-        f"✓ Google Client ID configured: {'Yes' if settings.google_client_id else 'No'}"
+        f"âœ“ Google Client ID configured: {'Yes' if settings.google_client_id else 'No'}"
     )
     print(
-        f"✓ Google Client Secret configured: {'Yes' if settings.google_client_secret else 'No'}"
+        f"âœ“ Google Client Secret configured: {'Yes' if settings.google_client_secret else 'No'}"
     )
 
     # Test auth manager initialization
-    print("\n🔐 Testing UserAuthManager...")
+    print("\nðŸ” Testing UserAuthManager...")
     auth_manager = UserAuthManager(settings)
-    print("✓ UserAuthManager initialized successfully")
+    print("âœ“ UserAuthManager initialized successfully")
 
     # Test Google configuration
     if settings.google_client_id and settings.google_client_secret:
-        print("✓ Google OAuth credentials configured")
-        print("✓ Client ID: [CONFIGURED]")
-        print("✓ Ready for Google authentication")
+        print("âœ“ Google OAuth credentials configured")
+        print("âœ“ Client ID: [CONFIGURED]")
+        print("âœ“ Ready for Google authentication")
     else:
-        print("❌ Google OAuth credentials missing")
+        print("âŒ Google OAuth credentials missing")
 
-    print("\n📋 Configuration Status:")
-    print("✓ Backend OAuth configuration: Loaded")
+    print("\nðŸ“‹ Configuration Status:")
+    print("âœ“ Backend OAuth configuration: Loaded")
     if settings.google_client_id and settings.google_client_secret:
-        print("✓ Google OAuth credentials: Present")
-        print("\n🎉 OAuth credentials are configured!")
+        print("âœ“ Google OAuth credentials: Present")
+        print("\nðŸŽ‰ OAuth credentials are configured!")
     else:
-        print("❌ Google OAuth credentials: Missing")
-        print("\n⚠️  OAuth credentials need to be configured!")
-    print("\n📋 Next steps:")
+        print("âŒ Google OAuth credentials: Missing")
+        print("\nâš ï¸  OAuth credentials need to be configured!")
+    print("\nðŸ“‹ Next steps:")
     print("1. Integrate Google OAuth button in frontend")
     print("2. Test end-to-end authentication flow")
     print("3. Deploy to production environment")
 
 except Exception as e:
-    print(f"❌ Error testing Google OAuth: {str(e)}")
+    print(f"âŒ Error testing Google OAuth: {str(e)}")
     import traceback
 
     traceback.print_exc()
+

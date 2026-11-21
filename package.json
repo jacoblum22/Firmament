@@ -11,7 +11,8 @@
     "dev:backend": "cd backend && uvicorn app.main:app --reload",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "start:backend": "cd backend && uvicorn app.main:app",
-    "test:backend": "cd backend && python -m pytest"
+    "test:backend": "cd backend && python -m pytest",
+    "test:frontend": "npm run test --workspace=frontend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

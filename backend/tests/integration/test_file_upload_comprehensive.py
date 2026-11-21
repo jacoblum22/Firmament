@@ -1,4 +1,4 @@
-"""
+﻿"""
 Comprehensive test suite for file upload validation.
 This includes both unit tests and integration tests.
 """
@@ -14,7 +14,7 @@ import time
 from tests.utils.test_file_generators import TestFileGenerator
 
 # Import the components to test
-from utils.file_validator import FileValidator, FileValidationError
+from utils.security.file_validator import FileValidator, FileValidationError
 from app.routes import router
 
 # Create test FastAPI app
@@ -324,9 +324,9 @@ class TestFileUploadValidationSuite:
 
         # Test unicode filenames
         unicode_names = [
-            "文档.pdf",  # Chinese
-            "документ.pdf",  # Russian
-            "café.pdf",  # Accented characters
+            "æ–‡æ¡£.pdf",  # Chinese
+            "Ð´Ð¾ÐºÑƒÐ¼ÐµÐ½Ñ‚.pdf",  # Russian
+            "cafÃ©.pdf",  # Accented characters
         ]
 
         pdf_content = TestFileGenerator.create_valid_pdf(0.1)
@@ -367,3 +367,4 @@ class TestFileUploadValidationSuite:
                     content, f"stress_{file_type}_{i}.{file_type}"
                 )
                 assert ext == file_type
+
