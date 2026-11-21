@@ -2,7 +2,7 @@ import pytest
 
 # Check for sentence_transformers dependency
 try:
-    from utils.semantic_segmentation import semantic_segment
+    from utils.nlp.semantic_segmentation import semantic_segment
 
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -84,3 +84,4 @@ def test_threshold_effect_on_segmentation(threshold, expected_min_segments):
     text = "Apple is a fruit. Cars are vehicles. The sky is blue."
     result = semantic_segment(text, similarity_threshold=threshold)
     assert len(result) >= expected_min_segments
+

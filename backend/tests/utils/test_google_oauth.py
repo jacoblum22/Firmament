@@ -24,7 +24,7 @@ try:
         raise ImportError(
             "Could not import 'Settings' from 'backend.config'. Ensure the module exists and is in the Python path."
         )
-    from utils.auth import UserAuthManager
+    from utils.security.auth import UserAuthManager
 
     print("🧪 Testing Google OAuth Configuration")
     print("=" * 50)
@@ -71,3 +71,4 @@ except Exception as e:
     import traceback
 
     traceback.print_exc()
+

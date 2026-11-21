@@ -6,11 +6,30 @@ Integration test with larger dataset to verify k-means pre-clustering triggers.
 import pytest
 
 try:
-    from utils.bertopic_processor import process_with_bertopic
+    from utils.nlp.bertopic_processor import process_with_bertopic
 
     BERTOPIC_AVAILABLE = True
 except ImportError:
     BERTOPIC_AVAILABLE = False
+
+
+@pytest.fixture(autouse=True)
+def stub_cluster_headings(monkeypatch):
+    """Replace the LLM heading call so these tests never hit the OpenAI API."""
+    if not BERTOPIC_AVAILABLE:
+        return
+
+    def fake_generate_cluster_headings(clusters, **kwargs):
+        headings = [
+            {"concept": "test", "heading": f"Topic {i}", "summary": ""}
+            for i in range(len(clusters))
+        ]
+        return headings, 0
+
+    monkeypatch.setattr(
+        "utils.nlp.topic_formatting.generate_cluster_headings",
+        fake_generate_cluster_headings,
+    )
 
 
 @pytest.fixture
@@ -172,3 +191,4 @@ class TestKMeansIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

@@ -19,7 +19,7 @@ import pytest
 
 # Check for utils dependency
 try:
-    from utils.rnnoise_process import (
+    from utils.audio.rnnoise_process import (
         get_file_info,
         cleanup_old_files,
         denoise_with_rnnoise,
@@ -512,3 +512,4 @@ class TestErrorScenarios:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+

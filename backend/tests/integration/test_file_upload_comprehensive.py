@@ -14,7 +14,7 @@ import time
 from tests.utils.test_file_generators import TestFileGenerator
 
 # Import the components to test
-from utils.file_validator import FileValidator, FileValidationError
+from utils.security.file_validator import FileValidator, FileValidationError
 from app.routes import router
 
 # Create test FastAPI app
@@ -367,3 +367,4 @@ class TestFileUploadValidationSuite:
                     content, f"stress_{file_type}_{i}.{file_type}"
                 )
                 assert ext == file_type
+

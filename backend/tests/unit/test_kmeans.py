@@ -7,7 +7,7 @@ import os
 from unittest.mock import patch, MagicMock
 
 try:
-    from utils.bertopic_processor import process_with_bertopic
+    from utils.nlp.bertopic_processor import process_with_bertopic
 
     BERTOPIC_AVAILABLE = True
 except ImportError:
@@ -38,9 +38,12 @@ Concept: computer vision, natural language processing, applications
 Heading: AI Applications in Vision and Language Processing
 Summary: This section explores practical applications of AI including computer vision techniques for image processing and natural language processing methods for text analysis."""
 
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_response
+
     with patch(
-        "utils.generate_cluster_heading.client.chat.completions.create",
-        return_value=mock_response,
+        "utils.nlp.generate_cluster_heading.get_openai_client",
+        return_value=mock_client,
     ):
         # Create test chunks that should be separable by k-means
         test_chunks = [
@@ -154,3 +157,4 @@ Summary: This section explores practical applications of AI including computer v
 
 if __name__ == "__main__":
     test_kmeans_clustering()
+

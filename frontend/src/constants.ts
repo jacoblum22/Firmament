@@ -31,6 +31,36 @@ export const UI = {
 } as const;
 
 /**
+ * Color palette for dynamic UI accents.
+ */
+export const ACCENT_HUES = [185, 315, 35] as const; // cyan, pink, peach
+
+/**
+ * File validation and upload limits.
+ */
+export const FILE_VALIDATION = {
+  /** Maximum file size in megabytes - balances usability with server resources */
+  MAX_SIZE_MB: 100,
+  /** Maximum file size in bytes (computed from MB) - used for precise validation */
+  MAX_SIZE_BYTES: 100 * 1024 * 1024,
+  /** Allowed file extensions (must include leading dot) - whitelist approach for security */
+  ALLOWED_EXTENSIONS: ['.pdf', '.mp3', '.wav', '.txt', '.m4a'] as const,
+  /**
+   * Corresponding MIME types for additional validation if needed in future.
+   * Note: MIME types can be spoofed, so we rely primarily on extension validation.
+   */
+  ALLOWED_MIME_TYPES: [
+    'application/pdf',
+    'audio/mpeg',
+    'audio/wav',
+    'audio/wave',
+    'text/plain',
+    'audio/mp4',
+    'audio/x-m4a',
+  ] as const,
+} as const;
+
+/**
  * API/Service related constants
  */
 export const SERVICE = {

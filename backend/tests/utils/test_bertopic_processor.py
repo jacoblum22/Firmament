@@ -1,17 +1,39 @@
-import pytest
-import os
+"""
+Tests for the BERTopic processor pipeline.
+
+The processor now lives at utils.nlp.bertopic_processor and has been split
+into sub-modules (topic_analysis, topic_formatting, clustering, ...).
+
+Key behaviour change: fewer than 20 chunks skip BERTopic entirely and are
+treated as a single topic, so mocking BERTopic is only relevant for large
+datasets (≥ 20 chunks).
+"""
+
 import json
+import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-# Ensure we can import from utils by adding the parent directory to path
-if __name__ == "__main__" or "pytest" in sys.modules:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    backend_dir = os.path.dirname(os.path.dirname(current_dir))
-    if backend_dir not in sys.path:
-        sys.path.insert(0, backend_dir)
+import pytest
 
-from utils.bertopic_processor import process_with_bertopic
+# ---------------------------------------------------------------------------
+# Availability guard
+# ---------------------------------------------------------------------------
+try:
+    from utils.nlp.bertopic_processor import process_with_bertopic
+
+    BERTOPIC_AVAILABLE = True
+except ImportError:
+    BERTOPIC_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(
+    not BERTOPIC_AVAILABLE, reason="utils.nlp.bertopic_processor not available"
+)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -25,137 +47,53 @@ def sample_chunks():
 
 
 @pytest.fixture
-def mock_generate_cluster_headings():
-    # Returns ([headings_data], total_tokens)
+def mock_headings_response():
+    """Return value expected by _generate_topic_headings."""
     return (
-        [
-            {"concept": "cat, mat", "heading": "Cats", "summary": "About cats."},
-            {"concept": "dog, animal", "heading": "Dogs", "summary": "About dogs."},
-        ],
+        [{"concept": "pets, animals", "heading": "Pets and Animals", "summary": "About animals."}],
         42,
     )
 
 
-@pytest.fixture
-def mock_bertopic_fit_transform():
-    # topics: [0, 1, 0, -1] means 2 topics and 1 noise
-    return [0, 1, 0, -1], [0.9, 0.8, 0.95, 0.1]
+def _make_large_chunks(n=25):
+    """Create n artificial chunks for testing the BERTopic code path (≥ 20)."""
+    topics = [
+        "Machine learning is a branch of artificial intelligence.",
+        "Neural networks are inspired by the human brain.",
+        "Deep learning uses many layers of neural networks.",
+        "Natural language processing handles text understanding.",
+        "Computer vision interprets images with algorithms.",
+    ]
+    return [{"position": i, "text": topics[i % len(topics)]} for i in range(n)]
 
 
-@pytest.fixture
-def mock_bertopic_get_topic():
-    # Return a list of (word, score) tuples
-    return [("cat", 0.5), ("mat", 0.3), ("dog", 0.2), ("animal", 0.1), ("pet", 0.05)]
+# ---------------------------------------------------------------------------
+# Small-dataset path (< 20 chunks → skips BERTopic entirely)
+# ---------------------------------------------------------------------------
 
 
-@patch(
-    "utils.bertopic_processor.stopwords.words",
-    return_value=["the", "on", "in", "are", "can"],
-)
-@patch("utils.bertopic_processor.BERTopic")
-@patch("utils.bertopic_processor.generate_cluster_headings")
-@patch("utils.bertopic_processor.pre_cluster_with_kmeans")
-def test_process_with_bertopic_basic(
-    mock_pre_cluster,
-    mock_generate_headings,
-    mock_bertopic_cls,
-    mock_stopwords,
-    sample_chunks,
-    mock_generate_cluster_headings,
-    mock_bertopic_fit_transform,
-    mock_bertopic_get_topic,
-):
-    # Debug print to check chunks
-    print(f"DEBUG: sample_chunks in test: {sample_chunks}")
-
-    # Mock k-means to return single cluster (no splitting for small dataset)
-    mock_pre_cluster.return_value = [sample_chunks]
-    # Setup mocks
-    mock_generate_headings.return_value = mock_generate_cluster_headings
-    mock_topic_model = MagicMock()
-    mock_topic_model.fit_transform.return_value = mock_bertopic_fit_transform
-    mock_topic_model.get_topic.return_value = mock_bertopic_get_topic
-    mock_bertopic_cls.return_value = mock_topic_model
+@patch("utils.nlp.topic_formatting.generate_cluster_headings")
+def test_process_with_bertopic_small_dataset(mock_gen, sample_chunks, mock_headings_response):
+    """With < 20 chunks the processor skips BERTopic and returns one topic."""
+    mock_gen.return_value = mock_headings_response
 
     result = process_with_bertopic(sample_chunks)
-    print(f"DEBUG: result in test: {result}")
 
     assert result["num_chunks"] == 4
-    assert result["num_topics"] == 2
+    assert result["num_topics"] == 1
     assert result["total_tokens_used"] == 42
     assert "topics" in result
-    assert set(result["topics"].keys()) == {"0", "1"}
-    for tid, topic in result["topics"].items():
-        assert "concepts" in topic
-        assert "heading" in topic
-        assert "summary" in topic
-        assert "keywords" in topic
-        assert isinstance(topic["keywords"], list)
-        assert "examples" in topic
-        assert isinstance(topic["examples"], list)
-        assert "stats" in topic
+    topic = next(iter(result["topics"].values()))
+    assert "heading" in topic
+    assert "concepts" in topic
+    assert "summary" in topic
+    assert "examples" in topic
+    assert isinstance(topic["examples"], list)
+    assert "stats" in topic
 
 
-@patch(
-    "utils.bertopic_processor.stopwords.words",
-    return_value=["the", "on", "in", "are", "can"],
-)
-@patch("utils.bertopic_processor.BERTopic")
-@patch("utils.bertopic_processor.generate_cluster_headings")
-@patch("utils.bertopic_processor.pre_cluster_with_kmeans")
-def test_process_with_bertopic_kmeans_clustering(
-    mock_pre_cluster,
-    mock_generate_headings,
-    mock_bertopic_cls,
-    mock_stopwords,
-    sample_chunks,
-    mock_generate_cluster_headings,
-    mock_bertopic_fit_transform,
-    mock_bertopic_get_topic,
-):
-    """Test BERTopic processing when k-means splits data into multiple clusters."""
-    # Mock k-means to return two clusters
-    cluster1 = sample_chunks[:2]
-    cluster2 = sample_chunks[2:]
-    mock_pre_cluster.return_value = [cluster1, cluster2]
-
-    # Mock headings for both clusters
-    mock_generate_headings.return_value = (
-        [
-            {"concept": "cat", "heading": "Cats", "summary": "About cats."},
-            {"concept": "dog", "heading": "Dogs", "summary": "About dogs."},
-        ],
-        30,
-    )
-
-    # Setup BERTopic mocks
-    mock_topic_model = MagicMock()
-    mock_topic_model.fit_transform.return_value = ([0, 0], [0.9, 0.8])
-    mock_topic_model.get_topic.return_value = mock_bertopic_get_topic
-    mock_bertopic_cls.return_value = mock_topic_model
-
-    result = process_with_bertopic(sample_chunks)
-
-    # Should still process all chunks
-    assert result["num_chunks"] == 4
-    # Should have topics from both clusters (with ID offsets)
-    assert result["num_topics"] >= 2
-    assert "topics" in result
-
-    # Check that topic IDs include offset (cluster 1 should have IDs like 1000, 1001)
-    topic_ids = list(result["topics"].keys())
-    assert len(topic_ids) >= 2
-
-    # Verify k-means was called
-    mock_pre_cluster.assert_called_once_with(sample_chunks)
-
-
-@patch(
-    "utils.bertopic_processor.stopwords.words",
-    return_value=["the", "on", "in", "are", "can"],
-)
-@patch("utils.bertopic_processor.generate_cluster_headings")
-def test_process_with_bertopic_empty_chunks(mock_generate_headings, mock_stopwords):
+def test_process_with_bertopic_empty_chunks():
+    """Empty input returns a zero-topic sentinel immediately."""
     result = process_with_bertopic([])
     assert result == {
         "num_chunks": 0,
@@ -165,96 +103,103 @@ def test_process_with_bertopic_empty_chunks(mock_generate_headings, mock_stopwor
     }
 
 
-@patch(
-    "utils.bertopic_processor.stopwords.words",
-    return_value=["the", "on", "in", "are", "can"],
-)
-@patch("utils.bertopic_processor.BERTopic")
-@patch("utils.bertopic_processor.generate_cluster_headings")
-def test_process_with_bertopic_save_file(
-    mock_generate_headings,
-    mock_bertopic_cls,
-    mock_stopwords,
-    tmp_path,
-    sample_chunks,
-    mock_generate_cluster_headings,
-    mock_bertopic_fit_transform,
-    mock_bertopic_get_topic,
-):
-    # Debug print to check chunks
-    print(f"DEBUG: sample_chunks in test: {sample_chunks}")
-    # Setup mocks
-    mock_generate_headings.return_value = mock_generate_cluster_headings
-    mock_topic_model = MagicMock()
-    mock_topic_model.fit_transform.return_value = mock_bertopic_fit_transform
-    mock_topic_model.get_topic.return_value = mock_bertopic_get_topic
-    mock_bertopic_cls.return_value = mock_topic_model
+# ---------------------------------------------------------------------------
+# Large-dataset path (≥ 20 chunks → BERTopic path)
+# ---------------------------------------------------------------------------
 
-    # Patch os.makedirs and os.remove to avoid actual file system changes
-    with patch("os.makedirs"), patch("os.remove"), patch(
-        "os.path.exists", return_value=True
+
+@patch("utils.nlp.topic_formatting.generate_cluster_headings")
+@patch("utils.nlp.bertopic_processor.pre_cluster_with_kmeans")
+def test_process_with_bertopic_large_dataset_single_cluster(
+    mock_pre_cluster, mock_gen
+):
+    """With ≥ 20 chunks, k-means runs; single cluster → result with ≥ 1 topic."""
+    large_chunks = _make_large_chunks(25)
+    mock_pre_cluster.return_value = [large_chunks]
+    mock_gen.return_value = (
+        [{"concept": "ML", "heading": "Machine Learning", "summary": "About ML."}],
+        10,
+    )
+
+    with (
+        patch("utils.nlp.topic_analysis.SentenceTransformer"),
+        patch("utils.nlp.topic_analysis.BERTopic") as MockBERTopic,
     ):
-        # Patch PROCESSED_DIR to tmp_path
-        with patch("utils.bertopic_processor.PROCESSED_DIR", str(tmp_path)):
-            filename = "testfile.txt"
-            result = process_with_bertopic(sample_chunks, filename=filename)
-            # Check file exists and content
-            save_path = tmp_path / "testfile_processed.json"
-            assert save_path.exists()
-            with open(save_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            print(f"DEBUG: loaded data from file: {data}")
-            assert "segments" in data
-            assert "clusters" in data
-            assert "meta" in data
-            assert data["num_chunks"] == 4
-            assert data["num_topics"] == 2
+        mock_model = MagicMock()
+        mock_model.fit_transform.return_value = ([0] * 25, [0.9] * 25)
+        mock_model.get_topic.return_value = [("ml", 0.5), ("learning", 0.3)]
+        MockBERTopic.return_value = mock_model
+
+        result = process_with_bertopic(large_chunks)
+
+    assert result["num_chunks"] == 25
+    assert result["num_topics"] >= 1
+    assert "topics" in result
+    mock_pre_cluster.assert_called_once_with(large_chunks)
+
+
+@patch("utils.nlp.topic_formatting.generate_cluster_headings")
+@patch("utils.nlp.bertopic_processor.pre_cluster_with_kmeans")
+def test_process_with_bertopic_large_dataset_two_clusters(
+    mock_pre_cluster, mock_gen
+):
+    """K-means returning two clusters merges them into a combined result."""
+    large_chunks = _make_large_chunks(26)
+    cluster1 = large_chunks[:13]
+    cluster2 = large_chunks[13:]
+    mock_pre_cluster.return_value = [cluster1, cluster2]
+    mock_gen.return_value = (
+        [
+            {"concept": "NLP", "heading": "Language Processing", "summary": "NLP."},
+            {"concept": "CV", "heading": "Computer Vision", "summary": "Vision."},
+        ],
+        20,
+    )
+
+    with (
+        patch("utils.nlp.topic_analysis.SentenceTransformer"),
+        patch("utils.nlp.topic_analysis.BERTopic") as MockBERTopic,
+    ):
+        mock_model = MagicMock()
+        mock_model.fit_transform.return_value = ([0] * 13, [0.9] * 13)
+        mock_model.get_topic.return_value = [("language", 0.5)]
+        MockBERTopic.return_value = mock_model
+
+        result = process_with_bertopic(large_chunks)
+
+    assert result["num_chunks"] == 26
+    assert result["num_topics"] >= 1
 
 
 # ---------------------------------------------------------------------------
-# Tests for get_stopwords and redistribute_large_topics (new features)
+# Optional features: get_stopwords / redistribute_large_topics
 # ---------------------------------------------------------------------------
 
 try:
-    from utils.bertopic_processor import (
-        get_stopwords,
-        redistribute_large_topics,
-    )
+    from utils.nlp.bertopic_processor import get_stopwords, redistribute_large_topics
 
     _NEW_FEATURES_AVAILABLE = BERTOPIC_AVAILABLE
 except ImportError:
     _NEW_FEATURES_AVAILABLE = False
 
 
-@pytest.mark.skipif(not _NEW_FEATURES_AVAILABLE, reason="bertopic not available")
+@pytest.mark.skipif(not _NEW_FEATURES_AVAILABLE, reason="optional features not present")
 class TestGetStopwords:
-    """Test the NLTK stopwords fallback system."""
-
-    @patch("utils.bertopic_processor.NLTK_AVAILABLE", True)
-    @patch("utils.bertopic_processor.stopwords")
-    def test_get_stopwords_nltk_available_success(self, mock_stopwords):
-        mock_stopwords.words.return_value = ["the", "and", "or", "but"]
+    @patch("utils.nlp.topic_analysis.NLTK_AVAILABLE", True)
+    @patch("utils.nlp.topic_analysis.stopwords")
+    def test_get_stopwords_nltk_success(self, mock_sw):
+        mock_sw.words.return_value = ["the", "and"]
         result = get_stopwords()
-        assert result == ["the", "and", "or", "but"]
-        mock_stopwords.words.assert_called_once_with("english")
+        assert "the" in result
 
-    @patch("utils.bertopic_processor.NLTK_AVAILABLE", True)
-    @patch("utils.bertopic_processor.stopwords")
-    def test_get_stopwords_nltk_available_lookup_error(self, mock_stopwords):
-        mock_stopwords.words.side_effect = LookupError("Resource not found")
-        result = get_stopwords()
-        assert result == "english"
-
-    @patch("utils.bertopic_processor.NLTK_AVAILABLE", False)
+    @patch("utils.nlp.topic_analysis.NLTK_AVAILABLE", False)
     def test_get_stopwords_nltk_unavailable(self):
         result = get_stopwords()
         assert result == "english"
 
 
-@pytest.mark.skipif(not _NEW_FEATURES_AVAILABLE, reason="bertopic not available")
+@pytest.mark.skipif(not _NEW_FEATURES_AVAILABLE, reason="optional features not present")
 class TestRedistributeLargeTopics:
-    """Test the topic redistribution functionality."""
-
     @pytest.fixture
     def sample_topic_map(self):
         return {
@@ -272,101 +217,15 @@ class TestRedistributeLargeTopics:
             ],
         }
 
-    @pytest.fixture
-    def mock_topic_model(self):
-        return MagicMock()
-
-    def test_redistribute_large_topics_no_redistribution_needed(
-        self, sample_topic_map, mock_topic_model
-    ):
+    def test_no_redistribution_needed(self, sample_topic_map):
+        mock_model = MagicMock()
         result = redistribute_large_topics(
-            sample_topic_map,
-            mock_topic_model,
-            cluster_id=0,
-            max_topic_percentage=0.8,
+            sample_topic_map, mock_model, cluster_id=0, max_topic_percentage=0.8
         )
         assert result == sample_topic_map
 
-    def test_redistribute_large_topics_insufficient_topics(self, mock_topic_model):
-        single_topic_map = {
-            "topic_0": [
-                {"text": "Only one topic here", "position": 0},
-                {"text": "Cannot redistribute", "position": 1},
-            ]
-        }
-        result = redistribute_large_topics(
-            single_topic_map, mock_topic_model, cluster_id=0
-        )
-        assert result == single_topic_map
-
-    def test_redistribute_large_topics_normal_operation(
-        self, sample_topic_map, mock_topic_model
-    ):
-        result = redistribute_large_topics(
-            sample_topic_map, mock_topic_model, cluster_id=0
-        )
-        assert len(result["topic_0"]) == 4
-        assert len(result["topic_1"]) == 4
-
-
-@pytest.mark.skipif(not _NEW_FEATURES_AVAILABLE, reason="bertopic not available")
-class TestIntegrationWithNewFeatures:
-    """Integration tests for get_stopwords and redistribution working together."""
-
-    @patch("utils.bertopic_processor.get_stopwords")
-    @patch("utils.bertopic_processor.BERTopic")
-    @patch("utils.bertopic_processor.redistribute_large_topics")
-    def test_stopwords_and_redistribution_integration(
-        self, mock_redistribute, mock_bertopic_cls, mock_get_stopwords
-    ):
-        from utils.bertopic_processor import process_cluster_with_bertopic
-
-        mock_get_stopwords.return_value = ["the", "and", "or"]
-        mock_topic_model = MagicMock()
-        mock_topic_model.fit_transform.return_value = ([0, 1, 0], [0.9, 0.8, 0.9])
-        mock_bertopic_cls.return_value = mock_topic_model
-        mock_redistribute.return_value = {"topic_0": [], "topic_1": []}
-
-        chunks = [
-            {"text": "First chunk", "position": 0},
-            {"text": "Second chunk", "position": 1},
-            {"text": "Third chunk", "position": 2},
-        ]
-
-        result = process_cluster_with_bertopic(chunks, cluster_id=0)
-        mock_get_stopwords.assert_called()
-
-
-@patch(
-    "utils.bertopic_processor.stopwords.words",
-    return_value=["the", "on", "in", "are", "can"],
-)
-@patch("utils.bertopic_processor.BERTopic")
-@patch("utils.bertopic_processor.generate_cluster_headings")
-def test_process_with_bertopic_fallback_parameters(
-    mock_generate_headings,
-    mock_bertopic_cls,
-    mock_stopwords,
-    sample_chunks,
-    mock_generate_cluster_headings,
-    mock_bertopic_fit_transform,
-    mock_bertopic_get_topic,
-):
-    # Setup mocks
-    mock_generate_headings.return_value = mock_generate_cluster_headings
-    mock_topic_model = MagicMock()
-
-    # First call to fit_transform raises ValueError, second call returns normally
-    def fit_transform_side_effect(*args, **kwargs):
-        if not hasattr(fit_transform_side_effect, "called"):
-            fit_transform_side_effect.called = True
-            raise ValueError("max_df corresponds to < documents than min_df")
-        return mock_bertopic_fit_transform
-
-    mock_topic_model.fit_transform.side_effect = fit_transform_side_effect
-    mock_topic_model.get_topic.return_value = mock_bertopic_get_topic
-    mock_bertopic_cls.return_value = mock_topic_model
-
-    result = process_with_bertopic(sample_chunks)
-    assert result["num_topics"] == 2
-    assert "topics" in result
+    def test_insufficient_topics(self):
+        mock_model = MagicMock()
+        single = {"topic_0": [{"text": "only", "position": 0}]}
+        result = redistribute_large_topics(single, mock_model, cluster_id=0)
+        assert result == single

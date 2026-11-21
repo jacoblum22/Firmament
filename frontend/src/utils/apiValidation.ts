@@ -136,6 +136,9 @@ function isTopicShapeRecord(value: unknown): value is Record<string, UnknownReco
   if (!isRecord(value)) {
     return false;
   }
+  if (Array.isArray(value)) {
+    return false;
+  }
 
   return Object.values(value).every((entry) => isRecord(entry));
 }

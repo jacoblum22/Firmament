@@ -42,7 +42,7 @@ def test_auth():
     print("=" * 30)
 
     try:
-        from utils.auth import UserAuthManager
+        from utils.security.auth import UserAuthManager
         from app.config import Settings
 
         settings = Settings()
@@ -90,8 +90,8 @@ def test_storage_integration():
     print("=" * 40)
 
     try:
-        from utils.s3_storage import S3StorageManager
-        from utils.auth import UserAuthManager
+        from utils.storage.s3_storage import S3StorageManager
+        from utils.security.auth import UserAuthManager
         from app.config import Settings
 
         settings = Settings()
@@ -178,3 +178,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -7,7 +7,7 @@ import tempfile
 from typing import Tuple, Dict, Optional
 from pathlib import Path
 import pytest
-from utils.file_validator import FileValidator, FileValidationError
+from utils.security.file_validator import FileValidator, FileValidationError
 
 
 class TestFileGenerator:
@@ -501,3 +501,4 @@ class TestFileGenerators:
 
             # At least half the files should have content
             assert non_empty_files >= len(files) // 2
+

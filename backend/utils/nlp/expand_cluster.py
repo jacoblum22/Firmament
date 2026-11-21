@@ -2,14 +2,24 @@ import json
 import logging
 import os
 from dotenv import load_dotenv
-from .openai_client import get_openai_client, get_default_model
+from ..common.openai_client import (
+    call_openai_with_retries,
+    get_openai_client,
+    get_default_model,
+)
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 
-def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None, base_url_override: str | None = None, model_override: str | None = None) -> dict:
+def expand_cluster(
+    filename: str,
+    cluster_id: str,
+    api_key: str | None = None,
+    base_url_override: str | None = None,
+    model_override: str | None = None,
+) -> dict:
     """
     Expand a cluster by generating a bullet point list of important points.
 
@@ -76,29 +86,39 @@ def expand_cluster(filename: str, cluster_id: str, api_key: str | None = None, b
         logger.error(f"No valid segments found for Cluster ID {cluster_id}.")
         return {"error": f"No valid segments found for Cluster ID {cluster_id}."}
 
-    # Build the prompt for GPT-4
-    prompt = (
-        "You are a helpful assistant generating concise bullet points for study notes.\n"
-        "Below is a cluster of text chunks. Each chunk represents a key idea or example.\n"
-        "Generate a list of 5-15 concise bullet points summarizing the most important ideas from the cluster.\n"
-        "- Each bullet should start with a bolded 'mini-header' that is ALWAYS phrased as a question, followed by a question mark.\n"
-        "- Examples: '**What is photosynthesis?**', '**How does neural transmission work?**', '**Why is this concept important?**'\n"
-        "- The question should act as a semantic anchor that students can use for self-testing.\n"
-        "- After the question, provide a clear and concise answer.\n"
-        "- Keep each bullet to a single idea.\n"
-        "- Use clear and concise language.\n"
-        "- Focus on key takeaways and avoid redundancy.\n"
-        "- Ensure the bullet points are suitable for study notes and self-testing.\n\n"
+    # Build role-separated prompts: strict style rules in system message, raw chunk text in user message.
+    system_prompt = (
+        "You are an expert study notes generator. Your job is to create clear, self-contained bullet points from lecture content.\n\n"
+        "Below is a cluster of text chunks from a lecture. Generate 5-15 concise bullet points summarizing the most important ideas.\n\n"
+        "FORMAT (strictly follow this for every bullet):\n"
+        "- Start with a bolded question: **What is X?** or **How does X work?** or **Why is X important?**\n"
+        "- Follow immediately with a clear, complete answer on the same line\n"
+        "- Example: **What is the kernel trick?** It allows efficient computation in high-dimensional feature spaces by using inner products instead of explicit feature mappings.\n\n"
+        "QUALITY RULES:\n"
+        "- Every bullet MUST follow the **Question?** Answer format — no exceptions\n"
+        "- Answers must be SELF-CONTAINED — a reader should understand the point without seeing the original lecture slides, equations, or diagrams\n"
+        '- If the source text references a visual element (formula, graph, table, expression), describe what it represents in words rather than saying "the expression" or "as shown"\n'
+        '- Replace vague references like "this method", "the above", "as we saw" with specific names and descriptions\n'
+        "- Each bullet should cover ONE distinct idea — no compound bullets\n"
+        "- Use clear, specific academic language — avoid filler words\n"
+        "- Focus on concepts, definitions, mechanisms, and relationships — not lecture logistics\n"
+        "- Aim for 15-30 words per answer — concise but complete\n"
     )
-    prompt += "\n".join(chunks)
+    user_content = "\n".join(chunks)
 
-    logger.debug(f"Generated GPT-4 prompt length: {len(prompt)} chars")
+    logger.debug(
+        f"Generated prompts: system={len(system_prompt)} chars, user={len(user_content)} chars"
+    )
 
     # GPT call
     client = get_openai_client(api_key, base_url_override=base_url_override)
-    response = client.chat.completions.create(
+    response = call_openai_with_retries(
+        client.chat.completions.create,
         model=get_default_model("gpt-4o", model_override=model_override),
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ],
         temperature=0.3,
         max_tokens=500,  # Adjust as needed for bullet points
     )

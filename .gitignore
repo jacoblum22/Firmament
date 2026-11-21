@@ -49,20 +49,56 @@ pnpm-debug.log*
 test_env/
 audio_benchmark_report.json
 backend/security_audit_report.json
-backend/cache/
-backend/models/
-backend/output/
-backend/uploads/
-backend/processed/
-backend/temp_chunks/
-backend/rnnoise_output/
-cache/
-models/
-output/
-uploads/
-processed/
-temp_chunks/
-rnnoise_output/
+
+# ── backend data directories ────────────────────────────────────────────────
+# Pattern: ignore dir contents but keep the dir structure via .gitkeep.
+# The specific backend/* rules must come BEFORE any catch-all patterns below.
+
+backend/cache/*
+!backend/cache/.gitkeep
+!backend/cache/transcriptions/
+backend/cache/transcriptions/*
+!backend/cache/transcriptions/.gitkeep
+!backend/cache/processed/
+backend/cache/processed/*
+!backend/cache/processed/.gitkeep
+
+backend/models/*
+!backend/models/.gitkeep
+
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+backend/processed/*
+!backend/processed/.gitkeep
+
+backend/temp_chunks/*
+!backend/temp_chunks/.gitkeep
+
+backend/rnnoise_output/*
+!backend/rnnoise_output/.gitkeep
+
+# App-level runtime dirs (created automatically on first run — no .gitkeep needed)
+backend/app/uploads/
+backend/app/output/
+backend/app/processed/
+
+# Storage-layer local fallback dirs (used when USE_S3_STORAGE=false)
+backend/utils/uploads/
+backend/utils/cache/
+
+# ── catch-all for any other cache/upload/output dirs not listed above ───────
+# NOTE: These broad patterns intentionally come AFTER the backend-specific
+# rules above (git evaluates rules in order; last match wins).  They will
+# match root-level or other nested dirs named cache/, uploads/, etc., but
+# will NOT affect backend/* paths already handled above.
+/cache/
+/models/
+/output/
+/uploads/
+/processed/
+/temp_chunks/
+/rnnoise_output/
 
 # Large media files and temporary binaries
 *.wav

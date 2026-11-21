@@ -14,6 +14,33 @@ all required NLTK resources.
 
 import os
 import sys
+import time
+
+
+def _download_package(nltk, package: str, nltk_data_dir: str, get_package_path, max_attempts: int = 4) -> bool:
+    """Download one NLTK resource with retries (handles transient CDN / network blips)."""
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            try:
+                nltk.download(
+                    package,
+                    quiet=True,
+                    download_dir=nltk_data_dir,
+                    halt_on_error=False,
+                )
+            except TypeError:
+                nltk.download(package, quiet=True, download_dir=nltk_data_dir)
+            package_path = get_package_path(package)
+            nltk.data.find(package_path)
+            return True
+        except Exception as e:
+            last_err = e
+            if attempt < max_attempts:
+                time.sleep(1.5 * attempt)
+    if last_err:
+        print(f"❌ Failed to download {package} after {max_attempts} attempts: {last_err}")
+    return False
 
 
 def download_nltk_data():
@@ -82,16 +109,11 @@ def download_nltk_data():
         failed = []
 
         for package in required_packages:
-            try:
-                result = nltk.download(package, quiet=True, download_dir=nltk_data_dir)
-                # Verify the download by finding the package
-                package_path = get_package_path(package)
-                nltk.data.find(package_path)
+            if _download_package(nltk, package, nltk_data_dir, get_package_path):
                 downloaded.append(package)
                 print(f"✓ Downloaded: {package}")
-            except Exception as e:
+            else:
                 failed.append(package)
-                print(f"❌ Failed to download {package}: {e}")
 
         print(f"\n📊 NLTK Data Setup Summary:")
         print(f"   Successfully processed: {len(downloaded)} packages")

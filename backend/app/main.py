@@ -4,9 +4,15 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from datetime import datetime, timezone
-from .routes import router
+from .routes import router as api_router
 from .config import settings
-from .middleware import SecurityHeadersMiddleware, RateLimitMiddleware
+from .middleware import (
+    SecurityHeadersMiddleware,
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    get_request_id,
+)
+from .middleware import ErrorHandlingMiddleware
 import logging
 import json
 import asyncio
@@ -19,7 +25,7 @@ apply_startup_optimizations()
 
 # Import circuit breaker utilities
 try:
-    from utils.circuit_breaker import get_all_circuit_breaker_stats
+    from utils.security.circuit_breaker import get_all_circuit_breaker_stats
 except ImportError:
 
     def get_all_circuit_breaker_stats():
@@ -34,11 +40,76 @@ if settings.log_file:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = settings.log_file
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filename=log_file,
-)
+_STANDARD_LOG_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__.keys())
+
+
+class RequestContextFilter(logging.Filter):
+    """Inject request-scoped context into log records."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        request_id = get_request_id()
+        if request_id and not hasattr(record, "request_id"):
+            record.request_id = request_id
+        return True
+
+
+class JsonFormatter(logging.Formatter):
+    """Format logs as single-line JSON objects."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": datetime.fromtimestamp(
+                record.created, timezone.utc
+            ).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        request_id = getattr(record, "request_id", None)
+        if request_id:
+            payload["request_id"] = request_id
+
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_LOG_RECORD_KEYS or key in payload:
+                continue
+            payload[key] = value
+
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, default=str)
+
+
+def configure_logging() -> None:
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, settings.log_level))
+
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+
+    context_filter = RequestContextFilter()
+
+    if settings.is_production:
+        formatter = JsonFormatter()
+    else:
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.addFilter(context_filter)
+    root_logger.addHandler(console_handler)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        file_handler.addFilter(context_filter)
+        root_logger.addHandler(file_handler)
+
+
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app with environment-specific settings
@@ -59,7 +130,12 @@ async def debug_upload_requests(request: Request, call_next):
     if request.url.path == "/upload":
         logger.debug(f"Upload request to {request.url.path}")
         logger.debug(f"Method: {request.method}")
-        logger.debug(f"Headers: {dict(request.headers)}")
+        safe_headers = {
+            k: v
+            for k, v in request.headers.items()
+            if k.lower() not in ("authorization", "x-openai-key", "cookie")
+        }
+        logger.debug(f"Headers: {safe_headers}")
         logger.debug(f"Content-Type: {request.headers.get('content-type', 'Not set')}")
 
     response = await call_next(request)
@@ -94,6 +170,9 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=settings.cors_max_age,
 )
+
+# Centralized error handling for sanitized client responses.
+app.add_middleware(ErrorHandlingMiddleware)
 
 # Production-specific middleware
 if settings.is_production:
@@ -136,7 +215,10 @@ elif settings.is_development:
         f"Development rate limiting: {settings.rate_limit_calls} calls per {settings.rate_limit_period} seconds"
     )
 
-app.include_router(router)
+# Register request ID middleware last so it wraps the full middleware stack.
+app.add_middleware(RequestIDMiddleware)
+
+app.include_router(api_router)
 
 
 @app.exception_handler(EnvironmentError)
@@ -154,6 +236,36 @@ async def env_error_handler(request: Request, exc: EnvironmentError):
 
 # Global background task storage
 background_tasks = []
+
+
+async def run_cache_cleanup(max_age_days: int = 30) -> dict:
+    """Run content cache cleanup and log cleanup statistics."""
+    try:
+        from utils.storage.content_cache import get_content_cache
+
+        cache = get_content_cache()
+        stats = cache.cleanup_old_entries(max_age_days=max_age_days)
+        logger.info(
+            "Content cache cleanup completed: removed=%s, freed_mb=%.2f, errors=%s",
+            stats.get("deleted_entries", 0),
+            stats.get("freed_size_mb", 0.0),
+            stats.get("errors", 0),
+        )
+        return stats
+    except Exception:
+        logger.exception("Content cache cleanup failed")
+        return {"deleted_entries": 0, "freed_size_mb": 0.0, "errors": 1}
+
+
+async def periodic_cache_cleanup_task(interval_seconds: int = 6 * 60 * 60):
+    """Run content cache cleanup periodically in the background."""
+    logger.info(
+        "Starting periodic content cache cleanup task with interval=%s seconds",
+        interval_seconds,
+    )
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await run_cache_cleanup()
 
 
 def create_background_task(coro, task_name: str = "background_task"):
@@ -194,9 +306,15 @@ async def startup_event():
     """Initialize services on application startup"""
     logger.info("Application startup - initializing services...")
 
+    # Run immediate content cache cleanup on startup and then schedule periodic cleanup.
+    await run_cache_cleanup()
+    create_background_task(
+        periodic_cache_cleanup_task(), task_name="periodic_cache_cleanup"
+    )
+
     # Start the optional cleanup service
     try:
-        from utils.cleanup_service import start_cleanup_service
+        from utils.storage.cleanup_service import start_cleanup_service
 
         start_cleanup_service()
     except Exception as e:
@@ -205,7 +323,7 @@ async def startup_event():
 
     # Initialize S3 storage in background for better upload performance
     try:
-        from utils.s3_storage import init_storage_background
+        from utils.storage.s3_storage import init_storage_background
 
         # Start S3 initialization in background - don't await to avoid blocking startup
         # Use helper function for proper exception handling
@@ -244,7 +362,7 @@ async def shutdown_event():
 
     # Stop the cleanup service
     try:
-        from utils.cleanup_service import stop_cleanup_service
+        from utils.storage.cleanup_service import stop_cleanup_service
 
         stop_cleanup_service()
     except Exception as e:
@@ -475,3 +593,4 @@ async def general_exception_handler(request: Request, exc: Exception):
             "path": str(request.url.path),
         },
     )
+

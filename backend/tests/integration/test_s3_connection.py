@@ -15,7 +15,7 @@ sys.path.insert(0, str(backend_dir))
 
 try:
     from app.config import Settings
-    from utils.s3_storage import S3StorageManager
+    from utils.storage.s3_storage import S3StorageManager
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure you're in the backend directory and have installed dependencies.")
@@ -160,3 +160,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

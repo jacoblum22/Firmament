@@ -22,13 +22,13 @@ def test_basic_setup():
         print(f"✓ Config: {settings.environment}")
 
         # Test S3 storage
-        from utils.s3_storage import get_storage_manager
+        from utils.storage.s3_storage import get_storage_manager
 
         storage = get_storage_manager()
         print(f"✓ Storage: {'S3' if storage.use_s3 else 'Local'}")
 
         # Test auth
-        from utils.auth import get_auth_manager
+        from utils.security.auth import get_auth_manager
 
         auth = get_auth_manager()
         print(f"✓ Auth: JWT secret configured")
@@ -57,3 +57,4 @@ if __name__ == "__main__":
         print("🎉 Basic setup is working!")
     else:
         print("❌ Setup has issues")
+

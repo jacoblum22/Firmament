@@ -27,6 +27,21 @@ python start.py --env production
 docker-compose up -d
 ```
 
+## Google Sign-In — fixing `Error 400: origin_mismatch`
+
+The frontend uses **Google Identity Services** (`accounts.google.com/gsi`). Google only allows sign-in from URLs listed as **Authorized JavaScript origins** on your OAuth **Web client**.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**.
+2. Select your **OAuth 2.0 Client ID** (type **Web application** — the same ID as `VITE_GOOGLE_CLIENT_ID` in `frontend/.env.development` or `.env.local`).
+3. Under **Authorized JavaScript origins**, add the **exact** origin you use in the address bar (scheme + host + port, no path). For local Vite this is usually one or both of:
+   - `http://localhost:5173`
+   - `http://127.0.0.1:5173`  
+   **These count as different origins** — if you open the app via `127.0.0.1` but only registered `localhost`, you get `origin_mismatch`.
+4. Save. Changes can take a few minutes to apply.
+5. If the OAuth consent screen is in **Testing**, add your Google account under **Test users**.
+
+Set `VITE_GOOGLE_CLIENT_ID` in `frontend/.env.local` (gitignored) or keep it in `.env.development`; it must match that same Web client.
+
 ## Configuration Files
 
 ### Environment Files

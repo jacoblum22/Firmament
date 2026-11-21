@@ -9,7 +9,7 @@ if __name__ == "__main__" or "pytest" in sys.modules:
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
 
-from utils.filter_chunks import is_informative, filter_chunks
+from utils.nlp.filter_chunks import is_informative, filter_chunks
 
 
 class TestIsInformative:
@@ -248,3 +248,4 @@ class TestEdgeCases:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+

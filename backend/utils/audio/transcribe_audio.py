@@ -1,14 +1,13 @@
 import os
 import logging
 import shutil
-import whisper
 import threading
 import uuid
 from pydub import AudioSegment
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from faster_whisper import WhisperModel
 import torch
-from .clean_text import clean_chunk_text
+from ..nlp.clean_text import clean_chunk_text
 from .rnnoise_process import denoise_with_rnnoise
 from .preprocess_audio import preprocess_audio
 
@@ -173,13 +172,18 @@ def transcribe_audio_in_chunks(
         compute_type = get_compute_type(device)
         logger.info(f"Using device: {device} with compute type: {compute_type}")
 
+        n_cpu = os.cpu_count() or 4
+        cpu_threads = max(1, min(16, n_cpu)) if device == "cpu" else 0
+
         # Initialize model with optimized settings
         logger.info(f"Loading Whisper model ({model_size})...")
         model = WhisperModel(
             model_size,
             compute_type=compute_type,
             device=device,
-            download_root="./models",  # Cache models locally
+            cpu_threads=cpu_threads,
+            num_workers=1,
+            download_root="./models",
         )
         logger.info("Model loaded successfully")
 
@@ -206,14 +210,15 @@ def transcribe_audio_in_chunks(
         transcript_chunks = [None] * total_chunks  # Ensure this is a list, not a tuple
         failed_chunks = []
 
+        beam_size = 1 if device == "cpu" else 5
+
         def transcribe_and_clean_chunk(idx, chunk_path):
             nonlocal completed_chunks
             try:
-                # Use beam search for better accuracy
                 segments, _ = model.transcribe(
                     chunk_path,
-                    beam_size=5,
-                    vad_filter=True,  # Voice activity detection
+                    beam_size=beam_size,
+                    vad_filter=True,
                     vad_parameters=dict(min_silence_duration_ms=500),
                 )
                 # Get raw text from segments
@@ -237,16 +242,18 @@ def transcribe_audio_in_chunks(
                     failed_chunks.append((idx, chunk_path))
                 return idx, None
 
-        # Optimize thread count based on device and chunk size
+        # One in-flight chunk on CPU avoids N× oversubscription (each transcribe() is already threaded).
         if device == "cpu":
-            cpu_count = os.cpu_count() or 2  # Default to 2 if None
-            max_workers = max(cpu_count // 2, 1)
+            max_workers = 1
+            logger.info(
+                "CPU transcription: sequential chunks, beam_size=%s, cpu_threads=%s "
+                "(parallel chunk workers disabled to avoid thrashing)",
+                beam_size,
+                cpu_threads,
+            )
         else:
-            cpu_count = os.cpu_count() or 2  # Default to 2 if None
-            max_workers = min(
-                4, cpu_count
-            )  # Limit GPU workers to prevent memory issues
-        logger.info(f"Using {max_workers} workers for transcription")
+            max_workers = min(4, len(chunk_paths), n_cpu)
+            logger.info(f"Using {max_workers} parallel chunk workers (GPU)")
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -267,15 +274,18 @@ def transcribe_audio_in_chunks(
             # Reuse the same model but with different settings
             model = WhisperModel(
                 model_size,
-                compute_type="int8",  # Use int8 for retries to ensure compatibility
-                device="cpu",  # Use CPU for retries to ensure stability
+                compute_type="int8",
+                device="cpu",
+                cpu_threads=max(1, min(16, os.cpu_count() or 4)),
+                num_workers=1,
+                download_root="./models",
             )
 
             for idx, path in failed_chunks:
                 try:
                     segments, _ = model.transcribe(
                         path,
-                        beam_size=3,  # Reduced beam size for faster retry
+                        beam_size=1,
                         vad_filter=True,
                     )
                     # Clean the text for retried chunks as well

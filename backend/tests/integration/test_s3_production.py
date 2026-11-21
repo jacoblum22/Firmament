@@ -9,7 +9,7 @@ os.environ["ENVIRONMENT"] = "production"
 
 try:
     from app.config import Settings
-    from utils.s3_storage import S3StorageManager
+    from utils.storage.s3_storage import S3StorageManager
 
     print("🧪 Testing S3 Connection in Production Mode")
     print("=" * 50)
@@ -68,3 +68,4 @@ except Exception as e:
     import traceback
 
     traceback.print_exc()
+

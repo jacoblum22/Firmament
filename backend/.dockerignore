@@ -1,0 +1,42 @@
+# Shrink build context for faster `docker build` / CI (Dockerfile COPY . .)
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.git
+.gitignore
+venv
+.venv
+env
+ENV
+
+# Runtime / local data — never belong in the image
+cache
+uploads
+processed
+temp_chunks
+rnnoise_output
+models
+logs
+*.log
+.env
+.env.*
+!.env.example
+
+app/output
+app/processed
+app/uploads
+
+# Tests and tooling (not needed to run the API)
+tests
+**/tests
+htmlcov
+.coverage
+.coverage.*
+
+# Docs / IDE
+*.md
+.vscode
+.idea

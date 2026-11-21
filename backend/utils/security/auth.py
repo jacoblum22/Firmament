@@ -11,7 +11,9 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 import hashlib
 import secrets
+from uuid import uuid4
 import jwt
+import redis
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from fastapi import HTTPException, status
@@ -27,7 +29,46 @@ class UserAuthManager:
         self.settings = settings
         self.jwt_secret = self._get_jwt_secret()
         self.jwt_algorithm = "HS256"
-        self.token_expire_hours = 24 * 7  # 7 days
+        self.token_expire_hours = self.settings.token_expiry_hours
+        self.redis_client: Optional[redis.Redis] = None
+        self._blacklist_key_prefix = "token_blacklist:"
+        self.blacklisted_jtis: set[str] = set()
+        self.blacklisted_jti_expiries: dict[str, int] = {}
+        self._last_blacklist_cleanup = datetime.now(timezone.utc)
+        self._blacklist_cleanup_interval_seconds = 600
+        self._initialize_blacklist_storage()
+
+    def _initialize_blacklist_storage(self) -> None:
+        """Initialize Redis-backed blacklist storage with in-memory fallback."""
+        redis_url = self.settings.redis_url
+        if not redis_url:
+            logger.warning(
+                "REDIS_URL not configured; using in-memory token blacklist fallback"
+            )
+            return
+
+        try:
+            self.redis_client = redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True,
+                health_check_interval=30,
+            )
+            self.redis_client.ping()
+            logger.info("Redis-backed token blacklist enabled")
+        except Exception as exc:
+            self.redis_client = None
+            logger.warning(
+                "Failed to connect to Redis for token blacklist: %s. "
+                "Falling back to in-memory blacklist.",
+                exc,
+            )
+
+    def _get_blacklist_key(self, jti: str) -> str:
+        """Build Redis key for a token blacklist entry."""
+        return f"{self._blacklist_key_prefix}{jti}"
 
     def _get_jwt_secret(self) -> str:
         """Get JWT secret key for token signing"""
@@ -90,15 +131,19 @@ class UserAuthManager:
         Returns:
             str: JWT session token
         """
+        now = datetime.now(timezone.utc)
+        token_expiry = now + timedelta(hours=self.token_expire_hours)
+        token_jti = str(uuid4())
+
         # Create token payload
         payload = {
             "user_id": user_info["user_id"],
             "email": user_info["email"],
             "name": user_info["name"],
             "provider": user_info["provider"],
-            "iat": datetime.now(timezone.utc),
-            "exp": datetime.now(timezone.utc)
-            + timedelta(hours=self.token_expire_hours),
+            "iat": now,
+            "exp": token_expiry,
+            "jti": token_jti,
         }
 
         # Generate JWT token
@@ -118,9 +163,15 @@ class UserAuthManager:
             dict: User information if valid, None otherwise
         """
         try:
+            self._cleanup_blacklisted_tokens()
             payload = jwt.decode(
                 token, self.jwt_secret, algorithms=[self.jwt_algorithm]
             )
+
+            jti = payload.get("jti")
+            if jti and self.is_token_blacklisted(jti):
+                logger.warning("Session token has been invalidated")
+                return None
 
             # Check if token is expired (JWT library should handle this, but double-check)
             exp = payload.get("exp")
@@ -144,6 +195,90 @@ class UserAuthManager:
         except Exception as e:
             logger.error(f"Error verifying session token: {e}")
             return None
+
+    def blacklist_token(self, jti: str, exp: Optional[int] = None) -> None:
+        """Blacklist a JWT ID and optionally track its expiration for cleanup."""
+        if not jti:
+            return
+
+        current_timestamp = int(datetime.now(timezone.utc).timestamp())
+
+        if self.redis_client is not None:
+            if exp is None:
+                logger.warning(
+                    "Token expiry not provided for JTI %s; using in-memory blacklist fallback",
+                    jti,
+                )
+            else:
+                try:
+                    ttl_seconds = int(exp) - current_timestamp
+                    if ttl_seconds > 0:
+                        self.redis_client.setex(
+                            self._get_blacklist_key(jti), ttl_seconds, "1"
+                        )
+                        return
+                    logger.debug(
+                        "Skipping blacklist entry for JTI %s because token is already expired",
+                        jti,
+                    )
+                    return
+                except Exception as exc:
+                    logger.warning(
+                        "Redis blacklist write failed for JTI %s: %s. Falling back to in-memory blacklist.",
+                        jti,
+                        exc,
+                    )
+
+        self.blacklisted_jtis.add(jti)
+        if exp is not None:
+            try:
+                self.blacklisted_jti_expiries[jti] = int(exp)
+            except (TypeError, ValueError):
+                logger.warning("Unable to parse token expiry for blacklisted JTI")
+
+        self._cleanup_blacklisted_tokens(force=False)
+
+    def is_token_blacklisted(self, jti: str) -> bool:
+        """Check if a JWT ID has been blacklisted."""
+        if not jti:
+            return False
+
+        if self.redis_client is not None:
+            try:
+                if self.redis_client.exists(self._get_blacklist_key(jti)):
+                    return True
+            except Exception as exc:
+                logger.warning(
+                    "Redis blacklist read failed for JTI %s: %s. Falling back to in-memory blacklist.",
+                    jti,
+                    exc,
+                )
+
+        self._cleanup_blacklisted_tokens(force=False)
+        return jti in self.blacklisted_jtis
+
+    def _cleanup_blacklisted_tokens(self, force: bool = False) -> None:
+        """Periodically remove blacklisted JTIs whose source token already expired."""
+        now = datetime.now(timezone.utc)
+        if (
+            not force
+            and (now - self._last_blacklist_cleanup).total_seconds()
+            < self._blacklist_cleanup_interval_seconds
+        ):
+            return
+
+        current_timestamp = int(now.timestamp())
+        expired_jtis = [
+            jti
+            for jti, exp in self.blacklisted_jti_expiries.items()
+            if exp <= current_timestamp
+        ]
+
+        for jti in expired_jtis:
+            self.blacklisted_jtis.discard(jti)
+            self.blacklisted_jti_expiries.pop(jti, None)
+
+        self._last_blacklist_cleanup = now
 
     def get_user_content_hash(self, user_id: str, content: bytes) -> str:
         """
@@ -221,6 +356,16 @@ def init_auth_manager(settings: Settings) -> UserAuthManager:
     global _auth_manager
     _auth_manager = UserAuthManager(settings)
     return _auth_manager
+
+
+def blacklist_token(jti: str, exp: Optional[int] = None) -> None:
+    """Blacklist a token JTI using the global auth manager."""
+    get_auth_manager().blacklist_token(jti, exp)
+
+
+def is_token_blacklisted(jti: str) -> bool:
+    """Check if a token JTI is blacklisted using the global auth manager."""
+    return get_auth_manager().is_token_blacklisted(jti)
 
 
 # FastAPI dependency for requiring authentication

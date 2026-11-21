@@ -9,7 +9,7 @@ if __name__ == "__main__" or "pytest" in sys.modules:
     if backend_dir not in sys.path:
         sys.path.insert(0, backend_dir)
 
-from utils.clean_text import (
+from utils.nlp.clean_text import (
     remove_filler_words,
     remove_duplicate_phrases,
     restore_punctuation,
@@ -456,3 +456,4 @@ def test_multiple_sentence_processing():
     assert not any(s.startswith("Well") for s in sentences)
     assert not any(s.startswith("Actually") for s in sentences)
     assert not any(s.startswith("Basically") for s in sentences)
+
